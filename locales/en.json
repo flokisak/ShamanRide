@@ -1,0 +1,459 @@
+{
+  "general": {
+    "add": "Add",
+    "save": "Save",
+    "saveChanges": "Save Changes",
+    "cancel": "Cancel",
+    "close": "Close",
+    "closeModal": "Close modal",
+    "unassigned": "Unassigned",
+    "notApplicable": "N/A",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "header": {
+    "manageTariff": "Set Tariff",
+    "managePeople": "Manage People",
+    "showAnalytics": "Show Analytics",
+    "settings": "Settings",
+    "backToHomepage": "Back to homepage"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": {
+      "title": "General",
+      "language": "Language",
+      "aiMode": "AI Mode"
+    },
+    "communication": {
+      "title": "Communication",
+      "preferredApp": "Preferred Messaging App"
+    },
+    "fuel": {
+      "title": "Fuel Prices",
+      "diesel": "Diesel Price",
+      "petrol": "Petrol Price"
+    },
+    "visibility": {
+      "title": "Widget Visibility",
+      "dispatch": "Dispatch Form",
+      "vehicles": "Vehicle Status",
+      "map": "Map",
+      "rideLog": "Ride History",
+      "smsGate": "SMS Gate"
+    },
+    "layout": {
+      "title": "Layout",
+      "editLayout": "Edit Layout",
+      "finishEditing": "Finish Editing",
+      "resetLayout": "Reset Layout",
+      "confirmReset": "Are you sure you want to reset the layout to default?"
+    },
+    "data": {
+      "title": "Data Management",
+      "save": "Save Data",
+      "load": "Load Data",
+      "exportCsv": "Export to CSV",
+      "confirmLoad": "Loading new data will overwrite current data. Do you want to continue?",
+      "clearHistory": "Clear Ride History",
+      "confirmClearHistory": "Are you SURE you want to clear the entire ride history? This action is irreversible."
+    }
+  },
+  "dispatch": {
+    "newRide": "New Ride",
+    "pickupAddress": "Pickup Address",
+    "destinationAddress": "Destination Address",
+    "customerName": "Customer Name",
+    "customerPhone": "Phone Number",
+    "passengers": "Passengers",
+    "pickupTime": "Pickup Time",
+    "schedule": "Schedule",
+    "asap": "ASAP",
+    "notes": "Note",
+    "notesOptional": "Note (optional)",
+    "notesPlaceholder": "e.g., 5th floor, at the back entrance...",
+    "addressHint": "Search biased towards South Moravia.",
+    "scheduleRide": "Schedule Ride",
+    "findingVehicle": "Finding vehicle...",
+    "findVehicle": "Find Vehicle",
+    "cooldown": "Try again in {cooldownTime}s",
+    "optimizeStops": "Optimize stop order",
+    "stops": {
+        "title": "Stops",
+        "startPlaceholder": "Pickup address",
+        "destinationPlaceholder": "Destination / Next stop",
+        "addStop": "Add stop"
+    },
+    "validation": {
+      "pickupRequired": "Pickup address is required.",
+      "destinationRequired": "Destination address is required.",
+      "nameRequired": "Customer name is required.",
+      "phoneRequired": "Phone number is required.",
+      "pickupTimeRequired": "Pickup time is required.",
+      "futureTimeRequired": "Scheduled time must be in the future.",
+      "positivePassengers": "Number of passengers must be a positive number.",
+      "allStopsRequired": "All stops must be filled.",
+      "atLeastTwoStops": "At least 2 stops are required (pickup and destination)."
+    },
+    "sendSms": "Send SMS",
+    "smsPlaceholder": "Type SMS message...",
+    "send": "Send",
+    "showChat": "Show chat records",
+    "hideChat": "Hide chat records",
+    "phoneNotEdited": "Phone number was not edited. Please verify the number or confirm submission.",
+    "confirmSubmitWithUneditedPhone": "Phone number was not edited. Do you still want to submit the order?"
+  },
+  "smsGate": {
+    "title": "SMS Gateway",
+    "connected": "Gateway configured",
+    "notConfigured": "Local only",
+    "noOutgoing": "No pending rides",
+    "inbox": "SMS History",
+    "inboxEmpty": "No messages",
+    "sending": "Sending...",
+    "send": "Send SMS",
+    "select": "Select",
+    "latestRide": "Send SMS for Latest Ride",
+    "driverPhone": "Driver Phone",
+    "changeDriver": "Change Driver",
+    "smsText": "SMS Text",
+    "editSms": "Edit SMS",
+    "sendToDriver": "Send to Driver",
+    "newSms": "Send New SMS",
+    "recipientPhone": "Recipient Phone",
+    "message": "Message",
+    "sendSms": "Send SMS",
+    "selectDriver": "Select Driver",
+    "customRecipient": "Custom Recipient",
+    "reply": "Reply",
+    "replyTo": "Reply to",
+    "replyMessage": "Reply message",
+    "sendReply": "Send Reply",
+    "smsSent": "SMS sent successfully",
+    "replySent": "Reply sent successfully"
+  },
+  "vehicles": {
+    "title": "Vehicle Status",
+    "addVehicle": "Add new vehicle",
+    "editVehicle": "Edit vehicle {name}",
+    "filters": {
+      "allTypes": "All types",
+      "allStatuses": "All statuses",
+      "filterByType": "Filter by type",
+      "filterByStatus": "Filter by status",
+      "hideInactive": "Hide inactive"
+    },
+    "table": {
+      "vehicle": "Vehicle",
+      "status": "Status",
+      "location": "Location",
+      "warnings": "Warnings",
+      "actions": "Actions",
+      "totalFuelCost": "Total fuel cost from logged rides"
+    },
+    "add": {
+      "title": "Add New Vehicle",
+      "namePlaceholder": "e.g., Škoda Octavia #4",
+      "licensePlatePlaceholder": "e.g., 1AB 2345",
+      "locationPlaceholder": "e.g., Náměstí, Mikulov",
+      "serviceDetailsOptional": "Service Details (optional)",
+      "addVehicleButton": "Add Vehicle",
+      "fillAllFields": "Please fill all required fields (Name, License Plate, Location, Capacity)."
+    },
+    "edit": {
+      "title": "Edit Vehicle",
+      "serviceDetailsTitle": "Service Details",
+      "unavailableTime": "Unavailable for (minutes)",
+      "deleteVehicle": "Delete Vehicle",
+      "confirmDelete": "Are you sure you want to delete vehicle \"{name}\"? This action is irreversible."
+    },
+    "fields": {
+      "name": "Vehicle Name",
+      "licensePlate": "License Plate",
+      "location": "Location",
+      "type": "Type",
+      "status": "Status",
+      "capacity": "Capacity",
+      "assignedDriver": "Assigned Driver",
+      "noDriverAssigned": "No driver assigned",
+      "mileage": "Mileage (km)",
+      "serviceInterval": "Service Interval (km)",
+      "lastServiceMileage": "Last Service at (km)",
+      "inspectionExpiry": "Technical Inspection Expiry",
+      "vignetteExpiry": "Vignette Expiry",
+      "notes": "Vehicle Notes",
+      "fuelType": "Fuel Type",
+      "fuelConsumption": "Consumption (L/100km)"
+    },
+    "warnings": {
+      "serviceOverdue": "Service overdue by {km} km.",
+      "serviceDue": "Service due in {km} km.",
+      "inspectionExpired": "Inspection expired!",
+      "inspectionExpires": "Inspection expires on {date}.",
+      "inspectionExpiresSoon": "Inspection expires in {days} days!",
+      "vignetteExpired": "Vignette expired!",
+      "vignetteExpires": "Vignette expires on {date}.",
+      "vignetteExpiresSoon": "Vignette expires in {days} days!"
+    }
+  },
+  "assignment": {
+    "recommended": "Recommended",
+    "price": "Price",
+    "route": "Route",
+    "eta": "Arrival in",
+    "wait": "wait",
+    "assign": "Assign",
+    "errorTitle": "Error finding vehicle",
+    "titleAI": "Ride Assignment Suggestion",
+    "titleManual": "Manual Vehicle Selection",
+    "communication": "Driver Communication",
+    "sendVia": "Send via {app}",
+    "openNavigation": "Open Navigation",
+    "noDriverAssigned": "No driver assigned to this vehicle",
+    "copyText": "Copy text",
+    "optimizedRoute": "Optimized Route",
+    "fuelCost": "Estimated fuel cost",
+    "cost": "Cost"
+  },
+  "rideLog": {
+    "title": "Ride History",
+    "showInactive": "Show inactive",
+    "noRidesYet": "No rides have been logged yet.",
+    "noActiveRides": "No active or scheduled rides.",
+    "confirmDelete": "Are you sure you want to delete this ride log? This action is irreversible.",
+    "table": {
+      "time": "Time",
+      "driver": "Driver",
+      "customer": "Customer",
+      "passengers": "Passengers",
+      "route": "Route",
+      "status": "Status",
+      "sms": "SMS",
+      "dispatch": "Dispatch",
+      "actions": "Actions",
+      "awaitingAssignment": "Awaiting assignment",
+      "from": "From",
+      "to": "To",
+      "stops": "stops",
+      "pickup": "Pickup",
+      "note": "Note",
+      "price": "Price",
+      "sortBy": "Sort by {label}",
+      "changeStatusFor": "Change status for ride with customer {customerName}",
+      "markSmsSentFor": "Mark SMS as sent for ride with customer {customerName}",
+      "editRideFor": "Edit ride for customer {customerName}",
+      "deleteRideFor": "Delete ride for customer {customerName}"
+    },
+    "edit": {
+      "title": "Edit Ride Log",
+      "assignmentTitle": "Assignment",
+      "assignmentHelp": "Select a vehicle to assign. The driver will be auto-filled but can be changed.",
+       "availableVehicles": "Available Vehicles",
+       "selectDriver": "Select driver",
+       "estimates": "Estimates",
+       "estimatedPrice": "Estimated Price",
+       "estimatedDuration": "Estimated Duration"
+    }
+    ,
+    "smsPreview": {
+      "title": "SMS Preview",
+      "driverPhone": "Driver Phone",
+      "noPhoneNumber": "No phone number available",
+      "confirmDispatch": "Confirm & Dispatch",
+      "sentSuccess": "SMS sent successfully.",
+      "sentFailed": "Failed to send SMS via gateway."
+    }
+  },
+  "map": {
+    "title": "Map",
+    "distance": "Distance",
+    "duration": "Duration"
+  },
+  "loading": {
+    "calculating": "Calculating best route..."
+  },
+  "notifications": {
+    "dismiss": "Dismiss notification",
+    "scheduledRide": {
+      "title": "Reminder: Scheduled Ride",
+      "message15": "Ride for {customerName} from {pickupAddress} starts in 15 minutes. Please assign a vehicle.",
+      "message5": "Ride for {customerName} from {pickupAddress} starts in 5 minutes. Please assign a vehicle."
+    },
+    "smsReminder": {
+      "title": "Forgotten SMS?",
+      "message": "SMS for ride to {customerName} (driver: {driverName}) has not been confirmed as sent for over 5 minutes."
+    },
+    "rideScheduled": "The ride has been scheduled and added to the list.",
+    "noRidesToExport": "Ride history is empty, nothing to export.",
+    "dataLoadedSuccess": "Data was loaded successfully.",
+    "dataLoadedError": "Failed to load data. The file is corrupt or has an invalid format.",
+    "clearHistoryAfterExport": "Data successfully exported. Do you want to clear the ride history now?",
+    "noRidesToClear": "The ride history is already empty."
+  },
+  "people": {
+    "title": "Manage People",
+    "addPerson": "Add Person",
+    "confirmDelete": "Are you sure you want to delete this person? If they are assigned to a vehicle, they will be unassigned.",
+    "fields": {
+      "name": "Name",
+      "phone": "Phone"
+    },
+    "validation": {
+      "nameAndPhoneRequired": "Name and phone number are required."
+    }
+  },
+  "tariff": {
+    "title": "Tariff Settings",
+    "rideRates": "Ride Rates",
+    "startingFee": "Starting Fee",
+    "pricePerKmCar": "Price/km (Car)",
+    "pricePerKmVan": "Price/km (Van)",
+    "flatRates": "Flat Rates",
+    "routeName": "Route Name",
+    "routeNamePlaceholder": "Description of route (e.g., Within Mikulov)",
+    "price": "Price",
+    "priceCar": "Price (Car)",
+    "priceVan": "Price (Van)",
+    "deleteFlatRate": "Delete flat rate",
+    "noFlatRates": "No flat rates defined.",
+    "resetToDefault": "Reset to Default",
+    "saveTariff": "Save Tariff",
+    "confirmReset": "Are you sure you want to reset the tariff to its default settings?"
+  },
+  "analytics": {
+    "title": "Analytics & Reports",
+    "exportPdf": "Export PDF",
+    "exporting": "Exporting...",
+    "exportError": "An error occurred while exporting to PDF.",
+    "ranges": {
+      "today": "Today",
+      "last7d": "Last 7 days",
+      "last30d": "Last 30 days",
+      "allTime": "All Time"
+    },
+    "filters": {
+      "dateRange": "Date Range",
+      "vehicle": "Vehicle",
+      "driver": "Driver",
+      "allVehicles": "All Vehicles",
+      "allDrivers": "All Drivers"
+    },
+    "cards": {
+      "completedRides": "Completed Rides",
+      "totalRevenue": "Total Revenue",
+      "avgPrice": "Avg. Price per Ride",
+      "cancelledRides": "Cancelled Rides",
+      "totalFuelCost": "Total Fuel Costs"
+    },
+    "chartTitle": "Rides per Vehicle",
+    "noChartData": "No data available for chart.",
+    "tableTitle": "Vehicle Statistics",
+    "table": {
+      "vehicle": "Vehicle",
+      "licensePlate": "License Plate",
+      "completedRides": "Completed Rides",
+      "revenue": "Revenue",
+      "fuelCost": "Fuel Cost"
+    },
+    "noData": "No data for the selected period."
+  },
+  "smsPreview": {
+    "title": "Message Ready for Driver",
+    "driverPhone": "Driver's Phone",
+    "noPhoneNumber": "Driver's phone number is not available",
+    "confirmDispatch": "Confirm Dispatch",
+    "sendSms": "Send SMS",
+    "sentFailed": "Failed to send SMS."
+  },
+  "manualAssignment": {
+    "title": "Manual Assignment",
+    "customer": "Customer",
+    "route": "Route",
+    "vehicle": "Vehicle",
+    "busyDuration": "Busy for (minutes)",
+    "googleMapsEstimate": "Google Maps estimates this ride will take {duration} minutes. You can adjust this value.",
+    "confirmAndAssign": "Confirm and Assign",
+    "validation": {
+      "validDuration": "Please enter a valid duration in minutes."
+    }
+  },
+  "dashboardWidget": {
+    "editTitle": "Edit Widget",
+    "colStart": "Col Start",
+    "colSpan": "Col Span",
+    "rowStart": "Row Start",
+    "rowSpan": "Row Span"
+  },
+  "aiToggle": {
+    "manual": "Manual",
+    "aiMode": "AI Mode"
+  },
+  "sms": {
+    "from": "From",
+    "to": "To",
+    "name": "Cust",
+    "phone": "Tel",
+    "passengers": "Passengers",
+    "pickupTime": "Pickup",
+    "pickupASAP": "ASAP",
+    "note": "Note",
+    "route": "Route",
+    "navigation": "Nav",
+    "openInApp": "Open in App",
+    "open": "Open"
+  },
+  "csv": {
+    "timestamp": "Timestamp",
+    "vehicle": "Vehicle",
+    "licensePlate": "License Plate",
+    "vehicleType": "Vehicle Type",
+    "driverName": "Driver Name",
+    "customerName": "Customer Name",
+    "customerPhone": "Customer Phone",
+    "pickupAddress": "Pickup Address",
+    "destinationAddress": "Destination Address",
+    "pickupTime": "Pickup Time",
+    "status": "Status",
+    "smsSent": "SMS Sent",
+    "estimatedPrice": "Estimated Price (CZK)",
+    "notes": "Notes"
+  },
+  "error": {
+    "missingApiKey": "Configuration key for AI services is missing.",
+    "noVehiclesInService": "All vehicles are currently out of service.",
+    "geocodingFailed": "Error geocoding addresses.",
+    "mainRouteCalculationFailed": "Failed to calculate the main route distance.",
+    "insufficientCapacity": "No available vehicle has enough capacity for the requested number of passengers.",
+    "unknown": "An unknown error occurred."
+  },
+  "vehicleType": {
+    "CAR": "Car",
+    "VAN": "Van"
+  },
+  "fuelType": {
+    "DIESEL": "Diesel",
+    "PETROL": "Petrol"
+  },
+  "vehicleStatus": {
+    "AVAILABLE": "Available",
+    "BUSY": "Busy",
+    "OUT_OF_SERVICE": "Out of Service",
+    "NOT_DRIVING_TODAY": "Not Driving Today"
+  },
+  "rideStatus": {
+    "SCHEDULED": "Scheduled",
+    "ON_THE_WAY": "On the Way",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+   "personRole": {
+     "DRIVER": "Driver",
+     "MANAGEMENT": "Management",
+     "DISPATCHER": "Dispatcher"
+   },
+   "personRolePlural": {
+     "DRIVER": "Drivers",
+     "MANAGEMENT": "Management",
+     "DISPATCHER": "Dispatchers"
+   }
+}

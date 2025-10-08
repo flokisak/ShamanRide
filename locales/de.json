@@ -1,0 +1,451 @@
+{
+  "general": {
+    "add": "Hinzufügen",
+    "save": "Speichern",
+    "saveChanges": "Änderungen speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "closeModal": "Modal schließen",
+    "unassigned": "Nicht zugewiesen",
+    "notApplicable": "N/A",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "header": {
+    "manageTariff": "Tarif festlegen",
+    "managePeople": "Personen verwalten",
+    "showAnalytics": "Analysen anzeigen",
+    "settings": "Einstellungen",
+    "backToHomepage": "Zurück zur Startseite"
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "general": {
+      "title": "Allgemein",
+      "language": "Sprache",
+      "aiMode": "KI-Modus"
+    },
+    "communication": {
+      "title": "Kommunikation",
+      "preferredApp": "Bevorzugte Nachrichten-App"
+    },
+    "fuel": {
+        "title": "Kraftstoffpreise",
+        "diesel": "Dieselpreis",
+        "petrol": "Benzinpreis"
+    },
+    "visibility": {
+      "title": "Widget-Sichtbarkeit",
+      "dispatch": "Dispositionsformular",
+      "vehicles": "Fahrzeugstatus",
+      "map": "Karte",
+      "rideLog": "Fahrtenbuch",
+      "smsGate": "SMS-Gateway"
+    },
+    "layout": {
+      "title": "Layout",
+      "editLayout": "Layout bearbeiten",
+      "finishEditing": "Bearbeitung beenden",
+      "resetLayout": "Layout zurücksetzen",
+      "confirmReset": "Möchten Sie das Layout wirklich auf die Standardeinstellungen zurücksetzen?"
+    },
+    "data": {
+      "title": "Datenverwaltung",
+      "save": "Daten speichern",
+      "load": "Daten laden",
+      "exportCsv": "Als CSV exportieren",
+      "confirmLoad": "Das Laden neuer Daten überschreibt die aktuellen Daten. Möchten Sie fortfahren?",
+      "clearHistory": "Fahrtenbuch leeren",
+      "confirmClearHistory": "Möchten Sie das gesamte Fahrtenbuch WIRKLICH leeren? Diese Aktion ist unkehrbar."
+    }
+  },
+  "dispatch": {
+    "newRide": "Neue Fahrt",
+    "pickupAddress": "Abholadresse",
+    "destinationAddress": "Zieladresse",
+    "customerName": "Kundenname",
+    "customerPhone": "Telefonnummer",
+    "passengers": "Fahrgäste",
+    "pickupTime": "Abholzeit",
+    "schedule": "Planen",
+    "asap": "Sofort",
+    "notes": "Notiz",
+    "notesOptional": "Notiz (optional)",
+    "notesPlaceholder": "z.B. 5. Stock, am Hintereingang...",
+    "addressHint": "Suche bevorzugt für Südmähren.",
+    "scheduleRide": "Fahrt planen",
+    "findingVehicle": "Fahrzeug wird gesucht...",
+    "findVehicle": "Fahrzeug finden",
+    "cooldown": "Versuchen Sie es in {cooldownTime}s erneut",
+    "optimizeStops": "Reihenfolge optimieren",
+    "stops": {
+        "title": "Haltestellen",
+        "startPlaceholder": "Abholadresse",
+        "destinationPlaceholder": "Zieladresse / Nächste Haltestelle",
+        "addStop": "Haltestelle hinzufügen"
+    },
+    "validation": {
+      "pickupRequired": "Abholadresse ist erforderlich.",
+      "destinationRequired": "Zieladresse ist erforderlich.",
+      "nameRequired": "Kundenname ist erforderlich.",
+      "phoneRequired": "Telefonnummer ist erforderlich.",
+      "pickupTimeRequired": "Abholzeit ist erforderlich.",
+      "futureTimeRequired": "Die geplante Zeit muss in der Zukunft liegen.",
+      "positivePassengers": "Die Anzahl der Fahrgäste muss eine positive Zahl sein.",
+      "allStopsRequired": "Alle Haltestellen müssen ausgefüllt sein.",
+      "atLeastTwoStops": "Es sind mindestens 2 Haltestellen erforderlich (Abholung und Ziel)."
+    }
+    ,
+    "phoneNotEdited": "Telefonnummer wurde nicht geändert. Bitte überprüfen Sie die Nummer oder bestätigen Sie die Übermittlung.",
+    "confirmSubmitWithUneditedPhone": "Die Telefonnummer wurde nicht geändert. Möchten Sie die Bestellung trotzdem absenden?"
+  },
+  "smsGate": {
+    "title": "SMS-Gateway",
+    "connected": "Gateway konfiguriert",
+    "notConfigured": "Nur lokal",
+    "noOutgoing": "Keine ausstehenden Fahrten",
+    "inbox": "SMS-Verlauf",
+    "inboxEmpty": "Keine Nachrichten",
+    "sending": "Wird gesendet...",
+    "send": "SMS senden",
+    "select": "Auswählen",
+    "latestRide": "SMS für neueste Fahrt senden",
+    "driverPhone": "Fahrertelefon",
+    "changeDriver": "Fahrer ändern",
+    "smsText": "SMS-Text",
+    "editSms": "SMS bearbeiten",
+    "sendToDriver": "An Fahrer senden",
+    "newSms": "Neue SMS senden",
+    "recipientPhone": "Empfängertelefon",
+    "message": "Nachricht",
+    "sendSms": "SMS senden",
+    "selectDriver": "Fahrer auswählen",
+    "customRecipient": "Benutzerdefinierter Empfänger",
+    "reply": "Antworten",
+    "replyTo": "Antworten an",
+    "replyMessage": "Antwortnachricht",
+    "sendReply": "Antwort senden",
+    "smsSent": "SMS erfolgreich gesendet",
+    "replySent": "Antwort erfolgreich gesendet"
+  },
+  "vehicles": {
+    "title": "Fahrzeugstatus",
+    "addVehicle": "Neues Fahrzeug hinzufügen",
+    "editVehicle": "Fahrzeug {name} bearbeiten",
+    "filters": {
+      "allTypes": "Alle Typen",
+      "allStatuses": "Alle Status",
+      "filterByType": "Nach Typ filtern",
+      "filterByStatus": "Nach Status filtern",
+      "hideInactive": "Inaktive ausblenden"
+    },
+    "table": {
+      "vehicle": "Fahrzeug",
+      "status": "Status",
+      "location": "Standort",
+      "warnings": "Warnungen",
+      "actions": "Aktionen",
+      "totalFuelCost": "Gesamte Kraftstoffkosten aus protokollierten Fahrten"
+    },
+    "add": {
+      "title": "Neues Fahrzeug hinzufügen",
+      "namePlaceholder": "z.B. Škoda Octavia #4",
+      "licensePlatePlaceholder": "z.B. 1AB 2345",
+      "locationPlaceholder": "z.B. Náměstí, Mikulov",
+      "serviceDetailsOptional": "Servicedetails (optional)",
+      "addVehicleButton": "Fahrzeug hinzufügen",
+      "fillAllFields": "Bitte füllen Sie alle Pflichtfelder aus (Name, Kennzeichen, Standort, Kapazität)."
+    },
+    "edit": {
+      "title": "Fahrzeug bearbeiten",
+      "serviceDetailsTitle": "Servicedetails",
+      "unavailableTime": "Nicht verfügbar für (Minuten)",
+      "deleteVehicle": "Fahrzeug löschen",
+      "confirmDelete": "Möchten Sie das Fahrzeug \"{name}\" wirklich löschen? Diese Aktion ist unkehrbar."
+    },
+    "fields": {
+      "name": "Fahrzeugname",
+      "licensePlate": "Kennzeichen",
+      "location": "Standort",
+      "type": "Typ",
+      "status": "Status",
+      "capacity": "Kapazität",
+      "assignedDriver": "Zugewiesener Fahrer",
+      "noDriverAssigned": "Kein Fahrer zugewiesen",
+      "mileage": "Kilometerstand (km)",
+      "serviceInterval": "Serviceintervall (km)",
+      "lastServiceMileage": "Letzter Service bei (km)",
+      "inspectionExpiry": "TÜV gültig bis",
+      "vignetteExpiry": "Vignette gültig bis",
+      "notes": "Fahrzeugnotizen",
+      "fuelType": "Kraftstoffart",
+      "fuelConsumption": "Verbrauch (L/100km)"
+    },
+    "warnings": {
+      "serviceOverdue": "Service um {km} km überfällig.",
+      "serviceDue": "Service in {km} km fällig.",
+      "inspectionExpired": "TÜV abgelaufen!",
+      "inspectionExpires": "TÜV läuft am {date} ab.",
+      "inspectionExpiresSoon": "TÜV läuft in {days} Tagen ab!",
+      "vignetteExpired": "Vignette abgelaufen!",
+      "vignetteExpires": "Vignette läuft am {date} ab.",
+      "vignetteExpiresSoon": "Vignette läuft in {days} Tagen ab!"
+    }
+  },
+  "assignment": {
+    "recommended": "Empfohlen",
+    "price": "Preis",
+    "route": "Route",
+    "eta": "Ankunft in",
+    "wait": "Wartezeit",
+    "assign": "Zuweisen",
+    "errorTitle": "Fehler bei der Fahrzeugsuche",
+    "titleAI": "Fahrtzuweisungsvorschlag",
+    "titleManual": "Manuelle Fahrzeugauswahl",
+    "communication": "Fahrerkommunikation",
+    "sendVia": "Senden über {app}",
+    "openNavigation": "Navigation öffnen",
+    "noDriverAssigned": "Diesem Fahrzeug ist kein Fahrer zugewiesen",
+    "copyText": "Text kopieren",
+    "optimizedRoute": "Optimierte Route",
+    "fuelCost": "Geschätzte Kraftstoffkosten",
+    "cost": "Kosten"
+  },
+  "rideLog": {
+    "title": "Fahrtenbuch",
+    "showInactive": "Inaktive anzeigen",
+    "noRidesYet": "Bisher wurden keine Fahrten protokolliert.",
+    "noActiveRides": "Keine aktiven oder geplanten Fahrten.",
+    "confirmDelete": "Möchten Sie diesen Fahrteintrag wirklich löschen? Diese Aktion ist unkehrbar.",
+    "table": {
+      "time": "Zeit",
+      "driver": "Fahrer",
+      "customer": "Kunde",
+      "passengers": "Passagiere",
+      "route": "Route",
+      "status": "Status",
+      "sms": "SMS",
+      "dispatch": "Disposition",
+      "actions": "Aktionen",
+      "awaitingAssignment": "Wartet auf Zuweisung",
+      "from": "Von",
+      "to": "Nach",
+      "stops": "Stopps",
+      "pickup": "Abholung",
+      "note": "Notiz",
+      "price": "Preis",
+      "sortBy": "Sortieren nach {label}",
+      "changeStatusFor": "Status für Fahrt mit Kunde {customerName} ändern",
+      "markSmsSentFor": "SMS für Fahrt mit Kunde {customerName} als gesendet markieren",
+      "editRideFor": "Fahrt für Kunde {customerName} bearbeiten",
+      "deleteRideFor": "Fahrt für Kunde {customerName} löschen"
+    },
+    "edit": {
+      "title": "Fahrteintrag bearbeiten",
+      "assignmentTitle": "Zuweisung",
+      "assignmentHelp": "Wählen Sie ein Fahrzeug zur Zuweisung aus. Der Fahrer wird automatisch ausgefüllt, kann aber geändert werden.",
+       "availableVehicles": "Verfügbare Fahrzeuge",
+       "selectDriver": "Fahrer auswählen",
+       "estimates": "Schätzungen",
+       "estimatedPrice": "Geschätzter Preis",
+       "estimatedDuration": "Geschätzte Dauer"
+    }
+    ,
+    "smsPreview": {
+      "title": "SMS Vorschau",
+      "driverPhone": "Telefon des Fahrers",
+      "noPhoneNumber": "Keine Telefonnummer verfügbar",
+      "confirmDispatch": "Bestätigen & Senden",
+      "sentSuccess": "SMS erfolgreich gesendet.",
+      "sentFailed": "Senden der SMS über das Gateway fehlgeschlagen."
+    }
+  },
+  "map": {
+    "title": "Karte",
+    "distance": "Entfernung",
+    "duration": "Dauer"
+  },
+  "loading": {
+    "calculating": "Berechne beste Route..."
+  },
+  "notifications": {
+    "dismiss": "Benachrichtigung schließen",
+    "scheduledRide": {
+      "title": "Erinnerung: Geplante Fahrt",
+      "message15": "Fahrt für {customerName} von {pickupAddress} beginnt in 15 Minuten. Bitte weisen Sie ein Fahrzeug zu.",
+      "message5": "Fahrt für {customerName} von {pickupAddress} beginnt in 5 Minuten. Bitte weisen Sie ein Fahrzeug zu."
+    },
+    "smsReminder": {
+      "title": "SMS vergessen?",
+      "message": "SMS für die Fahrt zu {customerName} (Fahrer: {driverName}) wurde seit über 5 Minuten nicht als gesendet bestätigt."
+    },
+    "rideScheduled": "Die Fahrt wurde geplant und zur Liste hinzugefügt.",
+    "noRidesToExport": "Das Fahrtenbuch ist leer, es gibt nichts zu exportieren.",
+    "dataLoadedSuccess": "Daten wurden erfolgreich geladen.",
+    "dataLoadedError": "Daten konnten nicht geladen werden. Die Datei ist beschädigt oder hat ein ungültiges Format.",
+    "clearHistoryAfterExport": "Daten erfolgreich exportiert. Möchten Sie das Fahrtenbuch jetzt leeren?",
+    "noRidesToClear": "Das Fahrtenbuch ist bereits leer."
+  },
+  "people": {
+    "title": "Personen verwalten",
+    "addPerson": "Person hinzufügen",
+    "confirmDelete": "Möchten Sie diese Person wirklich löschen? Wenn sie einem Fahrzeug zugewiesen ist, wird die Zuweisung aufgehoben.",
+    "fields": {
+      "name": "Name",
+      "phone": "Telefon"
+    },
+    "validation": {
+      "nameAndPhoneRequired": "Name und Telefonnummer sind erforderlich."
+    }
+  },
+  "tariff": {
+    "title": "Tarifeinstellungen",
+    "rideRates": "Fahrtpreise",
+    "startingFee": "Grundgebühr",
+    "pricePerKmCar": "Preis/km (PKW)",
+    "pricePerKmVan": "Preis/km (Transporter)",
+    "flatRates": "Pauschalpreise",
+    "routeName": "Routenname",
+    "routeNamePlaceholder": "Routenbeschreibung (z.B. Innerhalb von Mikulov)",
+    "price": "Preis",
+    "priceCar": "Preis (PKW)",
+    "priceVan": "Preis (Transporter)",
+    "deleteFlatRate": "Pauschale löschen",
+    "noFlatRates": "Keine Pauschalpreise definiert.",
+    "resetToDefault": "Auf Standard zurücksetzen",
+    "saveTariff": "Tarif speichern",
+    "confirmReset": "Möchten Sie den Tarif wirklich auf die Standardeinstellungen zurücksetzen?"
+  },
+  "analytics": {
+    "title": "Analysen & Berichte",
+    "exportPdf": "PDF exportieren",
+    "exporting": "Exportieren...",
+    "exportError": "Beim Exportieren als PDF ist ein Fehler aufgetreten.",
+    "ranges": {
+      "today": "Heute",
+      "last7d": "Letzte 7 Tage",
+      "last30d": "Letzte 30 Tage",
+      "allTime": "Gesamt"
+    },
+    "filters": {
+      "dateRange": "Zeitraum",
+      "vehicle": "Fahrzeug",
+      "driver": "Fahrer",
+      "allVehicles": "Alle Fahrzeuge",
+      "allDrivers": "Alle Fahrer"
+    },
+    "cards": {
+      "completedRides": "Abgeschlossene Fahrten",
+      "totalRevenue": "Gesamtumsatz",
+      "avgPrice": "Durchschn. Preis/Fahrt",
+      "cancelledRides": "Stornierte Fahrten",
+      "totalFuelCost": "Gesamte Kraftstoffkosten"
+    },
+    "chartTitle": "Fahrten pro Fahrzeug",
+    "noChartData": "Keine Daten für das Diagramm verfügbar.",
+    "tableTitle": "Fahrzeugstatistiken",
+    "table": {
+      "vehicle": "Fahrzeug",
+      "licensePlate": "Kennzeichen",
+      "completedRides": "Abgeschl. Fahrten",
+      "revenue": "Umsatz",
+      "fuelCost": "Kraftstoffkosten"
+    },
+    "noData": "Keine Daten für den ausgewählten Zeitraum."
+  },
+  "smsPreview": {
+    "title": "Nachricht für Fahrer bereit",
+    "driverPhone": "Telefon des Fahrers",
+    "noPhoneNumber": "Telefonnummer des Fahrers nicht verfügbar",
+    "confirmDispatch": "Disposition bestätigen"
+  },
+  "manualAssignment": {
+    "title": "Manuelle Zuweisung",
+    "customer": "Kunde",
+    "route": "Route",
+    "vehicle": "Fahrzeug",
+    "busyDuration": "Besetzt für (Minuten)",
+    "googleMapsEstimate": "Google Maps schätzt, dass diese Fahrt {duration} Minuten dauert. Sie können diesen Wert anpassen.",
+    "confirmAndAssign": "Bestätigen und Zuweisen",
+    "validation": {
+      "validDuration": "Bitte geben Sie eine gültige Dauer in Minuten ein."
+    }
+  },
+  "dashboardWidget": {
+    "editTitle": "Widget bearbeiten",
+    "colStart": "Spalte Start",
+    "colSpan": "Spaltenbreite",
+    "rowStart": "Zeile Start",
+    "rowSpan": "Zeilenhöhe"
+  },
+  "aiToggle": {
+    "manual": "Manuell",
+    "aiMode": "KI-Modus"
+  },
+  "sms": {
+    "from": "Von",
+    "to": "Nach",
+    "name": "Kunde",
+    "phone": "Tel",
+    "passengers": "Anzahl Personen",
+    "pickupTime": "Abholung",
+    "pickupASAP": "so bald wie möglich",
+    "note": "Notiz",
+    "route": "Route",
+    "navigation": "Nav"
+  },
+  "csv": {
+    "timestamp": "Zeitstempel",
+    "vehicle": "Fahrzeug",
+    "licensePlate": "Kennzeichen",
+    "vehicleType": "Fahrzeugtyp",
+    "driverName": "Fahrername",
+    "customerName": "Kundenname",
+    "customerPhone": "Kundentelefon",
+    "pickupAddress": "Abholadresse",
+    "destinationAddress": "Zieladresse",
+    "pickupTime": "Abholzeit",
+    "status": "Status",
+    "smsSent": "SMS gesendet",
+    "estimatedPrice": "Geschätzter Preis (CZK)",
+    "notes": "Notizen"
+  },
+  "error": {
+    "missingApiKey": "Konfigurationsschlüssel für KI-Dienste fehlt.",
+    "noVehiclesInService": "Alle Fahrzeuge sind derzeit außer Betrieb.",
+    "geocodingFailed": "Fehler bei der Adressauflösung.",
+    "mainRouteCalculationFailed": "Die Hauptroute konnte nicht berechnet werden.",
+    "insufficientCapacity": "Kein verfügbares Fahrzeug hat genügend Kapazität für die angeforderte Anzahl von Fahrgästen.",
+    "unknown": "Ein unbekannter Fehler ist aufgetreten."
+  },
+  "vehicleType": {
+    "CAR": "PKW",
+    "VAN": "Transporter"
+  },
+  "fuelType": {
+    "DIESEL": "Diesel",
+    "PETROL": "Benzin"
+  },
+  "vehicleStatus": {
+    "AVAILABLE": "Verfügbar",
+    "BUSY": "Besetzt",
+    "OUT_OF_SERVICE": "Außer Betrieb",
+    "NOT_DRIVING_TODAY": "Fährt heute nicht"
+  },
+  "rideStatus": {
+    "SCHEDULED": "Geplant",
+    "ON_THE_WAY": "Unterwegs",
+    "COMPLETED": "Abgeschlossen",
+    "CANCELLED": "Storniert"
+  },
+   "personRole": {
+     "DRIVER": "Fahrer",
+     "MANAGEMENT": "Management",
+     "DISPATCHER": "Disponent"
+   },
+   "personRolePlural": {
+     "DRIVER": "Fahrer",
+     "MANAGEMENT": "Management",
+     "DISPATCHER": "Disponenten"
+   }
+}

@@ -1,0 +1,498 @@
+{
+  "general": {
+    "add": "Přidat",
+    "save": "Uložit",
+    "saveChanges": "Uložit změny",
+    "cancel": "Zrušit",
+    "close": "Zavřít",
+    "closeModal": "Zavřít modální okno",
+    "unassigned": "Nepřiřazen",
+    "notApplicable": "N/A",
+    "yes": "Ano",
+    "no": "Ne"
+  },
+  "header": {
+    "manageTariff": "Nastavit tarif",
+    "managePeople": "Spravovat osoby",
+    "showAnalytics": "Zobrazit reporty",
+    "settings": "Nastavení",
+    "backToHomepage": "Zpět na hlavní stránku"
+  },
+  "settings": {
+    "title": "Nastavení",
+    "general": {
+      "title": "Obecné",
+      "language": "Jazyk",
+      "aiMode": "Režim AI"
+    },
+    "communication": {
+      "title": "Komunikace",
+      "preferredApp": "Preferovaná aplikace pro zprávy"
+    },
+    "fuel": {
+      "title": "Ceny paliva",
+      "diesel": "Cena nafty",
+      "petrol": "Cena benzínu"
+    },
+    "visibility": {
+      "title": "Viditelnost widgetů",
+      "dispatch": "Formulář pro zadání",
+      "vehicles": "Status vozidel",
+      "map": "Mapa",
+      "rideLog": "Historie jízd",
+      "smsGate": "SMS brána"
+    },
+    "layout": {
+      "title": "Rozložení",
+      "editLayout": "Upravit rozložení",
+      "finishEditing": "Dokončit úpravy",
+      "resetLayout": "Resetovat rozložení",
+      "confirmReset": "Opravdu chcete resetovat rozložení na výchozí?"
+    },
+    "data": {
+      "title": "Správa dat",
+      "save": "Uložit data",
+      "load": "Načíst data",
+      "exportCsv": "Exportovat do CSV",
+      "confirmLoad": "Načtením dat přepíšete aktuální data. Chcete pokračovat?",
+      "clearHistory": "Vyčistit historii jízd",
+      "confirmClearHistory": "OPRAVDU chcete vyčistit celou historii jízd? Tato akce je nevratná."
+    }
+  },
+  "dispatch": {
+    "newRide": "Nová Jízda",
+    "pickupAddress": "Adresa nástupu",
+    "destinationAddress": "Adresa cíle",
+    "customerName": "Jméno zákazníka",
+    "customerPhone": "Telefonní číslo",
+    "passengers": "Počet cestujících",
+    "pickupTime": "Čas vyzvednutí",
+    "schedule": "Naplánovat",
+    "asap": "Ihned",
+    "notes": "Poznámka",
+    "notesOptional": "Poznámka (volitelné)",
+    "notesPlaceholder": "např. 5. patro, u zadního vchodu...",
+    "addressHint": "Hledání upřednostněno pro Jižní Moravu.",
+    "scheduleRide": "Naplánovat jízdu",
+    "findingVehicle": "Hledám vozidlo...",
+    "findVehicle": "Najít vozidlo",
+    "cooldown": "Zkuste to znovu za {cooldownTime}s",
+    "optimizeStops": "Optimalizovat pořadí zastávek",
+    "stops": {
+        "title": "Zastávky",
+        "startPlaceholder": "Adresa vyzvednutí",
+        "destinationPlaceholder": "Cílová adresa / Další zastávka",
+        "addStop": "Přidat zastávku"
+    },
+    "validation": {
+      "pickupRequired": "Adresa nástupu je povinná.",
+      "destinationRequired": "Cílová adresa je povinná.",
+      "nameRequired": "Jméno zákazníka je povinné.",
+      "phoneRequired": "Telefonní číslo je povinné.",
+      "pickupTimeRequired": "Čas vyzvednutí je povinný.",
+      "futureTimeRequired": "Plánovaný čas musí být v budoucnosti.",
+      "positivePassengers": "Počet cestujících musí být kladné číslo.",
+      "allStopsRequired": "Všechny zastávky musí být vyplněny.",
+      "atLeastTwoStops": "Musí být zadány alespoň 2 zastávky (start a cíl)."
+    },
+    "sendSms": "Odeslat SMS",
+    "smsPlaceholder": "Napište SMS zprávu...",
+    "send": "Odeslat",
+    "showChat": "Zobrazit chat záznamy",
+    "hideChat": "Skrýt chat záznamy",
+    "phoneNotEdited": "Telefon nebyl upraven. Ověřte prosím číslo nebo potvrďte odeslání.",
+    "confirmSubmitWithUneditedPhone": "Telefonní číslo nebylo upraveno. Chcete přesto odeslat objednávku?"
+  },
+   "smsGate": {
+     "title": "SMS Brána",
+     "connected": "Brána nakonfigurována",
+     "notConfigured": "Pouze lokální",
+     "noOutgoing": "Žádné čekající jízdy",
+     "inbox": "Historie SMS",
+     "inboxEmpty": "Žádné zprávy",
+     "noMessagesForPhone": "Žádné zprávy pro toto číslo",
+     "filterByPhone": "Filtrovat podle čísla",
+     "sending": "Odesílání...",
+     "send": "Odeslat SMS",
+     "select": "Vybrat",
+     "latestRide": "Odeslat SMS pro nejnovější jízdu",
+     "driverPhone": "Telefon řidiče",
+     "changeDriver": "Změnit řidiče",
+     "smsText": "Text SMS",
+     "editSms": "Upravit SMS",
+     "sendToDriver": "Odeslat řidiči",
+     "newSms": "Odeslat novou SMS",
+     "recipientPhone": "Telefon příjemce",
+     "message": "Zpráva",
+     "sendSms": "Odeslat SMS",
+     "selectDriver": "Vybrat řidiče",
+     "customRecipient": "Vlastní příjemce",
+     "reply": "Odpovědět",
+     "replyTo": "Odpovědět na",
+     "replyMessage": "Zpráva odpovědi",
+     "sendReply": "Odeslat odpověď",
+     "smsSent": "SMS úspěšně odeslána",
+     "replySent": "Odpověď úspěšně odeslána"
+   },
+  "vehicles": {
+    "title": "Status Vozidel",
+    "addVehicle": "Přidat nové vozidlo",
+    "editVehicle": "Upravit vozidlo {name}",
+    "filters": {
+      "allTypes": "Všechny typy",
+      "allStatuses": "Všechny stavy",
+      "filterByType": "Filtrovat podle typu",
+      "filterByStatus": "Filtrovat podle statusu",
+      "hideInactive": "Skrýt neaktivní"
+    },
+    "table": {
+      "vehicle": "Vozidlo",
+      "status": "Status",
+      "location": "Lokace",
+      "warnings": "Upozornění",
+      "actions": "Akce",
+      "totalFuelCost": "Celkové náklady na palivo ze zaznamenaných jízd"
+    },
+    "add": {
+      "title": "Přidat nové vozidlo",
+      "namePlaceholder": "např. Škoda Octavia #4",
+      "licensePlatePlaceholder": "např. 1AB 2345",
+      "locationPlaceholder": "např. Náměstí, Mikulov",
+      "serviceDetailsOptional": "Servisní údaje (volitelné)",
+      "addVehicleButton": "Přidat vozidlo",
+      "fillAllFields": "Vyplňte prosím všechna povinná pole (Název, SPZ, Lokace, Kapacita)."
+    },
+    "edit": {
+      "title": "Upravit vozidlo",
+      "serviceDetailsTitle": "Servisní údaje",
+      "unavailableTime": "Doba nedostupnosti (v minutách)",
+      "deleteVehicle": "Smazat vozidlo",
+      "confirmDelete": "Opravdu chcete smazat vozidlo \"{name}\"? Tato akce je nevratná."
+    },
+    "fields": {
+      "name": "Název vozidla",
+      "licensePlate": "SPZ",
+      "location": "Lokace",
+      "type": "Typ",
+      "status": "Status",
+      "capacity": "Kapacita",
+      "assignedDriver": "Přiřazený řidič",
+      "noDriverAssigned": "Nikdo nepřiřazen",
+      "mileage": "Stav km",
+      "serviceInterval": "Servisní interval (km)",
+      "lastServiceMileage": "Poslední servis (km)",
+      "inspectionExpiry": "Platnost STK do",
+      "vignetteExpiry": "Platnost dálniční známky do",
+      "notes": "Poznámky k vozidlu",
+      "fuelType": "Typ paliva",
+      "fuelConsumption": "Spotřeba (L/100km)"
+    },
+    "warnings": {
+        "serviceOverdue": "Servis po termínu o {km} km.",
+        "serviceDue": "Servis za {km} km.",
+        "inspectionExpired": "STK propadlá!",
+        "inspectionExpires": "STK končí {date}.",
+        "inspectionExpiresSoon": "STK končí za {days} dní!",
+        "vignetteExpired": "Dálniční známka propadlá!",
+        "vignetteExpires": "Dálniční známka končí {date}.",
+        "vignetteExpiresSoon": "Dálniční známka končí za {days} dní!"
+    }
+  },
+  "assignment": {
+    "recommended": "Doporučeno",
+    "price": "Cena",
+    "route": "Trasa",
+    "eta": "Příjezd za",
+    "wait": "čekání",
+    "assign": "Přiřadit",
+    "errorTitle": "Chyba při hledání vozidla",
+    "titleAI": "Návrh přiřazení jízdy",
+    "titleManual": "Manuální výběr vozidla",
+    "communication": "Komunikace s řidičem",
+    "sendVia": "Odeslat přes {app}",
+    "openNavigation": "Otevřít navigaci",
+    "noDriverAssigned": "Vozidlu není přiřazen žádný řidič",
+    "copyText": "Kopírovat text",
+    "optimizedRoute": "Optimalizovaná trasa",
+    "fuelCost": "Odhadované náklady na palivo",
+    "cost": "Náklady"
+  },
+  "rideLog": {
+    "title": "Kniha jízd",
+    "showInactive": "Zobrazit neaktivní",
+    "noRidesYet": "Zatím nebyly zaznamenány žádné jízdy.",
+    "noActiveRides": "Žádné aktivní nebo naplánované jízdy.",
+    "confirmDelete": "Opravdu si přejete smazat tento záznam o jízdě? Tato akce je nevratná.",
+    "table": {
+      "time": "Čas",
+      "driver": "Řidič",
+      "customer": "Zákazník",
+      "passengers": "Cestující",
+      "route": "Trasa",
+      "status": "Status",
+      "sms": "SMS",
+      "dispatch": "Dispečink",
+      "actions": "Akce",
+      "awaitingAssignment": "Čeká na přiřazení",
+      "from": "Z",
+      "to": "Do",
+      "stops": "zastávky",
+      "pickup": "Vyzvednout",
+      "note": "Pozn",
+      "price": "Cena",
+       "sortBy": "Seřadit podle {label}",
+       "changeStatusFor": "Změnit status pro jízdu se zákazníkem {customerName}",
+       "markSmsSentFor": "Označit SMS jako odeslanou pro jízdu se zákazníkem {customerName}",
+       "sendSmsFor": "Odeslat SMS pro jízdu se zákazníkem {customerName}",
+       "editRideFor": "Upravit jízdu se zákazníkem {customerName}",
+       "deleteRideFor": "Smazat jízdu se zákazníkem {customerName}",
+      "startMileage": "Počáteční km",
+      "endMileage": "Konečný km",
+      "distance": "Vzdálenost",
+      "rideType": "Typ jízdy",
+      "purpose": "Účel"
+    },
+    "edit": {
+      "title": "Upravit záznam jízdy",
+      "assignmentTitle": "Přiřazení",
+      "assignmentHelp": "Vyberte vozidlo pro přiřazení. Řidič se vyplní automaticky, ale můžete ho změnit.",
+      "availableVehicles": "Dostupná vozidla",
+      "selectDriver": "Vyberte řidiče",
+      "rideType": "Typ jízdy",
+      "startMileage": "Počáteční stav km",
+      "endMileage": "Konečný stav km",
+       "purpose": "Účel jízdy",
+       "businessPurpose": "Účel služební jízdy",
+       "estimates": "Odhady",
+       "estimatedPrice": "Odhadovaná cena",
+       "estimatedDuration": "Odhadovaná doba"
+    },
+    "add": {
+      "title": "Přidat jízdu",
+      "privateRide": "Soukromá jízda",
+      "businessRide": "Služební jízda"
+    }
+    ,
+    "smsPreview": {
+      "title": "Náhled SMS",
+      "driverPhone": "Telefon řidiče",
+      "noPhoneNumber": "Telefonní číslo není k dispozici",
+      "confirmDispatch": "Potvrdit a odeslat",
+      "sentSuccess": "SMS byla úspěšně odeslána.",
+      "sentFailed": "Nepodařilo se odeslat SMS přes bránu."
+    }
+  },
+  "map": {
+    "title": "Mapa",
+    "distance": "Vzdálenost",
+    "duration": "Doba jízdy"
+  },
+  "loading": {
+    "calculating": "Počítám nejlepší trasu..."
+  },
+  "notifications": {
+    "dismiss": "Zavřít upozornění",
+    "scheduledRide": {
+      "title": "Připomínka: Plánovaná jízda",
+      "message15": "Jízda pro {customerName} z {pickupAddress} začíná za 15 minut. Přiřaďte vozidlo.",
+      "message5": "Jízda pro {customerName} z {pickupAddress} začíná za 5 minut. Přiřaďte vozidlo."
+    },
+    "smsReminder": {
+      "title": "Zapomenutá SMS?",
+      "message": "U jízdy pro {customerName} (řidič: {driverName}) nebylo potvrzeno odeslání SMS déle než 5 minut."
+    },
+    "customerOrder": {
+      "title": "Nová objednávka od zákazníka",
+      "message": "{customerName} objednal odvoz z {pickupAddress} do {destinationAddress}. Přiřaďte vozidlo."
+    },
+    "rideScheduled": "Jízda byla naplánována a přidána do seznamu.",
+    "noRidesToExport": "Historie jízd je prázdná, není co exportovat.",
+    "dataLoadedSuccess": "Data byla úspěšně načtena.",
+    "dataLoadedError": "Nepodařilo se načíst data. Soubor je poškozený nebo má neplatný formát.",
+    "clearHistoryAfterExport": "Data byla úspěšně exportována. Chcete nyní vyčistit historii jízd?",
+    "noRidesToClear": "Historie jízd je již prázdná."
+  },
+  "people": {
+    "title": "Správa osob",
+    "addPerson": "Přidat osobu",
+    "confirmDelete": "Opravdu chcete smazat tuto osobu? Pokud je přiřazena k vozidlu, bude z něj odebrána.",
+    "fields": {
+        "name": "Jméno",
+        "phone": "Telefon"
+    },
+    "validation": {
+        "nameAndPhoneRequired": "Jméno a telefonní číslo jsou povinné."
+    }
+  },
+  "tariff": {
+    "title": "Nastavení Tarifu",
+    "rideRates": "Sazby za jízdu",
+    "startingFee": "Nástupní sazba",
+    "pricePerKmCar": "Cena/km (osobák)",
+    "pricePerKmVan": "Cena/km (dodávka)",
+    "flatRates": "Paušální sazby",
+    "routeName": "Název trasy",
+    "routeNamePlaceholder": "Popis trasy (např. V rámci Mikulova)",
+    "price": "Cena",
+    "priceCar": "Cena (Osobák)",
+    "priceVan": "Cena (Dodávka)",
+    "deleteFlatRate": "Smazat paušální sazbu",
+    "noFlatRates": "Nejsou definovány žádné paušální sazby.",
+    "timeBasedTariffs": "Časové tarify",
+    "tariffName": "Název tarifu",
+    "tariffNamePlaceholder": "např. Den, Noc",
+    "startTime": "Čas začátku",
+    "endTime": "Čas konce",
+    "deleteTimeBasedTariff": "Smazat časový tarif",
+    "noTimeBasedTariffs": "Nejsou definovány žádné časové tarify.",
+    "resetToDefault": "Obnovit výchozí",
+    "saveTariff": "Uložit tarif",
+    "confirmReset": "Opravdu chcete obnovit výchozí nastavení tarifu?"
+  },
+  "analytics": {
+    "title": "Reporty a Analytika",
+    "exportPdf": "Export PDF",
+    "exporting": "Exportuji...",
+    "exportError": "Při exportu do PDF došlo k chybě.",
+    "ranges": {
+      "today": "Dnes",
+      "last7d": "Posledních 7 dní",
+      "last30d": "Posledních 30 dní",
+      "allTime": "Celkově"
+    },
+    "filters": {
+      "dateRange": "Časové období",
+      "vehicle": "Vozidlo",
+      "driver": "Řidič",
+      "allVehicles": "Všechna vozidla",
+      "allDrivers": "Všichni řidiči"
+    },
+    "cards": {
+      "completedRides": "Dokončené jízdy",
+      "totalRevenue": "Celkové tržby",
+      "avgPrice": "Průměrná cena jízdy",
+      "cancelledRides": "Zrušené jízdy",
+      "totalFuelCost": "Celkové náklady na palivo"
+    },
+    "chartTitle": "Počet jízd na vozidlo",
+    "noChartData": "Nejsou k dispozici žádná data pro graf.",
+    "tableTitle": "Statistiky vozidel",
+    "table": {
+        "vehicle": "Vozidlo",
+        "licensePlate": "SPZ",
+        "completedRides": "Dokončené jízdy",
+        "revenue": "Tržby",
+        "fuelCost": "Náklady na palivo"
+    },
+    "noData": "Pro vybrané období nejsou žádná data."
+  },
+  "smsPreview": {
+    "title": "Zpráva pro řidiče připravena",
+    "driverPhone": "Telefon řidiče",
+    "noPhoneNumber": "Telefonní číslo řidiče není k dispozici",
+    "confirmDispatch": "Potvrdit odeslání",
+    "sendSms": "Odeslat SMS",
+    "sentFailed": "Odeslání SMS se nezdařilo."
+  },
+  "manualAssignment": {
+      "title": "Manuální přiřazení",
+      "customer": "Zákazník",
+      "route": "Trasa",
+      "vehicle": "Vozidlo",
+      "busyDuration": "Doba obsazení (v minutách)",
+      "googleMapsEstimate": "Google Maps odhaduje délku této jízdy na {duration} minut. Hodnotu můžete upravit.",
+      "confirmAndAssign": "Potvrdit a přiřadit",
+      "validation": {
+          "validDuration": "Zadejte prosím platnou dobu obsazení v minutách."
+      }
+  },
+  "dashboardWidget": {
+    "editTitle": "Upravit Widget",
+    "colStart": "Sloupec Od",
+    "colSpan": "Šířka (sl.)",
+    "rowStart": "Řádek Od",
+    "rowSpan": "Výška (ř.)"
+  },
+  "aiToggle": {
+    "manual": "Manuálně",
+    "aiMode": "AI Režim"
+  },
+  "sms": {
+    "from": "Odkud",
+    "to": "Kam",
+    "name": "Zákazník",
+    "phone": "Tel",
+    "passengers": "Počet osob",
+    "pickupTime": "Vyzvednutí",
+    "pickupASAP": "co nejdříve",
+    "note": "Pozn",
+    "route": "Trasa",
+    "navigation": "Nav",
+    "openInApp": "Otevřít v aplikaci",
+    "open": "Otevřít"
+  },
+  "csv": {
+    "timestamp": "Čas záznamu",
+    "vehicle": "Vozidlo",
+    "licensePlate": "SPZ",
+    "vehicleType": "Typ vozidla",
+    "driverName": "Jméno řidiče",
+    "customerName": "Jméno zákazníka",
+    "customerPhone": "Telefon zákazníka",
+    "pickupAddress": "Adresa vyzvednutí",
+    "destinationAddress": "Cílová adresa",
+    "pickupTime": "Čas vyzvednutí",
+    "status": "Status",
+    "smsSent": "SMS odeslána",
+    "estimatedPrice": "Odhadovaná cena (Kč)",
+    "notes": "Poznámky"
+  },
+  "error": {
+    "missingApiKey": "Chybí konfigurační klíč pro AI služby.",
+    "noVehiclesInService": "Všechna vozidla jsou momentálně mimo provoz.",
+    "geocodingFailed": "Chyba při zjišťování polohy z adres.",
+    "mainRouteCalculationFailed": "Nepodařilo se vypočítat vzdálenost hlavní trasy.",
+    "insufficientCapacity": "Žádné vozidlo nemá dostatečnou kapacitu pro tolik cestujících.",
+    "unknown": "Došlo k neznámé chybě."
+  },
+  "vehicleType": {
+    "CAR": "Osobák",
+    "VAN": "Dodávka"
+  },
+  "fuelType": {
+    "DIESEL": "Nafta",
+    "PETROL": "Benzín"
+  },
+  "vehicleStatus": {
+    "AVAILABLE": "Volné",
+    "Available": "Volné",
+    "volné": "Volné",
+    "BUSY": "Obsazené",
+    "Busy": "Obsazené",
+    "obsazené": "Obsazené",
+    "OUT_OF_SERVICE": "Mimo provoz",
+    "OutOfService": "Mimo provoz",
+    "NOT_DRIVING_TODAY": "Dnes nejede",
+    "NotDrivingToday": "Dnes nejede"
+  },
+  "rideStatus": {
+    "SCHEDULED": "Naplánováno",
+    "ON_THE_WAY": "Na cestě",
+    "COMPLETED": "Dokončeno",
+    "CANCELLED": "Zrušeno"
+  },
+  "rideType": {
+    "BUSINESS": "Služební",
+    "PRIVATE": "Soukromá"
+  },
+   "personRole": {
+     "DRIVER": "Řidič",
+     "MANAGEMENT": "Vedení",
+     "DISPATCHER": "Dispečer"
+   },
+   "personRolePlural": {
+     "DRIVER": "Řidiči",
+     "MANAGEMENT": "Vedení",
+     "DISPATCHER": "Dispečeři"
+   }
+}
