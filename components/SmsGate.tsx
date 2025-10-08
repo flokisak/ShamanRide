@@ -17,7 +17,6 @@ interface SmsGateProps {
 
 export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onSend, smsMessages = [], messagingApp, onSmsSent }) => {
   const { t } = useTranslation();
-  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
   const [incoming, setIncoming] = useState<{ from: string; message: string; time: number }[]>([]);
   const [sending, setSending] = useState(false);

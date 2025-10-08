@@ -21,16 +21,14 @@ export async function sendSmsViaSmsGate(recipients: string[], message: string): 
 
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      // If SMS gateway fails, fall back to simulation for testing
-      console.warn('SMS gateway failed, simulating success for testing:', { status: res.status, body: data });
-      return { success: true, data: 'SMS simulated (gateway not configured)' };
+      console.warn('SMS gateway failed:', { status: res.status, body: data });
+      return { success: false, error: data };
     }
 
     return { success: true, data };
   } catch (err) {
-    // If server is not running, fall back to simulation
-    console.warn('SMS server not available, simulating success for testing:', err);
-    return { success: true, data: 'SMS simulated (server not running)' };
+    console.warn('SMS server not available:', err);
+    return { success: false, error: err.message };
   }
 }
 
