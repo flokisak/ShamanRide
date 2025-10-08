@@ -37,7 +37,7 @@ app.post('/api/send-sms', async (req, res) => {
     console.log('Sending SMS to:', url, { recipients, message });
     const body = {
       deviceId: process.env.DEVICE_ID || config.username,
-      phoneNumbers: recipients,
+      phoneNumbers: recipients.map(phone => phone.startsWith('+') ? phone.slice(1) : `420${phone.replace(/\s/g, '')}`),
       textMessage: {
         text: message
       }
