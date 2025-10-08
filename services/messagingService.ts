@@ -2,6 +2,8 @@
     Uses local SMS gateway server with smsgate when available.
     Falls back to a no-op that resolves when not configured.
  */
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+
 export function isSmsGateConfigured(): boolean {
   // Assume backend is running on localhost:3001
   return true; // Always try to use the backend
@@ -9,7 +11,7 @@ export function isSmsGateConfigured(): boolean {
 
 export async function sendSmsViaSmsGate(recipients: string[], message: string): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    const res = await fetch('http://localhost:3001/api/send-sms', {
+    const res = await fetch(`${API_BASE}/api/send`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
