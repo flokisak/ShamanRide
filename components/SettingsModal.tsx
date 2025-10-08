@@ -98,12 +98,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-4">
                <div className="flex justify-between items-center bg-slate-700 p-3 rounded-lg">
                  <label htmlFor="language-select" className="text-gray-200">{t('settings.general.language')}</label>
-                <select
-                  id="language-select"
-                  value={language}
-                  onChange={(e) => changeLanguage(e.target.value)}
-                  className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3"
-                >
+                 <select
+                   id="language-select"
+                   value={language}
+                   onChange={(e) => changeLanguage(e.target.value)}
+                   className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3 text-white"
+                 >
                   <option value="cs">Čeština</option>
                   <option value="en">English</option>
                   <option value="de">Deutsch</option>
@@ -122,12 +122,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="space-y-4">
   <div className="flex justify-between items-center bg-slate-700 p-3 rounded-lg">
                 <label htmlFor="messaging-app-select" className="text-gray-200">{t('settings.communication.preferredApp')}</label>
-                <select
-                  id="messaging-app-select"
-                  value={messagingApp}
-                  onChange={(e) => onMessagingAppChange(e.target.value as MessagingApp)}
-                  className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3"
-                >
+                 <select
+                   id="messaging-app-select"
+                   value={messagingApp}
+                   onChange={(e) => onMessagingAppChange(e.target.value as MessagingApp)}
+                   className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3 text-white"
+                 >
                   {Object.values(AppType).map(app => (
                     <option key={app} value={app}>{app}</option>
                   ))}
@@ -135,12 +135,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               <div className="flex justify-between items-center bg-slate-700 p-3 rounded-lg">
                 <label htmlFor="preferred-nav-select" className="text-gray-200">{t('settings.communication.preferredNav')}</label>
-                <select
-                  id="preferred-nav-select"
-                  value={preferredNav}
-                  onChange={(e) => onPreferredNavChange?.(e.target.value as 'google' | 'waze')}
-                  className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3"
-                >
+                 <select
+                   id="preferred-nav-select"
+                   value={preferredNav}
+                   onChange={(e) => onPreferredNavChange?.(e.target.value as 'google' | 'waze')}
+                   className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3 text-white"
+                 >
                   <option value="google">Google Maps</option>
                   <option value="waze">Waze</option>
                 </select>

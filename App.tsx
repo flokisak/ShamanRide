@@ -486,13 +486,12 @@ const AppContent: React.FC = () => {
         ]);
 
         // Then, fetch latest data from Supabase
-        const [ppl, veh, rl, notif, tf, fp, ci, ms] = await Promise.all([
+        const [ppl, veh, rl, notif, tf, ci, ms] = await Promise.all([
           supabaseService.getPeople().catch(() => null),
           supabaseService.getVehicles().catch(() => null),
           supabaseService.getRideLogs().catch(() => null),
           supabaseService.getNotifications().catch(() => null),
           supabaseService.getTariff().catch(() => null),
-          supabaseService.getFuelPrices().catch(() => null),
           supabaseService.getCompanyInfo().catch(() => null),
           supabaseService.getMessagingApp().catch(() => null),
         ]);
@@ -512,9 +511,6 @@ const AppContent: React.FC = () => {
         }
         if (tf) {
           setTariff(tf);
-        }
-        if (fp) {
-          setFuelPrices(fp);
         }
         if (ci) {
           setCompanyInfo(ci);

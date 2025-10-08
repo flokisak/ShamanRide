@@ -27,34 +27,30 @@ app.post('/api/send-sms', async (req, res) => {
     server: process.env.SMS_SERVER,
     username: process.env.SMS_USERNAME,
     password: process.env.SMS_PASSWORD,
+    deviceId: process.env.DEVICE_ID,
   };
   console.log('SMS config:', config);
   if (!config.server || !config.username || !config.password) {
     return res.status(500).json({ success: false, error: 'SMS gate not configured' });
   }
   try {
-    const url = `https://${config.server}/`;
+    const url = `https://${config.server}/3rdparty/v1/messages`;
     console.log('Sending SMS to:', url, { recipients, message });
     const body = {
-      deviceId: process.env.DEVICE_ID || config.username,
-      id: Date.now().toString(),
-      isEncrypted: false,
-      message: message,
-      phoneNumbers: recipients.map(phone => phone.startsWith('+') ? phone.slice(1) : `420${phone.replace(/\s/g, '')}`),
-      priority: 0,
-      simNumber: 1,
+      phoneNumbers: recipients.map(phone => phone.startsWith('+') ? phone : `+420${phone.replace(/\s/g, '')}`),
       textMessage: {
         text: message
-      },
-      ttl: 86400,
-      validUntil: "2025-12-31T00:00:00Z",
-      withDeliveryReport: true
+      }
     };
+    if (config.deviceId) {
+      body.deviceId = config.deviceId;
+    }
+    const auth = Buffer.from(`${config.username}:${config.password}`).toString('base64');
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + config.password
+        'Authorization': `Basic ${auth}`
       },
       body: JSON.stringify(body),
     });
