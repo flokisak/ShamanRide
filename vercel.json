@@ -2,7 +2,7 @@
   "framework": "vite",
   "functions": {
     "api/*.ts": {
-      "runtime": "@vercel/node"
+      "runtime": "@vercel/node@18"
     }
   }
 }
