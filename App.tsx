@@ -1651,60 +1651,187 @@ const AppContent: React.FC = () => {
 
 
 
-             {/* Main Dashboard Grid */}
-             <div className="grid grid-cols-3 gap-6">
+              {/* Main Dashboard Grid */}
+              <div className="grid grid-cols-3 gap-6">
+                {(() => {
+                  const mapColStart = widgetVisibility.dispatch ? 2 : 1;
+                  const mapColSpan = widgetVisibility.dispatch ? 2 : 3;
+                  const smsColStart = widgetVisibility.dispatch ? 2 : 1;
+                  const smsColSpan = widgetVisibility.dispatch ? 2 : 3;
+                  const smsRowStart = widgetVisibility.map ? 2 : 1;
+                  const rideLogColSpan = widgetVisibility.vehicles ? 2 : 3;
+                  const vehiclesColStart = widgetVisibility.rideLog ? 3 : 1;
+                  const vehiclesColSpan = widgetVisibility.rideLog ? 1 : 3;
 
-               {/* Dispatch Widget - Column 1, Rows 1-2 */}
-               <div className="col-start-1 row-start-1 row-span-2">
-                  <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
-                   <div className="p-4">
-                     {widgetMap.dispatch}
-                   </div>
-                 </div>
-               </div>
+                  return (
+                    <>
+                      {/* Dispatch Widget - Column 1, Rows 1-2 */}
+                      {widgetVisibility.dispatch && (
+                        <div className="col-start-1 row-start-1 row-span-2">
+                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
+                            <div className="p-4">
+                              {widgetMap.dispatch}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
-               {/* Map Widget - Columns 2-3, Row 1 */}
-               <div className="col-start-2 row-start-1 col-span-2">
-                  <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
-                    <div className="p-3 border-b border-slate-700">
-                      <h3 className="text-sm font-semibold text-white flex items-center">
-                        <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
-                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                         </svg>
+                      {/* Map Widget - Dynamic columns, Row 1 */}
+                      {widgetVisibility.map && (
+                        <div className={`col-start-${mapColStart} row-start-1 col-span-${mapColSpan}`}>
+                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
+                             <div className="p-3 border-b border-slate-700">
+                               <h3 className="text-sm font-semibold text-white flex items-center">
+                                 <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
+                                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                  </svg>
+                                 </div>
+                                 Mapa vozového parku
+                               </h3>
+                             </div>
+                             <div className="p-4">
+                               <div className="h-96">
+                                 {widgetMap.map}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
+                      )}
+
+                      {/* SMS Communications - Dynamic columns and row */}
+                      {widgetVisibility.smsGate && (
+                        <div className={`col-start-${smsColStart} row-start-${smsRowStart} col-span-${smsColSpan}`}>
+                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
+                             <div className="p-3 border-b border-slate-700">
+                               <h3 className="text-sm font-semibold text-white flex items-center">
+                                 <div className="w-6 h-6 bg-[#B48EAD]/80 rounded-lg flex items-center justify-center mr-2">
+                                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                  </svg>
+                                 </div>
+                                 SMS komunikace
+                               </h3>
+                             </div>
+                             <div className="p-4 overflow-y-auto h-full">
+                               {widgetMap.smsGate}
+                             </div>
+                           </div>
+                         </div>
+                      )}
+
+                      {/* Ride History - Dynamic columns, Row 3 */}
+                      {widgetVisibility.rideLog && (
+                        <div className={`col-start-1 row-start-3 col-span-${rideLogColSpan}`}>
+                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
+                             <div className="p-3 border-b border-slate-700">
+                               <div className="flex justify-between items-center">
+                                 <h3 className="text-sm font-semibold text-white flex items-center">
+                                   <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
+                                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                    </svg>
+                                   </div>
+                                   Historie jízd
+                                 </h3>
+                                   <button
+                                     onClick={handleAddRideClick}
+                                     className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
+                                   >
+                                  <PlusIcon size={14} />
+                                  <span>Přidat jízdu</span>
+                                </button>
+                              </div>
+                            </div>
+                            <div className="p-4">
+                              {widgetMap.rideLog}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Vehicles Status - Dynamic columns, Row 3 */}
+                      {widgetVisibility.vehicles && (
+                        <div className={`col-start-${vehiclesColStart} row-start-3 col-span-${vehiclesColSpan}`}>
+                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
+                             <div className="p-3 border-b border-slate-700">
+                               <h3 className="text-sm font-semibold text-white flex items-center">
+                                 <div className="w-6 h-6 bg-[#EBCB8B]/80 rounded-lg flex items-center justify-center mr-2">
+                                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                  </svg>
+                                 </div>
+                                 Stav vozového parku
+                               </h3>
+                             </div>
+                             <div className="p-4">
+                               {widgetMap.vehicles}
+                             </div>
+                           </div>
+                         </div>
+                      )}
+                    </>
+                  );
+                })()}
+
+                {/* Dispatch Widget - Column 1, Rows 1-2 */}
+                {widgetVisibility.dispatch && (
+                  <div className="col-start-1 row-start-1 row-span-2">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
+                      <div className="p-4">
+                        {widgetMap.dispatch}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Map Widget - Columns 2-3, Row 1 */}
+                {widgetVisibility.map && (
+                  <div className="col-start-2 row-start-1 col-span-2">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
+                       <div className="p-3 border-b border-slate-700">
+                         <h3 className="text-sm font-semibold text-white flex items-center">
+                           <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
+                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                           </div>
+                           Mapa vozového parku
+                         </h3>
                        </div>
-                       Mapa vozového parku
-                     </h3>
-                   </div>
-                   <div className="p-4">
-                     <div className="h-96">
-                       {widgetMap.map}
+                       <div className="p-4">
+                         <div className="h-96">
+                           {widgetMap.map}
+                         </div>
+                       </div>
                      </div>
                    </div>
-                 </div>
-               </div>
+                )}
 
-               {/* SMS Communications - Columns 2-3, Row 2 */}
-               <div className="col-start-2 row-start-2 col-span-2">
-                  <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
-                    <div className="p-3 border-b border-slate-700">
-                      <h3 className="text-sm font-semibold text-white flex items-center">
-                        <div className="w-6 h-6 bg-[#B48EAD]/80 rounded-lg flex items-center justify-center mr-2">
-                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                         </svg>
+                {/* SMS Communications - Columns 2-3, Row 2 */}
+                {widgetVisibility.smsGate && (
+                  <div className="col-start-2 row-start-2 col-span-2">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
+                       <div className="p-3 border-b border-slate-700">
+                         <h3 className="text-sm font-semibold text-white flex items-center">
+                           <div className="w-6 h-6 bg-[#B48EAD]/80 rounded-lg flex items-center justify-center mr-2">
+                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                           </div>
+                           SMS komunikace
+                         </h3>
                        </div>
-                       SMS komunikace
-                     </h3>
-                   </div>
-                   <div className="p-4 overflow-y-auto h-full">
-                     {widgetMap.smsGate}
-                   </div>
-                 </div>
-               </div>
+                       <div className="p-4 overflow-y-auto h-full">
+                        {widgetMap.smsGate}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-               {/* Ride History - Column 1-2, Row 3 */}
-               <div className="col-start-1 row-start-3 col-span-2">
+                {/* Ride History - Column 1-2, Row 3 */}
+                {widgetVisibility.rideLog && (
+                  <div className="col-start-1 row-start-3 col-span-2">
                   <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
                     <div className="p-3 border-b border-slate-700">
                       <div className="flex justify-between items-center">
@@ -1726,13 +1853,15 @@ const AppContent: React.FC = () => {
                      </div>
                    </div>
                    <div className="p-4">
-                     {widgetMap.rideLog}
-                   </div>
-                 </div>
-               </div>
+                        {widgetMap.rideLog}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-               {/* Vehicles Status - Column 3, Row 3 */}
-               <div className="col-start-3 row-start-3">
+                {/* Vehicles Status - Column 3, Row 3 */}
+                {widgetVisibility.vehicles && (
+                  <div className="col-start-3 row-start-3">
                   <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
                     <div className="p-3 border-b border-slate-700">
                       <h3 className="text-sm font-semibold text-white flex items-center">
@@ -1745,10 +1874,11 @@ const AppContent: React.FC = () => {
                      </h3>
                    </div>
                    <div className="p-4">
-                     {widgetMap.vehicles}
-                   </div>
-                 </div>
-               </div>
+                        {widgetMap.vehicles}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
              </div>
           </div>
