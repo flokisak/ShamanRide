@@ -11,7 +11,7 @@ export function isSmsGateConfigured(): boolean {
 
 export async function sendSmsViaSmsGate(recipients: string[], message: string): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
-    const res = await fetch(`${API_BASE}/api/send`, {
+    const res = await fetch(`${API_BASE}/api/send-sms`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
