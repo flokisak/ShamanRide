@@ -33,20 +33,28 @@ app.post('/api/send-sms', async (req, res) => {
     return res.status(500).json({ success: false, error: 'SMS gate not configured' });
   }
   try {
-    const url = `https://${config.server}/mobile/v1`;
+    const url = `https://${config.server}/`;
     console.log('Sending SMS to:', url, { recipients, message });
     const body = {
       deviceId: process.env.DEVICE_ID || config.username,
+      id: Date.now().toString(),
+      isEncrypted: false,
+      message: message,
       phoneNumbers: recipients.map(phone => phone.startsWith('+') ? phone.slice(1) : `420${phone.replace(/\s/g, '')}`),
+      priority: 0,
+      simNumber: 1,
       textMessage: {
         text: message
-      }
+      },
+      ttl: 86400,
+      validUntil: "2025-12-31T00:00:00Z",
+      withDeliveryReport: true
     };
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Basic ' + Buffer.from(config.username + ':' + config.password).toString('base64')
+        'Authorization': 'Bearer ' + config.password
       },
       body: JSON.stringify(body),
     });
