@@ -36,7 +36,7 @@ type RouteSummary = { distance: string; duration: string; price?: number };
 
 // --- Caching and API helpers ---
 const geocodeCache = new Map<string, Coords>();
-const SOUTH_MORAVIA_VIEWBOX = '16.3,48.7,17.2,49.3'; // lon_min,lat_min,lon_max,lat_max
+const EXPANDED_VIEWBOX = '12.0,46.0,24.0,52.0'; // lon_min,lat_min,lon_max,lat_max
 
 const generateColorForVehicle = (vehicleId: number): string => {
   const hue = (vehicleId * 137.5) % 360; // Use golden angle approximation for good distribution
@@ -52,26 +52,14 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
 
     const fetchCoords = async (addrToTry: string): Promise<Coords | null> => {
         const proxyUrl = 'https://corsproxy.io/?';
-        const parts = addrToTry.split('|');
-        const addr = parts[0];
-        const placeId = parts[1];
+        const addr = addrToTry.split('|')[0]; // Strip placeId if present
 
-        let nominatimUrl: string;
-        if (placeId) {
-            nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/details?place_id=${encodeURIComponent(placeId)}&format=json`;
-        } else {
-            nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=cz&viewbox=${SOUTH_MORAVIA_VIEWBOX}&bounded=1&accept-language=${lang},en;q=0.5&limit=1`;
-        }
+        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=cz&viewbox=${EXPANDED_VIEWBOX}&accept-language=${lang},en;q=0.5&limit=1`;
 
         const response = await fetch(nominatimUrl, { headers: { 'User-Agent': 'RapidDispatchAI/1.0' } });
         if (!response.ok) return null;
         const data = await response.json();
-
-        if (placeId) {
-            return data?.lat && data?.lon ? [parseFloat(data.lat), parseFloat(data.lon)] : null;
-        } else {
-            return data?.[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null;
-        }
+        return data?.[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null;
     };
 
     try {
