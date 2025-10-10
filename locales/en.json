@@ -69,6 +69,7 @@
     "pickupTime": "Pickup Time",
     "schedule": "Schedule",
     "asap": "ASAP",
+    "immediate": "Immediate",
     "notes": "Note",
     "notesOptional": "Note (optional)",
     "notesPlaceholder": "e.g., 5th floor, at the back entrance...",

@@ -69,6 +69,7 @@
     "pickupTime": "Čas vyzvednutí",
     "schedule": "Naplánovat",
     "asap": "Ihned",
+    "immediate": "Ihned",
     "notes": "Poznámka",
     "notesOptional": "Poznámka (volitelné)",
     "notesPlaceholder": "např. 5. patro, u zadního vchodu...",
