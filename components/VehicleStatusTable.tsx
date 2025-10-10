@@ -240,8 +240,8 @@ export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles
 
                 </tr>
                 </thead>
-                <tbody>
-                {filteredVehicles.map((vehicle) => {
+                 <tbody key={`${typeFilter}-${statusFilter}-${hideInactive}`}>
+                 {filteredVehicles.map((vehicle) => {
                     const driver = people.find(p => p.id === vehicle.driverId);
                     
                     const warnings: { text: string; level: WarningLevel }[] = [];
