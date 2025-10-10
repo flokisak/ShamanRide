@@ -228,6 +228,7 @@
     "confirmDelete": "Opravdu si přejete smazat tento záznam o jízdě? Tato akce je nevratná.",
     "table": {
       "time": "Čas",
+      "pickupTime": "Čas vyzvednutí",
       "driver": "Řidič",
       "customer": "Zákazník",
       "passengers": "Cestující",

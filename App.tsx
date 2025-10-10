@@ -57,7 +57,7 @@ const initialPeople: Person[] = [
 // Initial data for vehicles (empty by default)
 const initialVehicles: Vehicle[] = [];
 
-type SortKey = 'timestamp' | 'customerName';
+type SortKey = 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime';
 type SortDirection = 'asc' | 'desc';
 
 const DEFAULT_LAYOUT: LayoutConfig = [
@@ -130,6 +130,7 @@ const AppContent: React.FC = () => {
   const [rideLog, setRideLog] = useState<RideLog[]>([]);
 
   const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: SortDirection }>({ key: 'timestamp', direction: 'desc' });
+  type SortKey = 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime';
   const [tariff, setTariff] = useState<Tariff>(DEFAULT_TARIFF);
 
   // Defaults only; actual values are loaded from `supabaseService` (which has local fallback)
@@ -1511,6 +1512,11 @@ const AppContent: React.FC = () => {
 
     const sorted = filtered.sort((a, b) => {
         if (sortConfig.key === 'timestamp') return a.timestamp - b.timestamp;
+        if (sortConfig.key === 'pickupTime') {
+          const aTime = a.pickupTime === 'ihned' ? 0 : a.pickupTime ? new Date(a.pickupTime).getTime() : a.timestamp;
+          const bTime = b.pickupTime === 'ihned' ? 0 : b.pickupTime ? new Date(b.pickupTime).getTime() : b.timestamp;
+          return aTime - bTime;
+        }
         return a.customerName.localeCompare(b.customerName, language);
     });
     return sortConfig.direction === 'asc' ? sorted : sorted.reverse();

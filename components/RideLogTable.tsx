@@ -8,9 +8,9 @@ interface RideLogTableProps {
     vehicles: Vehicle[];
     people: Person[];
     messagingApp: MessagingApp;
-    onSort: (key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType') => void;
+    onSort: (key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime') => void;
     sortConfig: {
-      key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType';
+      key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime';
       direction: 'asc' | 'desc';
     };
      onToggleSmsSent: (logId: string) => void;
@@ -28,7 +28,7 @@ interface RideLogTableProps {
 
 const SortableHeader: React.FC<{
    label: string;
-   sortKey: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType';
+   sortKey: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime';
    onSort: (key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType') => void;
    sortConfig: RideLogTableProps['sortConfig'];
    className?: string;
@@ -351,9 +351,10 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
            <table className="min-w-full">
             <thead className="bg-slate-800 sticky top-0 z-10">
                 <tr>
-                 <SortableHeader label={t('rideLog.table.time')} sortKey="timestamp" onSort={onSort} sortConfig={sortConfig} className="pl-4 pr-3 sm:pl-0" />
-                 <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.driver')}</th>
-                  <SortableHeader label={t('rideLog.table.customer')} sortKey="customerName" onSort={onSort} sortConfig={sortConfig} className="px-3" />
+                  <SortableHeader label={t('rideLog.table.time')} sortKey="timestamp" onSort={onSort} sortConfig={sortConfig} className="pl-4 pr-3 sm:pl-0" />
+                  <SortableHeader label={t('rideLog.table.pickupTime')} sortKey="pickupTime" onSort={onSort} sortConfig={sortConfig} className="px-3" />
+                  <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.driver')}</th>
+                   <SortableHeader label={t('rideLog.table.customer')} sortKey="customerName" onSort={onSort} sortConfig={sortConfig} className="px-3" />
                   <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.passengers')}</th>
                   <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.route')}</th>
                  <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.status')}</th>
@@ -368,10 +369,13 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                 
                 return (
                 <tr key={log.id} className={`${log.status === RideStatus.Scheduled ? 'bg-sky-900' : ''} hover:bg-slate-700`}>
-                  <td className="whitespace-nowrap py-2 pl-4 pr-3 text-sm text-gray-400 sm:pl-0">
-                    {new Date(log.timestamp).toLocaleString(language, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-sm">
+                   <td className="whitespace-nowrap py-2 pl-4 pr-3 text-sm text-gray-400 sm:pl-0">
+                     {new Date(log.timestamp).toLocaleString(language, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                   </td>
+                   <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-400">
+                     {log.pickupTime === 'ihned' ? t('dispatch.immediate') : log.pickupTime ? new Date(log.pickupTime).toLocaleString(language, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                   </td>
+                   <td className="whitespace-nowrap px-3 py-2 text-sm">
                     <div className="flex items-center">
                       {log.vehicleType && (
                         <div className={`${log.vehicleType === VehicleType.Car ? 'text-gray-400' : 'text-gray-200'} mr-3 flex-shrink-0`}>

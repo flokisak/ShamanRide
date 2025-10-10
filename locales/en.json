@@ -226,6 +226,7 @@
     "confirmDelete": "Are you sure you want to delete this ride log? This action is irreversible.",
     "table": {
       "time": "Time",
+      "pickupTime": "Pickup Time",
       "driver": "Driver",
       "customer": "Customer",
       "passengers": "Passengers",
