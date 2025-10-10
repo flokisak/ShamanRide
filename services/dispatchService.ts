@@ -241,45 +241,41 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
 }
 
 /**
- * Converts an address to geographic coordinates using Google Geocoding API, falling back to Photon.
+ * Converts an address to geographic coordinates using Nominatim (free), falling back to Photon.
  */
 export async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
     const cacheKey = `${address}_${language}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
-    const fetchGoogleCoords = async (addrToTry: string) => {
-        const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-        if (!apiKey) return null;
-
-        const proxyUrl = 'https://corsproxy.io/?';
-
+    const fetchNominatimCoords = async (addrToTry: string) => {
         try {
-            // Check if address contains placeId
-            const parts = addrToTry.split('|');
-            const address = parts[0];
-            const placeId = parts[1];
-
-            if (placeId) {
-                // Use Places Details API for exact location (should be enabled if Places API is enabled)
-                const detailsUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${apiKey}&fields=geometry`;
-                const response = await fetch(detailsUrl);
-                const data = await response.json();
-                if (data.status === 'OK' && data.result && data.result.geometry) {
-                    const location = data.result.geometry.location;
-                    return { lat: location.lat, lon: location.lng };
+            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrToTry)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+            const response = await fetch(nominatimUrl);
+            if (!response.ok) return null;
+            const data = await response.json();
+            if (data && Array.isArray(data) && data.length > 0) {
+                // First priority: results within South Moravia bounds
+                for (const result of data) {
+                    const lat = parseFloat(result.lat);
+                    const lon = parseFloat(result.lon);
+                    if (isInSouthMoravia(lat, lon)) {
+                        return { lat, lon };
+                    }
                 }
-            } else {
-                // Use Places Text Search as fallback for geocoding
-                const textUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(address)}&key=${apiKey}&region=cz`;
-                const response = await fetch(textUrl);
-                const data = await response.json();
-                if (data.status === 'OK' && data.results && data.results.length > 0) {
-                    const location = data.results[0].geometry.location;
-                    return { lat: location.lat, lon: location.lng };
+                // Second priority: results within Czech Republic
+                for (const result of data) {
+                    const lat = parseFloat(result.lat);
+                    const lon = parseFloat(result.lon);
+                    if (isInCzechRepublic(lat, lon)) {
+                        return { lat, lon };
+                    }
                 }
+                // Third priority: any result
+                const result = data[0];
+                return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
             }
         } catch (error) {
-            console.error("Google geocoding error:", error);
+            console.error("Nominatim geocoding error:", error);
         }
         return null;
     };
@@ -317,8 +313,8 @@ export async function geocodeAddress(address: string, language: string): Promise
     };
 
     try {
-        // Try Google first for consistency with suggestions
-        let result = await fetchGoogleCoords(address);
+        // Try Nominatim first
+        let result = await fetchNominatimCoords(address);
         if (!result) {
             // Fallback to Photon
             result = await fetchPhotonCoords(address, language);
@@ -326,7 +322,7 @@ export async function geocodeAddress(address: string, language: string): Promise
         if (!result) {
             const city = address.split(',').map(p => p.trim()).pop();
             if (city && city.toLowerCase() !== address.toLowerCase()) {
-                result = await fetchGoogleCoords(city);
+                result = await fetchNominatimCoords(city);
                 if (!result) {
                     result = await fetchPhotonCoords(city, language);
                 }
@@ -532,55 +528,28 @@ async function fetchPOISuggestions(query: string, categories: string[], language
 }
 
 /**
- * Fetches address suggestions from Google Places Autocomplete API, falling back to Geocoding if no autocomplete results.
+ * Fetches address suggestions from Nominatim (free), falling back to Photon if needed.
  */
-async function getGoogleSuggestions(query: string, isPOISearch: boolean = false): Promise<{text: string, placeId?: string}[]> {
-    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-    if (!apiKey) return [];
-
-    const proxyUrl = 'https://corsproxy.io/?';
-
+async function getNominatimSuggestions(query: string, isPOISearch: boolean = false): Promise<{text: string, placeId?: string}[]> {
     try {
         let suggestions: {text: string, placeId?: string}[] = [];
 
-        if (isPOISearch) {
-            // For POI searches, use Text Search API which is better for finding businesses
-            const textUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=cs&region=cz`;
-            const textResponse = await fetch(textUrl);
-            const textData = await textResponse.json();
-            if (textData.status === 'OK' && textData.results && textData.results.length > 0) {
-                suggestions = textData.results.slice(0, 8).map((result: any) => ({
-                    text: result.formatted_address || result.name,
-                    placeId: result.place_id
+        // Use Nominatim search
+        const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+        const response = await fetch(nominatimUrl);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && Array.isArray(data)) {
+                suggestions = data.map((result: any) => ({
+                    text: result.display_name,
+                    placeId: result.place_id?.toString() // Nominatim place_id is string
                 }));
-            }
-        } else {
-            // For address searches, use Autocomplete
-            const autoUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=cs`;
-            const autoResponse = await fetch(autoUrl);
-            const autoData = await autoResponse.json();
-            if (autoData.status === 'OK' && autoData.predictions && autoData.predictions.length > 0) {
-                suggestions = autoData.predictions.slice(0, 8).map((pred: any) => ({
-                    text: pred.structured_formatting ? `${pred.structured_formatting.main_text}, ${pred.structured_formatting.secondary_text}` : pred.description,
-                    placeId: pred.place_id
-                }));
-            }
-        }
-
-        // If no results, try geocoding as fallback
-        if (suggestions.length === 0) {
-            const geoUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-            const geoResponse = await fetch(geoUrl);
-            const geoData = await geoResponse.json();
-            if (geoData.status === 'OK' && geoData.results && geoData.results.length > 0) {
-                const formatted = geoData.results[0].formatted_address;
-                suggestions = [{ text: formatted, placeId: geoData.results[0].place_id }];
             }
         }
 
         return suggestions;
     } catch (error) {
-        console.error("Google suggestions error:", error);
+        console.error("Nominatim suggestions error:", error);
         return [];
     }
 }
@@ -605,11 +574,11 @@ export async function getAddressSuggestions(query: string, language: string): Pr
     try {
         const suggestions: {text: string, placeId?: string}[] = [];
 
-        // Fetch Google suggestions (includes POI and addresses)
-        const googleSuggestions = await getGoogleSuggestions(query, isPOISearch);
-        suggestions.push(...googleSuggestions);
+        // Fetch Nominatim suggestions (includes POI and addresses)
+        const nominatimSuggestions = await getNominatimSuggestions(query, isPOISearch);
+        suggestions.push(...nominatimSuggestions);
 
-        // If POI keywords detected and Google returned few results, fetch POI-specific results from Photon
+        // If POI keywords detected and Nominatim returned few results, fetch POI-specific results from Photon
         if (isPOISearch && suggestions.length < 5) {
             const poiFeatures = await fetchPOISuggestions(query, poiCategories, language);
             const poiSuggestions = poiFeatures.map((feature: any) => {
@@ -641,29 +610,6 @@ export async function getAddressSuggestions(query: string, language: string): Pr
                         const address = [name, street, housenumber, city].filter(Boolean).join(', ');
                         return { text: shortenAddress(address) };
                     }).filter(s => s.text.trim());
-
-                    suggestions.push(...generalSuggestions);
-                }
-            }
-        }
-
-        // Fetch Photon general suggestions only if Google returned none
-        if (googleSuggestions.length === 0 && suggestions.length < 5) {
-            const generalUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=${isPOISearch ? 3 : 5}&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
-            const generalResponse = await fetch(generalUrl);
-
-            if (generalResponse.ok) {
-                const data = await generalResponse.json();
-                if (data?.features) {
-                    const generalSuggestions = data.features.map((feature: any) => {
-                        const props = feature.properties;
-                        const name = props.name || '';
-                        const city = props.city || props.town || props.village || '';
-                        const street = props.street || '';
-                        const housenumber = props.housenumber || '';
-                        const address = [name, street, housenumber, city].filter(Boolean).join(', ');
-                        return { text: shortenAddress(address) };
-                    });
 
                     suggestions.push(...generalSuggestions);
                 }
