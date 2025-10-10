@@ -6,14 +6,14 @@ import { generateSms, generateNavigationUrl, geocodeAddress } from '../services/
 import { smsService } from '../services/smsService';
 
 interface SmsGateProps {
-  people: Person[];
-  vehicles: Vehicle[];
-  rideLog: RideLog[];
-  onSend?: (logId: string) => void;
-  smsMessages?: any[];
-  messagingApp: MessagingApp;
-  onSmsSent?: () => void;
-}
+   people: Person[];
+   vehicles: Vehicle[];
+   rideLog: RideLog[];
+   onSend?: (logId: string) => void;
+   smsMessages?: any[];
+   messagingApp: MessagingApp;
+   onSmsSent?: (newMessages: any | any[]) => void;
+ }
 
 export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onSend, smsMessages = [], messagingApp, onSmsSent }) => {
   const { t } = useTranslation();
@@ -107,8 +107,8 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
           text: latestRideSms,
           status: 'sent' as const,
         };
-        await smsService.saveOutgoing(record);
-        onSmsSent?.(); // Refresh SMS messages
+         await smsService.saveOutgoing(record);
+         onSmsSent?.(record); // Add to SMS messages
         alert(t('smsGate.send') + ' successful');
       } else {
         alert('Failed to send SMS');
@@ -156,8 +156,8 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
           text: replyMessage,
           status: 'sent' as const,
         };
-        await smsService.saveOutgoing(record);
-        onSmsSent?.();
+         await smsService.saveOutgoing(record);
+         onSmsSent?.(record);
         setReplyTo(null);
         setReplyMessage('');
         alert(t('smsGate.replySent'));
@@ -178,21 +178,30 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
     const allPhones = [...selectedPhones, ...customPhones];
     if (allPhones.length === 0 || !newSmsMessage.trim()) return;
     setSending(true);
-    try {
-      const normalizedPhones = allPhones.map(phone => phone.replace(/\s/g, ''));
-      const result = await sendSms(normalizedPhones, newSmsMessage);
-      if (result.success) {
-        for (const phone of normalizedPhones) {
-          const record = {
-            id: `${Date.now()}-${phone}`,
-            timestamp: Date.now(),
-            direction: 'outgoing' as const,
-            to: phone,
-            text: newSmsMessage,
-            status: 'sent' as const,
-          };
-          await smsService.saveOutgoing(record);
-        }
+     try {
+       const normalizedPhones = allPhones.map(phone => phone.replace(/\s/g, ''));
+       const result = await sendSms(normalizedPhones, newSmsMessage);
+       if (result.success) {
+         const records = [];
+         for (const phone of normalizedPhones) {
+           const record = {
+             id: `${Date.now()}-${phone}`,
+             timestamp: Date.now(),
+             direction: 'outgoing' as const,
+             to: phone,
+             text: newSmsMessage,
+             status: 'sent' as const,
+           };
+           await smsService.saveOutgoing(record);
+           records.push(record);
+         }
+         onSmsSent?.(records);
+         setNewSmsMessage(''); // Clear message
+         alert(t('smsGate.smsSent'));
+       } else {
+         alert('Failed to send SMS');
+       }
+     }
         onSmsSent?.();
         setNewSmsMessage(''); // Clear message
         alert(t('smsGate.smsSent'));
@@ -226,22 +235,31 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
     const activeDriverPhones = activeDrivers.map(d => d.phone);
 
     setSending(true);
-    try {
-      const normalizedPhones = activeDriverPhones.map(phone => phone.replace(/\s/g, ''));
-      const result = await sendSms(normalizedPhones, newSmsMessage);
-      if (result.success) {
-        // Save records for each
-        for (const phone of normalizedPhones) {
-          const record = {
-            id: `${Date.now()}-${phone}`,
-            timestamp: Date.now(),
-            direction: 'outgoing' as const,
-            to: phone,
-            text: newSmsMessage,
-            status: 'sent' as const,
-          };
-          await smsService.saveOutgoing(record);
-        }
+     try {
+       const normalizedPhones = activeDriverPhones.map(phone => phone.replace(/\s/g, ''));
+       const result = await sendSms(normalizedPhones, newSmsMessage);
+       if (result.success) {
+         // Save records for each
+         const records = [];
+         for (const phone of normalizedPhones) {
+           const record = {
+             id: `${Date.now()}-${phone}`,
+             timestamp: Date.now(),
+             direction: 'outgoing' as const,
+             to: phone,
+             text: newSmsMessage,
+             status: 'sent' as const,
+           };
+           await smsService.saveOutgoing(record);
+           records.push(record);
+         }
+         onSmsSent?.(records);
+         setNewSmsMessage(''); // Clear message
+         alert(`${t('smsGate.smsSent')} to ${activeDriverPhones.length} drivers`);
+       } else {
+         alert('Failed to send SMS');
+       }
+     }
         onSmsSent?.();
         setNewSmsMessage(''); // Clear message
         alert(`${t('smsGate.smsSent')} to ${activeDriverPhones.length} drivers`);

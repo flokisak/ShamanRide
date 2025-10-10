@@ -1459,7 +1459,7 @@ const AppContent: React.FC = () => {
     rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onToggleSmsSent={handleToggleSmsSent} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
-    smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={reloadSmsMessages} />,
+     smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
   };
 
   const visibleLayout = layout.filter(item => widgetVisibility[item.id]);
