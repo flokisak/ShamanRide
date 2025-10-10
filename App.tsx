@@ -605,16 +605,32 @@ const AppContent: React.FC = () => {
     return undefined;
   }, [fuelPrices]);
 
-   const handleConfirmAssignment = useCallback(async (option: AssignmentAlternative) => {
-     const { rideRequest, rideDuration, optimizedStops } = assignmentResult!;
-     const chosenVehicle = option.vehicle;
-     const finalStops = optimizedStops || rideRequest.stops;
-     const destination = finalStops[finalStops.length - 1];
+  const handleConfirmAssignment = useCallback(async (option: AssignmentAlternative) => {
+      const { rideRequest, rideDuration, optimizedStops } = assignmentResult!;
+      const chosenVehicle = option.vehicle;
+      const finalStops = optimizedStops || rideRequest.stops;
+      const destination = finalStops[finalStops.length - 1];
 
-     const alternative = assignmentResult!.alternatives.find(a => a.vehicle.id === chosenVehicle.id) || assignmentResult;
-     const durationInMinutes = (rideDuration ? alternative.eta + rideDuration : alternative.eta + 30) + 5; // Add 5 min buffer
-     const freeAt = Date.now() + durationInMinutes * 60 * 1000;
-     const fuelCost = assignmentResult?.rideDistance ? calculateFuelCost(chosenVehicle, assignmentResult.rideDistance) : undefined;
+      const alternative = assignmentResult!.alternatives.find(a => a.vehicle.id === chosenVehicle.id) || assignmentResult;
+      const durationInMinutes = (rideDuration ? alternative.eta + rideDuration : alternative.eta + 30) + 5; // Add 5 min buffer
+      const freeAt = Date.now() + durationInMinutes * 60 * 1000;
+
+      // Calculate total distance including from vehicle location to first stop
+      let totalDistance = 0;
+      try {
+        const vehicleCoords = await geocodeAddress(chosenVehicle.location, language);
+        const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
+        if (stopCoords.length > 0) {
+          totalDistance += haversineDistance(vehicleCoords.lat, vehicleCoords.lon, stopCoords[0].lat, stopCoords[0].lon);
+          for (let i = 1; i < stopCoords.length; i++) {
+            totalDistance += haversineDistance(stopCoords[i-1].lat, stopCoords[i-1].lon, stopCoords[i].lat, stopCoords[i].lon);
+          }
+        }
+      } catch (err) {
+        console.error('Error calculating total distance:', err);
+        totalDistance = assignmentResult?.rideDistance || 0;
+      }
+      const fuelCost = totalDistance ? calculateFuelCost(chosenVehicle, totalDistance) : undefined;
 
      setVehicles(prev => prev.map(v => v.id === chosenVehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v));
 
@@ -660,9 +676,10 @@ const AppContent: React.FC = () => {
        smsSent: false,
        notes: rideRequest.notes,
        estimatedPrice: alternative.estimatedPrice,
-       estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
-       estimatedCompletionTimestamp: Date.now() + durationInMinutes * 60 * 1000,
-       fuelCost: fuelCost,
+        estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
+        estimatedCompletionTimestamp: Date.now() + durationInMinutes * 60 * 1000,
+        fuelCost: fuelCost,
+        distance: totalDistance,
      };
 
       // Generate customer SMS for the assigned vehicle
@@ -677,13 +694,29 @@ const AppContent: React.FC = () => {
       handleSendSms(newLog.id);
    }, [assignmentResult, isAiEnabled, people, t, language, calculateFuelCost]);
   
-  const handleManualAssignmentConfirm = (durationInMinutes: number) => {
-      if (!manualAssignmentDetails) return;
+  const handleManualAssignmentConfirm = async (durationInMinutes: number) => {
+       if (!manualAssignmentDetails) return;
 
-      const { rideRequest, vehicle, estimatedPrice } = manualAssignmentDetails;
-      const fuelCost = assignmentResult?.rideDistance ? calculateFuelCost(vehicle, assignmentResult.rideDistance) : undefined;
-      const finalStops = assignmentResult?.optimizedStops || rideRequest.stops;
-      const destination = finalStops[finalStops.length - 1];
+       const { rideRequest, vehicle, estimatedPrice } = manualAssignmentDetails;
+       const finalStops = assignmentResult?.optimizedStops || rideRequest.stops;
+       const destination = finalStops[finalStops.length - 1];
+
+       // Calculate total distance including from vehicle location to first stop
+       let totalDistance = 0;
+       try {
+         const vehicleCoords = await geocodeAddress(vehicle.location, language);
+         const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
+         if (stopCoords.length > 0) {
+           totalDistance += haversineDistance(vehicleCoords.lat, vehicleCoords.lon, stopCoords[0].lat, stopCoords[0].lon);
+           for (let i = 1; i < stopCoords.length; i++) {
+             totalDistance += haversineDistance(stopCoords[i-1].lat, stopCoords[i-1].lon, stopCoords[i].lat, stopCoords[i].lon);
+           }
+         }
+       } catch (err) {
+         console.error('Error calculating total distance:', err);
+         totalDistance = assignmentResult?.rideDistance || 0;
+       }
+       const fuelCost = totalDistance ? calculateFuelCost(vehicle, totalDistance) : undefined;
 
       // Calculate ETA more robustly
       let eta = 5; // Default 5 minutes if calculation fails
@@ -729,9 +762,10 @@ const AppContent: React.FC = () => {
         smsSent: false,
         notes: rideRequest.notes,
         estimatedPrice: estimatedPrice,
-        estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
-        estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
-        fuelCost: fuelCost,
+         estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
+         estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
+         fuelCost: fuelCost,
+         distance: totalDistance,
       };
 
       setRideLog(prev => [newLog, ...prev]);
