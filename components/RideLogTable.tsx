@@ -22,6 +22,8 @@ interface RideLogTableProps {
     onToggleShowCompleted: () => void;
     dateFilter: string;
     onDateFilterChange: (date: string) => void;
+    timeFilter: 'all' | 'morning' | 'afternoon' | 'evening' | 'night';
+    onTimeFilterChange: (time: 'all' | 'morning' | 'afternoon' | 'evening' | 'night') => void;
   }
 
 const SortableHeader: React.FC<{
@@ -53,7 +55,7 @@ const SortableHeader: React.FC<{
 };
 
 
-export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onToggleSmsSent, onStatusChange, onDelete, onEdit, onSendSms, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange }) => {
+export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onToggleSmsSent, onStatusChange, onDelete, onEdit, onSendSms, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange }) => {
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -246,12 +248,12 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
           </div>
         </div>
 
-        {/* Date Filter Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1">
-            <CalendarIcon className="text-cyan-400 w-4 h-4" />
-            <span className="text-sm text-gray-300">Filtr:</span>
-          </div>
+        {/* Date and Time Filter Controls */}
+         <div className="flex flex-wrap items-center gap-2">
+           <div className="flex items-center gap-1">
+             <CalendarIcon className="text-cyan-400 w-4 h-4" />
+             <span className="text-sm text-gray-300">Filtr:</span>
+           </div>
 
           <div className="flex gap-1">
             {[
@@ -300,11 +302,36 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                  />
                )}
              </div>
-          </div>
+           </div>
 
-           {dateFilter !== 'all' && (
+           <div className="flex gap-1">
+             {[
+               { key: 'all' as const, label: 'Vše' },
+               { key: 'morning' as const, label: 'Ráno (6-12)' },
+               { key: 'afternoon' as const, label: 'Odpo (12-18)' },
+               { key: 'evening' as const, label: 'Večer (18-24)' },
+               { key: 'night' as const, label: 'Noc (0-6)' }
+             ].map(({ key, label }) => (
+               <button
+                 key={key}
+                 onClick={() => onTimeFilterChange(key)}
+                 className={`px-3 py-1 text-xs rounded transition-colors ${
+                   timeFilter === key
+                     ? 'bg-cyan-600 text-white'
+                     : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                 }`}
+               >
+                 {label}
+               </button>
+             ))}
+           </div>
+
+           {(dateFilter !== 'all' || timeFilter !== 'all') && (
              <button
-               onClick={() => onDateFilterChange('all')}
+               onClick={() => {
+                 onDateFilterChange('all');
+                 onTimeFilterChange('all');
+               }}
                className="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded"
              >
                Vymazat filtr

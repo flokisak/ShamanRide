@@ -222,6 +222,7 @@ const AppContent: React.FC = () => {
   const [routeToPreview, setRouteToPreview] = useState<string[] | null>(null);
   const [showCompletedRides, setShowCompletedRides] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('all');
+  const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
   const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
@@ -1487,12 +1488,32 @@ const AppContent: React.FC = () => {
       }
     }
 
+    // Apply time filter based on pickupTime
+    if (timeFilter !== 'all') {
+      filtered = filtered.filter(log => {
+        if (!log.pickupTime) return false;
+        const [hours] = log.pickupTime.split(':').map(Number);
+        switch (timeFilter) {
+          case 'morning':
+            return hours >= 6 && hours < 12;
+          case 'afternoon':
+            return hours >= 12 && hours < 18;
+          case 'evening':
+            return hours >= 18 && hours < 24;
+          case 'night':
+            return hours >= 0 && hours < 6;
+          default:
+            return true;
+        }
+      });
+    }
+
     const sorted = filtered.sort((a, b) => {
         if (sortConfig.key === 'timestamp') return a.timestamp - b.timestamp;
         return a.customerName.localeCompare(b.customerName, language);
     });
     return sortConfig.direction === 'asc' ? sorted : sorted.reverse();
-  }, [rideLog, sortConfig, showCompletedRides, language, dateFilter]);
+  }, [rideLog, sortConfig, showCompletedRides, language, dateFilter, timeFilter]);
 
   const recentRideLog = sortedRideLog.filter(log => log.timestamp > Date.now() - 12 * 60 * 60 * 1000);
 
@@ -1500,7 +1521,7 @@ const AppContent: React.FC = () => {
     dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
     vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} />,
     map: <OpenStreetMap vehicles={vehicles} people={people} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
-     rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onToggleSmsSent={handleToggleSmsSent} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} />,
+     rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onToggleSmsSent={handleToggleSmsSent} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
