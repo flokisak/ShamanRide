@@ -9,7 +9,7 @@ import type { SmsMessageRecord } from './services/smsService';
 import { sendSms, isSmsGateConfigured } from './services/messagingService';
 
 import { LoadingSpinner } from './components/LoadingSpinner';
-import bgr from './src/bgr.jpg';
+
 import { ShamanIcon, SettingsIcon, PhoneIcon, PriceTagIcon, BarChartIcon, HomeIcon, PlusIcon, ClipboardIcon, LogoutIcon, TrophyIcon } from './components/icons';
 import { EditVehicleModal } from './components/EditVehicleModal';
 import { RideLogTable } from './components/RideLogTable';
@@ -233,22 +233,37 @@ const AppContent: React.FC = () => {
   // Gamification modal
    const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
 
-        // Apply modern Nord theme
-        useEffect(() => {
-          const nordBase = 'rgb(46, 52, 64)';
-          const nordMid = 'rgb(59, 66, 82)';
-          const nordDark = 'rgb(42, 48, 58)';
-          const modernGradient = `linear-gradient(135deg, ${nordBase} 0%, ${nordMid} 50%, ${nordDark} 100%)`;
+         // Apply modern Nord theme with rotating background
+         useEffect(() => {
+           const nordBase = 'rgb(46, 52, 64)';
+           const nordMid = 'rgb(59, 66, 82)';
+           const nordDark = 'rgb(42, 48, 58)';
+           const modernGradient = `linear-gradient(135deg, ${nordBase} 0%, ${nordMid} 50%, ${nordDark} 100%)`;
 
-          document.body.style.background = `url(${bgr}), ${modernGradient}`;
-          document.body.style.backgroundSize = 'cover';
-          document.body.style.backgroundAttachment = 'fixed';
-          document.body.style.backgroundBlendMode = 'overlay';
-          document.body.style.transition = 'background 1s ease-in-out';
+           const backgrounds = [
+             new URL('./src/bgr.jpg', import.meta.url).href,
+             new URL('./src/bgr2.jpg', import.meta.url).href,
+           ];
+           let currentIndex = 0;
 
-          document.documentElement.style.background = modernGradient;
-          document.documentElement.style.transition = 'background 1s ease-in-out';
-        }, []);
+           const updateBackground = () => {
+             document.body.style.background = `url(${backgrounds[currentIndex]}), ${modernGradient}`;
+             document.body.style.backgroundSize = 'cover';
+             document.body.style.backgroundAttachment = 'fixed';
+             document.body.style.backgroundBlendMode = 'overlay';
+             document.body.style.transition = 'background 1s ease-in-out';
+
+             document.documentElement.style.background = modernGradient;
+             document.documentElement.style.transition = 'background 1s ease-in-out';
+
+             currentIndex = (currentIndex + 1) % backgrounds.length;
+           };
+
+           updateBackground(); // Set initial background
+           const interval = setInterval(updateBackground, 60 * 60 * 1000); // Change every hour
+
+           return () => clearInterval(interval);
+         }, []);
 
 
   // Load initial data (Supabase when enabled, otherwise localStorage) and auto-update vehicle statuses
