@@ -533,29 +533,49 @@ async function fetchPOISuggestions(query: string, categories: string[], language
 /**
  * Fetches address suggestions from Google Places Autocomplete API, falling back to Geocoding if no autocomplete results.
  */
-async function getGoogleSuggestions(query: string): Promise<{text: string, placeId?: string}[]> {
+async function getGoogleSuggestions(query: string, isPOISearch: boolean = false): Promise<{text: string, placeId?: string}[]> {
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
     if (!apiKey) return [];
 
     try {
-        // Autocomplete without type restrictions for best POI and address coverage
-        const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=cs`;
-        const autoResponse = await fetch(autoUrl);
-        const autoData = await autoResponse.json();
-        if (autoData.status === 'OK' && autoData.predictions && autoData.predictions.length > 0) {
-            return autoData.predictions.slice(0, 8).map((pred: any) => ({ text: pred.structured_formatting ? `${pred.structured_formatting.main_text}, ${pred.structured_formatting.secondary_text}` : pred.description, placeId: pred.place_id }));
+        let suggestions: {text: string, placeId?: string}[] = [];
+
+        if (isPOISearch) {
+            // For POI searches, use Text Search API which is better for finding businesses
+            const textUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=cs&region=cz`;
+            const textResponse = await fetch(textUrl);
+            const textData = await textResponse.json();
+            if (textData.status === 'OK' && textData.results && textData.results.length > 0) {
+                suggestions = textData.results.slice(0, 8).map((result: any) => ({
+                    text: result.formatted_address || result.name,
+                    placeId: result.place_id
+                }));
+            }
+        } else {
+            // For address searches, use Autocomplete
+            const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=cs`;
+            const autoResponse = await fetch(autoUrl);
+            const autoData = await autoResponse.json();
+            if (autoData.status === 'OK' && autoData.predictions && autoData.predictions.length > 0) {
+                suggestions = autoData.predictions.slice(0, 8).map((pred: any) => ({
+                    text: pred.structured_formatting ? `${pred.structured_formatting.main_text}, ${pred.structured_formatting.secondary_text}` : pred.description,
+                    placeId: pred.place_id
+                }));
+            }
         }
 
-        // If no autocomplete results, try geocoding the query to get a formatted address
-        const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
-        const geoResponse = await fetch(geoUrl);
-        const geoData = await geoResponse.json();
-        if (geoData.status === 'OK' && geoData.results && geoData.results.length > 0) {
-            const formatted = geoData.results[0].formatted_address;
-            return [{ text: formatted, placeId: geoData.results[0].place_id }];
+        // If no results, try geocoding as fallback
+        if (suggestions.length === 0) {
+            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+            const geoResponse = await fetch(geoUrl);
+            const geoData = await geoResponse.json();
+            if (geoData.status === 'OK' && geoData.results && geoData.results.length > 0) {
+                const formatted = geoData.results[0].formatted_address;
+                suggestions = [{ text: formatted, placeId: geoData.results[0].place_id }];
+            }
         }
 
-        return [];
+        return suggestions;
     } catch (error) {
         console.error("Google suggestions error:", error);
         return [];
@@ -583,7 +603,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
         const suggestions: {text: string, placeId?: string}[] = [];
 
         // Fetch Google suggestions (includes POI and addresses)
-        const googleSuggestions = await getGoogleSuggestions(query);
+        const googleSuggestions = await getGoogleSuggestions(query, isPOISearch);
         suggestions.push(...googleSuggestions);
 
         // If POI keywords detected and Google returned few results, fetch POI-specific results from Photon
