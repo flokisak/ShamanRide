@@ -198,12 +198,9 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
          onSmsSent?.(records);
          setNewSmsMessage(''); // Clear message
          alert(t('smsGate.smsSent'));
-        } else {
-          alert('Failed to send SMS');
-        }
-      } catch (error) {
-        console.error('Error sending SMS:', error);
-        alert('Error sending SMS');
+         } else {
+           alert('Failed to send SMS');
+         }
        } catch (error) {
          console.error('Error sending SMS:', error);
          alert('Error sending SMS');
@@ -252,12 +249,9 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
          onSmsSent?.(records);
          setNewSmsMessage(''); // Clear message
          alert(`${t('smsGate.smsSent')} to ${activeDriverPhones.length} drivers`);
-        } else {
-          alert('Failed to send SMS');
-        }
-      } catch (error) {
-        console.error('Error sending SMS to all drivers:', error);
-        alert('Error sending SMS');
+         } else {
+           alert('Failed to send SMS');
+         }
        } catch (error) {
          console.error('Error sending SMS to all drivers:', error);
          alert('Error sending SMS');
