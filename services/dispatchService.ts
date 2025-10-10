@@ -533,17 +533,18 @@ async function fetchPOISuggestions(query: string, categories: string[], language
 /**
  * Fetches address suggestions from Google Places Autocomplete API, falling back to Geocoding if no autocomplete results.
  */
-async function getGoogleSuggestions(query: string): Promise<{text: string, placeId?: string}[]> {
+async function getGoogleSuggestions(query: string, isPOISearch: boolean = false): Promise<{text: string, placeId?: string}[]> {
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
     if (!apiKey) return [];
 
     try {
         // First try Autocomplete
-        const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&components=country:cz&language=cs`;
+        const types = isPOISearch ? 'establishment' : 'geocode|establishment|locality|sublocality|postal_code';
+        const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&components=country:cz&language=cs&types=${types}`;
         const autoResponse = await fetch(autoUrl);
         const autoData = await autoResponse.json();
         if (autoData.status === 'OK' && autoData.predictions && autoData.predictions.length > 0) {
-            return autoData.predictions.slice(0, 5).map((pred: any) => ({ text: pred.structured_formatting ? `${pred.structured_formatting.main_text}, ${pred.structured_formatting.secondary_text}` : pred.description, placeId: pred.place_id }));
+            return autoData.predictions.slice(0, isPOISearch ? 8 : 5).map((pred: any) => ({ text: pred.structured_formatting ? `${pred.structured_formatting.main_text}, ${pred.structured_formatting.secondary_text}` : pred.description, placeId: pred.place_id }));
         }
 
         // If no autocomplete results, try geocoding the query to get a formatted address
@@ -584,7 +585,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
         const suggestions: {text: string, placeId?: string}[] = [];
 
         // Always fetch Google suggestions first for better accuracy
-        const googleSuggestions = await getGoogleSuggestions(query);
+        const googleSuggestions = await getGoogleSuggestions(query, isPOISearch);
         suggestions.push(...googleSuggestions);
 
         // If POI keywords detected, fetch POI-specific results
