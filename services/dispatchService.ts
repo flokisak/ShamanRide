@@ -252,12 +252,30 @@ export async function geocodeAddress(address: string, language: string): Promise
         if (!apiKey) return null;
 
         try {
-            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addrToTry)}&key=${apiKey}&components=country:cz`;
-            const response = await fetch(geoUrl);
-            const data = await response.json();
-            if (data.status === 'OK' && data.results && data.results.length > 0) {
-                const location = data.results[0].geometry.location;
-                return { lat: location.lat, lon: location.lng };
+            // Check if address contains placeId
+            const parts = addrToTry.split('|');
+            const address = parts[0];
+            const placeId = parts[1];
+
+            if (placeId) {
+                // Use Places Details API for exact location
+                const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${apiKey}&fields=geometry`;
+                const response = await fetch(detailsUrl);
+                const data = await response.json();
+                if (data.status === 'OK' && data.result && data.result.geometry) {
+                    const location = data.result.geometry.location;
+                    return { lat: location.lat, lon: location.lng };
+                }
+            } else {
+                // Use bounds to bias results to the search area
+                const bounds = `${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMin}|${EXPANDED_SEARCH_BOUNDS.latMax},${EXPANDED_SEARCH_BOUNDS.lonMax}`;
+                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}&components=country:cz&bounds=${bounds}`;
+                const response = await fetch(geoUrl);
+                const data = await response.json();
+                if (data.status === 'OK' && data.results && data.results.length > 0) {
+                    const location = data.results[0].geometry.location;
+                    return { lat: location.lat, lon: location.lng };
+                }
             }
         } catch (error) {
             console.error("Google geocoding error:", error);
@@ -326,7 +344,7 @@ export async function geocodeAddress(address: string, language: string): Promise
 }
 
 // In-memory cache for suggestions to avoid repeated API calls for the same query
-const suggestionsCache = new Map<string, string[]>();
+const suggestionsCache = new Map<string, {text: string, placeId?: string}[]>();
 
 interface FrequentAddress {
     address: string;
@@ -515,7 +533,7 @@ async function fetchPOISuggestions(query: string, categories: string[], language
 /**
  * Fetches address suggestions from Google Places Autocomplete API, falling back to Geocoding if no autocomplete results.
  */
-async function getGoogleSuggestions(query: string): Promise<string[]> {
+async function getGoogleSuggestions(query: string): Promise<{text: string, placeId?: string}[]> {
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
     if (!apiKey) return [];
 
@@ -525,7 +543,7 @@ async function getGoogleSuggestions(query: string): Promise<string[]> {
         const autoResponse = await fetch(autoUrl);
         const autoData = await autoResponse.json();
         if (autoData.status === 'OK' && autoData.predictions && autoData.predictions.length > 0) {
-            return autoData.predictions.slice(0, 5).map((pred: any) => pred.description);
+            return autoData.predictions.slice(0, 5).map((pred: any) => ({ text: pred.description, placeId: pred.place_id }));
         }
 
         // If no autocomplete results, try geocoding the query to get a formatted address
@@ -534,7 +552,7 @@ async function getGoogleSuggestions(query: string): Promise<string[]> {
         const geoData = await geoResponse.json();
         if (geoData.status === 'OK' && geoData.results && geoData.results.length > 0) {
             const formatted = geoData.results[0].formatted_address;
-            return [formatted];
+            return [{ text: formatted, placeId: geoData.results[0].place_id }];
         }
 
         return [];
@@ -549,7 +567,7 @@ async function getGoogleSuggestions(query: string): Promise<string[]> {
  * Enhanced with POI detection and specialized search for hotels, wineries, restaurants, etc.
  * Falls back to Google Places Autocomplete if Photon returns few results.
  */
-export async function getAddressSuggestions(query: string, language: string): Promise<string[]> {
+export async function getAddressSuggestions(query: string, language: string): Promise<{text: string, placeId?: string}[]> {
     if (!query || query.trim().length < 3) {
         return [];
     }
@@ -563,7 +581,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
     const isPOISearch = poiCategories.length > 0;
 
     try {
-        const suggestions: string[] = [];
+        const suggestions: {text: string, placeId?: string}[] = [];
 
         // Always fetch Google suggestions first for better accuracy
         const googleSuggestions = await getGoogleSuggestions(query);
@@ -580,22 +598,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
                 const housenumber = props.housenumber || '';
                 const category = props.osm_value || '';
                 const address = [name, street, housenumber, city].filter(Boolean).join(', ');
-
-                // Add category indicator for POIs
-                const categoryEmoji = {
-                    hotel: '🏨',
-                    restaurant: '🍽️',
-                    winery: '🍷',
-                    tourism: '🏛️',
-                    shop: '🛍️',
-                    healthcare: '🏥',
-                    transport: '🚉',
-                    fuel: '⛽',
-                    parking: '🅿️',
-                    education: '🎓'
-                }[poiCategories[0]] || '📍';
-
-                return `${categoryEmoji} ${shortenAddress(address)}`;
+                return { text: address };
             });
             suggestions.push(...poiSuggestions);
         }

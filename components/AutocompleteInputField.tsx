@@ -14,7 +14,7 @@ export const AutocompleteInputField: React.FC<{
   isFirst?: boolean;
 }> = ({ id, value, onChange, suggestionMode, localSuggestions = [], error, hint, placeholder, isFirst }) => {
   const { language } = useTranslation();
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<{text: string, placeId?: string}[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceTimeout = useRef<number | null>(null);
@@ -79,8 +79,9 @@ export const AutocompleteInputField: React.FC<{
     }
   }, [onChange, suggestionMode, debouncedFetch, filterLocalSuggestions]);
 
-  const onSuggestionClick = useCallback((suggestion: string) => {
-    onChange(suggestion);
+  const onSuggestionClick = useCallback((suggestion: {text: string, placeId?: string}) => {
+    const value = suggestion.placeId ? `${suggestion.text}|${suggestion.placeId}` : suggestion.text;
+    onChange(value);
     setShowSuggestions(false);
     setSuggestions([]);
   }, [onChange]);
@@ -116,7 +117,7 @@ export const AutocompleteInputField: React.FC<{
               onClick={() => onSuggestionClick(suggestion)}
               className="px-3 py-2 text-sm text-gray-200 cursor-pointer hover:bg-slate-700"
             >
-              {suggestion}
+              {suggestion.text}
             </li>
           ))}
         </ul>
