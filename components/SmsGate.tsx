@@ -204,15 +204,12 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
       } catch (error) {
         console.error('Error sending SMS:', error);
         alert('Error sending SMS');
-      } finally {
-        setSending(false);
-      }
-    } catch (error) {
-      console.error('Error sending SMS:', error);
-      alert('Error sending SMS');
-    } finally {
-      setSending(false);
-    }
+       } catch (error) {
+         console.error('Error sending SMS:', error);
+         alert('Error sending SMS');
+       } finally {
+         setSending(false);
+       }
   };
 
   const handleSendToAllActiveDrivers = async () => {
@@ -261,15 +258,12 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
       } catch (error) {
         console.error('Error sending SMS to all drivers:', error);
         alert('Error sending SMS');
-      } finally {
-        setSending(false);
-      }
-    } catch (error) {
-      console.error('Error sending SMS to all drivers:', error);
-      alert('Error sending SMS');
-    } finally {
-      setSending(false);
-    }
+       } catch (error) {
+         console.error('Error sending SMS to all drivers:', error);
+         alert('Error sending SMS');
+       } finally {
+         setSending(false);
+       }
   };
 
   return (
