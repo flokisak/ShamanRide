@@ -560,15 +560,11 @@ export async function getAddressSuggestions(query: string, language: string): Pr
 
                 return `${categoryEmoji} ${shortenAddress(address)}`;
             });
-            // Filter duplicates with Google
-            const filteredPoi = poiSuggestions.filter(poi =>
-                !suggestions.some(existing => existing.toLowerCase().includes(poi.replace(/^[^\s]+ /, '').toLowerCase()) || poi.replace(/^[^\s]+ /, '').toLowerCase().includes(existing.toLowerCase()))
-            );
-            suggestions.push(...filteredPoi);
+            suggestions.push(...poiSuggestions);
         }
 
-        // Fetch Photon general suggestions if we need more
-        if (suggestions.length < 5) {
+        // Fetch Photon general suggestions only if Google returned none
+        if (googleSuggestions.length === 0 && suggestions.length < 5) {
             const generalUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=${isPOISearch ? 3 : 5}&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
             const generalResponse = await fetch(generalUrl);
 
@@ -585,12 +581,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
                         return shortenAddress(address);
                     });
 
-                    // Filter out duplicates
-                    const filteredGeneral = generalSuggestions.filter(suggestion =>
-                        !suggestions.some(existing => existing.toLowerCase().includes(suggestion.toLowerCase()) || suggestion.toLowerCase().includes(existing.toLowerCase()))
-                    );
-
-                    suggestions.push(...filteredGeneral);
+                    suggestions.push(...generalSuggestions);
                 }
             }
         }
