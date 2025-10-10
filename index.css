@@ -1,51 +1,87 @@
 @import "tailwindcss";
 
-/* Establish a full-height flexible layout */
-html, body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden; /* Prevent scrolling on the main document */
-    transition: background-color 0.5s ease, background-image 0.5s ease;
+/* Nord-themed base styles */
+:root {
+  --nord-polar-1: 46, 52, 64;
+  --nord-polar-2: 59, 66, 82;
+  --nord-polar-3: 67, 76, 94;
+  --nord-polar-4: 76, 86, 106;
+  --nord-snow-1: 216, 222, 233;
+  --nord-snow-2: 229, 233, 240;
+  --nord-snow-3: 236, 239, 244;
+  --nord-frost-1: 143, 188, 187;
+  --nord-frost-2: 136, 192, 208;
+  --nord-frost-3: 129, 161, 193;
+  --nord-frost-4: 94, 129, 172;
+  --nord-aurora-1: 191, 97, 106;
+  --nord-aurora-2: 208, 135, 112;
+  --nord-aurora-3: 235, 203, 139;
+  --nord-aurora-4: 163, 190, 140;
+  --nord-aurora-5: 180, 142, 173;
 }
 
-body {
-    display: flex;
-    flex-direction: column;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    font-family: 'Inter', 'Plus Jakarta Sans', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    transition: background-color 0.3s ease;
-}
-
-.theme-dashboard body {
-    /* Background is set directly via JavaScript */
-}
-
-/* Background will be set directly via JavaScript with highest priority */
-
-#root {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--nord-polar-4)) rgb(var(--nord-polar-3));
 }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-    transition: all 0.3s ease;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-    background: var(--scroll-track);
+  background: rgb(var(--nord-polar-3));
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb {
-    background-color: var(--scroll-thumb);
-    border-radius: 12px;
-    border: 2px solid var(--scroll-track);
-    transition: background-color 0.3s ease;
+  background: rgb(var(--nord-polar-4));
+  border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background-color: var(--accent);
+  background: rgb(var(--nord-frost-3));
+}
+
+/* Glass effect utility */
+.glass {
+  background: rgba(var(--nord-polar-1), 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(var(--nord-polar-4), 0.3);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Modern card hover effect */
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 64px rgba(15, 23, 42, 0.6);
+  border-color: rgba(var(--nord-frost-3), 0.4);
+}
+
+/* Button with modern micro-interactions */
+.btn-modern {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-modern:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(var(--nord-frost-3), 0.3);
+}
+
+.btn-modern:active {
+  transform: translateY(0);
+}
+
+/* Icon pop animation */
+.icon-pop {
+  transition: transform 0.2s ease;
+}
+
+.icon-pop:hover {
+  transform: scale(1.1);
 }
 
 /* Custom styles for vehicle markers on the map */
@@ -82,252 +118,4 @@ body {
     white-space: nowrap;
     border: 1px solid rgba(16, 185, 129, 0.2);
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
-}
-
-/* Enhanced widget styles */
-:root{
-    --card-bg: linear-gradient(135deg, var(--glass), rgba(248,250,252,0.9));
-    --card-border: rgba(16,185,129,0.12);
-}
-
-.bg-slate-800 {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 18px;
-    box-shadow: 0 8px 25px rgba(15,23,42,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
-    backdrop-filter: blur(8px) saturate(110%);
-}
-
-/* Material Design card utility */
-.material-card {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.08);
-    padding: 1rem;
-    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-/* Widget-specific backgrounds */
-.widget-light {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    color: #1f2937;
-}
-
-.widget-dark-blue {
-    background: #1e293b;
-    border: 1px solid #334155;
-    color: #ffffff;
-}
-
-.widget-light .text-white {
-    color: #1f2937;
-}
-
-.widget-light .text-gray-200 {
-    color: #4b5563;
-}
-
-.widget-light .text-gray-300 {
-    color: #6b7280;
-}
-
-.widget-light .bg-slate-700 {
-    background: #f3f4f6;
-    border-color: #d1d5db;
-}
-
-.widget-light .bg-slate-700 .text-white {
-    color: #1f2937;
-}
-
-.widget-light .border-slate-600 {
-    border-color: #d1d5db;
-}
-
-.widget-light .border-slate-700 {
-    border-color: #9ca3af;
-}
-
-/* Micro-interactions */
-.glass-card {
-    /* Avoid moving the whole widget on hover; only animate shadow and border color */
-    transition: box-shadow 220ms ease, border-color 220ms ease;
-}
-.material-card:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15), 0 2px 6px rgba(0,0,0,0.1);
-    border-color: var(--accent-2);
-    transition: box-shadow 0.3s ease, border-color 0.3s ease;
-}
-
-.btn-cta {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.6rem;
-    transition: box-shadow 180ms ease, filter 180ms ease, transform 180ms ease;
-}
-.btn-cta:hover {
-    /* Reduce movement on buttons to keep layout stable */
-    transform: scale(1.02);
-    filter: drop-shadow(0 8px 18px rgba(124,58,237,0.12));
-}
-.btn-cta:active { transform: translateY(0) scale(0.995); }
-.btn-cta:focus-visible { outline: 3px solid rgba(124,58,237,0.14); outline-offset: 3px; }
-
-/* Brand / logo */
-.logo-brand { display:flex; align-items:center; gap:0.75rem; }
-.logo-badge {
-    width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center;
-    background: linear-gradient(135deg, rgba(110,231,183,0.12), rgba(124,58,237,0.08));
-    border: 1px solid rgba(124,58,237,0.14);
-    box-shadow: 0 6px 22px rgba(124,58,237,0.06), 0 2px 6px rgba(2,6,23,0.5);
-    transition: transform 220ms cubic-bezier(.2,.9,.2,1), box-shadow 220ms ease;
-}
-.logo-badge:hover { transform: rotate(-8deg) scale(1.03); box-shadow: 0 18px 60px rgba(124,58,237,0.18); }
-.brand-title { font-weight:700; font-size:1.15rem; line-height:1; background: linear-gradient(90deg,var(--accent),#fbbf24,var(--accent-2)); -webkit-background-clip:text; background-clip:text; color:transparent; transition: background 0.5s ease; }
-.brand-subtle { color: var(--text-secondary); font-weight:600; transition: color 0.5s ease; }
-
-/* small pop for icons */
-.icon-pop { transition: transform 220ms ease, filter 220ms ease; }
-.icon-pop:hover { transform: translateY(-4px) scale(1.06); filter: drop-shadow(0 10px 30px rgba(124,58,237,0.12)); }
-
-/* Micro-interaction for interactive rows */
-.interactive-row { transition: background-color 0.3s ease; }
-.interactive-row:hover { background-color: var(--interactive-hover); }
-
-
-
-
-/* Glow effects */
-.eco-glow {
-    box-shadow: var(--glow-shadow), 0 0 40px rgba(16, 185, 129, 0.1);
-    transition: box-shadow 0.5s ease;
-}
-
-.eco-glow-emerald {
-    box-shadow: 0 0 15px rgba(52, 211, 153, 0.3), 0 0 30px rgba(52, 211, 153, 0.15);
-    transition: box-shadow 0.5s ease;
-}
-
-/* Natural background illustrations */
-.natural-bg-mountains::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image: url("data:image/svg+xml,%3Csvg width='120' height='80' viewBox='0 0 120 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 80 L30 40 L50 60 L80 20 L100 40 L120 30 L120 80 Z' fill='%23f1f5f9' opacity='0.1'/%3E%3Cpath d='M0 80 L20 50 L40 70 L70 30 L90 50 L110 40 L120 45 L120 80 Z' fill='%23f1f5f9' opacity='0.05'/%3E%3C/svg%3E");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    pointer-events: none;
-    z-index: -1;
-}
-
-.natural-bg-forest::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-image: url("data:image/svg+xml,%3Csvg width='100' height='60' viewBox='0 0 100 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23f1f5f9' opacity='0.08'%3E%3Cpath d='M10 60 L15 45 L12 40 L18 35 L16 30 L22 25 L20 20 L25 15 L23 10 L28 5 L30 10 L32 15 L35 20 L38 25 L40 30 L42 35 L45 40 L48 45 L50 50 L52 55 L55 60 Z'/%3E%3Cpath d='M60 60 L65 45 L62 40 L68 35 L66 30 L72 25 L70 20 L75 15 L73 10 L78 5 L80 10 L82 15 L85 20 L88 25 L90 30 L92 35 L95 40 L98 45 L100 50 L102 55 L105 60 Z'/%3E%3C/g%3E%3C/svg%3E");
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    pointer-events: none;
-    z-index: -1;
-}
-
-@keyframes bgShift {
-    0% { background-position: 5% 10%, 95% 80%, center; }
-    50% { background-position: 15% 20%, 85% 70%, center; }
-    100% { background-position: 10% 10%, 90% 80%, center; }
-}
-
-/* Subtle texture for widgets to replace bg-widget.png */
-.widget-texture {
-    background-image: radial-gradient(circle at 20% 10%, rgba(0,0,0,0.01), transparent 8%), radial-gradient(circle at 80% 90%, rgba(0,0,0,0.005), transparent 12%);
-    background-blend-mode: overlay;
-}
-
-/* Theme definitions */
-.theme-light {
-    --bg-main: #f8fafc;
-    --accent: #10b981;
-    --accent-2: #8b5cf6;
-    --card-bg: #ffffff;
-    --card-border: #e2e8f0;
-    --text-primary: #111827;
-    --text-secondary: #374151;
-    --scroll-track: #e2e8f0;
-    --scroll-thumb: #10b981;
-    --interactive-hover: #f3f4f6;
-}
-
-.theme-dashboard {
-    --bg-main: #0f172a;
-    --accent: hsl(247, 88%, 70%);
-    --accent-2: hsl(282, 82%, 51%);
-    --card-bg: #1e293b;
-    --card-border: #334155;
-    --text-primary: #ffffff;
-    --text-secondary: #cbd5e1;
-    --scroll-track: #334155;
-    --scroll-thumb: hsl(247, 88%, 70%);
-    --interactive-hover: #334155;
-}
-
-/* Override Tailwind slate colors for dashboard theme */
-.theme-dashboard .bg-slate-50 { background-color: #0f172a; }
-.theme-dashboard .bg-slate-100 { background-color: #1e293b; }
-.theme-dashboard .bg-slate-200 { background-color: #334155; }
-.theme-dashboard .bg-slate-300 { background-color: #475569; }
-.theme-dashboard .bg-slate-400 { background-color: #64748b; }
-.theme-dashboard .bg-slate-500 { background-color: #94a3b8; }
-.theme-dashboard .bg-slate-600 { background-color: #475569; }
-.theme-dashboard .bg-slate-700 { background-color: #334155; }
-.theme-dashboard .bg-slate-800 { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; box-shadow: 0 8px 25px rgba(15, 23, 42, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04); backdrop-filter: blur(8px) saturate(110%); }
-.theme-dashboard .bg-slate-900 { background-color: #0f172a; }
-
-.theme-dashboard .border-slate-100 { border-color: #334155; }
-.theme-dashboard .border-slate-200 { border-color: #475569; }
-.theme-dashboard .border-slate-300 { border-color: #64748b; }
-.theme-dashboard .border-slate-400 { border-color: #94a3b8; }
-.theme-dashboard .border-slate-500 { border-color: #cbd5e1; }
-.theme-dashboard .border-slate-600 { border-color: #334155; }
-.theme-dashboard .border-slate-700 { border-color: #475569; }
-
-.theme-dashboard .text-slate-100 { color: #f1f5f9; }
-.theme-dashboard .text-slate-200 { color: #e2e8f0; }
-.theme-dashboard .text-slate-300 { color: #cbd5e1; }
-.theme-dashboard .text-slate-400 { color: #94a3b8; }
-.theme-dashboard .text-slate-500 { color: #64748b; }
-.theme-dashboard .text-slate-600 { color: #cbd5e1; }
-.theme-dashboard .text-slate-700 { color: #94a3b8; }
-.theme-dashboard .text-slate-800 { color: #64748b; }
-.theme-dashboard .text-slate-900 { color: #475569; }
-
-/* Override light backgrounds for dashboard theme */
-.theme-dashboard .bg-white { background-color: #1e293b; }
-.theme-dashboard .bg-gray-100 { background-color: #334155; }
-.theme-dashboard .bg-gray-400 { background-color: #64748b; }
-.theme-dashboard .bg-slate-50 { background-color: #0f172a; }
-.theme-dashboard .bg-slate-100 { background-color: #1e293b; }
-
-.theme-dark {
-    --bg-top: #1e293b;
-    --bg-bottom: #334155;
-    --accent: #34d399;
-    --accent-2: #a78bfa;
-    --card-bg: #334155;
-    --card-border: #475569;
-    --text-primary: #ffffff;
-    --text-secondary: #e2e8f0;
-    --scroll-track: #475569;
-    --scroll-thumb: #34d399;
-    --interactive-hover: #475569;
 }

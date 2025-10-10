@@ -37,10 +37,9 @@ const initialVehicles: Vehicle[] = [
   { id: 10, name: 'Škoda Fabia #7', driverId: 10, licensePlate: '7MN 5678', type: VehicleType.Car, status: VehicleStatus.Available, location: 'Sedlec', capacity: 4, mileage: 78000, serviceInterval: 30000, lastServiceMileage: 70000, technicalInspectionExpiry: '2025-12-01', vignetteExpiry: '2025-01-31', fuelType: FuelType.Petrol, fuelConsumption: 6.8 },
 ];
 
-const ShamanIcon: React.FC<{ className?: string, size?: number }> = ({ className, size = 32 }) => (
+const TaxiIcon: React.FC<{ className?: string, size?: number }> = ({ className, size = 32 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-        <path d="M17.25 10.25L12 2L6.75 10.25L12 12.75L17.25 10.25Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M6.75 13.75L12 22L17.25 13.75L12 11.25L6.75 13.75Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H15V3H13V5H11V3H9V5H6.5C5.84 5 5.29 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01ZM7 17C6.45 17 6 16.55 6 16S6.45 15 7 15 8 15.45 8 16 7.55 17 7 17ZM17 17C16.45 17 16 16.55 16 16S16.45 15 17 15 18 15.45 18 16 17.55 17 17 17ZM5 13L6.5 7H17.5L19 13H5Z" fill="currentColor"/>
     </svg>
 );
 
@@ -85,7 +84,7 @@ const LandingPage: React.FC = () => {
                     const ci = await supabaseService.getCompanyInfo();
                     if (!ci) {
                         await supabaseService.updateCompanyInfo({
-                            name: 'ShamanRide',
+                            name: 'TaxiRide',
                             address: 'Mikulov, Česká republika',
                             phone: '+420 728 548 373',
                             email: 'info@shamanride.cz',
@@ -108,7 +107,7 @@ const LandingPage: React.FC = () => {
                 await supabaseService.getTariff().then(async (tf) => { if (!tf) await supabaseService.updateTariff({ startingFee: 50, pricePerKmCar: 40, pricePerKmVan: 60, flatRates: [ { id: 1, name: "V rámci Hustopečí", priceCar: 80, priceVan: 120 }, { id: 2, name: "V rámci Mikulova", priceCar: 100, priceVan: 150 }, { id: 3, name: "Zaječí - diskotéka Retro", priceCar: 200, priceVan: 300 }, ], timeBasedTariffs: [], }); });
                 await supabaseService.getFuelPrices().then(async (fp) => { if (!fp) await supabaseService.updateFuelPrices({ DIESEL: 37.5, PETROL: 38.9 }); });
                 await supabaseService.getMessagingApp().then(async (ma) => { if (!ma) await supabaseService.updateMessagingApp('SMS' as any); });
-                await supabaseService.getCompanyInfo().then(async (ci) => { if (!ci) await supabaseService.updateCompanyInfo({ name: 'ShamanRide', address: 'Mikulov, Česká republika', phone: '+420 728 548 373', email: 'info@shamanride.cz', ico: '12345678', dic: 'CZ12345678', logoUrl: null, }); });
+                await supabaseService.getCompanyInfo().then(async (ci) => { if (!ci) await supabaseService.updateCompanyInfo({ name: 'TaxiRide', address: 'Mikulov, Česká republika', phone: '+420 728 548 373', email: 'info@taxiride.cz', ico: '12345678', dic: 'CZ12345678', logoUrl: null, }); });
             } catch (err) {
                 console.error('Error ensuring local defaults via supabaseService', err);
             }
@@ -127,9 +126,9 @@ const LandingPage: React.FC = () => {
         <div className="min-h-screen hero-bg">
             <header className="container mx-auto px-6 py-4 flex justify-between items-center">
                     <div className="logo-brand">
-                        <div className="logo-badge"><ShamanIcon className="text-[#88C0D0] w-8 h-8" /></div>
+                        <div className="logo-badge"><TaxiIcon className="text-[#88C0D0] w-8 h-8" /></div>
                         <div>
-                           <div className="brand-title">Shaman<span className="text-[#88C0D0]">Ride</span></div>
+                           <div className="brand-title">Taxi<span className="text-[#88C0D0]">Ride</span></div>
                           <div className="brand-subtle">Taxi Mikulov & Hustopeče</div>
                         </div>
                     </div>
@@ -172,7 +171,7 @@ const LandingPage: React.FC = () => {
             </main>
 
             <footer className="container mx-auto px-6 py-8 text-center text-gray-500">
-                <p>&copy; {new Date().getFullYear()} ShamanRide. Všechna práva vyhrazena.</p>
+                <p>&copy; {new Date().getFullYear()} TaxiRide. Všechna práva vyhrazena.</p>
                 <p className="mt-2">Kontakt: <a href="tel:+420728548373" className="hover:text-[#81A1C1]">728 548 373</a> | <a href="mailto:info@shamanride.cz" className="hover:text-[#81A1C1]">info@shamanride.cz</a></p>
             </footer>
 

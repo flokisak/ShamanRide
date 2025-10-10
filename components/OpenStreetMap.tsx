@@ -40,9 +40,24 @@ const SOUTH_MORAVIA_VIEWBOX = '16.3,48.7,17.2,49.3'; // lon_min,lat_min,lon_max,
 
 const generateColorForVehicle = (vehicleId: number): string => {
   const hue = (vehicleId * 137.5) % 360; // Use golden angle approximation for good distribution
-  return `hsl(${hue}, 85%, 60%)`;
+  return `hsl(${hue}, 50%, 55%)`; // Reduced saturation and slightly darker lightness for more muted colors
 };
 
+
+async function geocodeWithGoogle(address: string): Promise<Coords> {
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+    if (!apiKey) {
+        throw new Error('Google API key not found');
+    }
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.status === 'OK' && data.results.length > 0) {
+        const loc = data.results[0].geometry.location;
+        return [loc.lat, loc.lng];
+    }
+    throw new Error(`Google geocoding failed: ${data.status}`);
+}
 
 async function geocodeAddress(address: string, lang: string): Promise<Coords> {
     const cacheKey = `${address}_${lang}`;
@@ -68,7 +83,10 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
             geocodeCache.set(cacheKey, result);
             return result;
         }
-        throw new Error(`Address not found: ${address}`);
+        // Fallback to Google Maps if OSM doesn't find the address
+        const googleResult = await geocodeWithGoogle(address);
+        geocodeCache.set(cacheKey, googleResult);
+        return googleResult;
     } catch (error) {
           console.error(`Could not geocode address for map: ${address}`, error);
           throw error;
@@ -127,11 +145,13 @@ const VehicleMarker: React.FC<{ vehicle: Vehicle, people: Person[], gpsPosition?
 
     const iconHtml = `
       <div class="custom-marker-content">
-        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="marker-dot" style="background: ${color}"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="${color}" stroke="${color}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
           <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/>
           <circle cx="7" cy="17" r="2"/>
           <circle cx="17" cy="17" r="2"/>
           <path d="M9 17h6"/>
+          <circle cx="12" cy="12" r="1" fill="white"/>
         </svg>
         ${driverFirstName ? `<span class="driver-name-label">${driverFirstName}</span>` : ''}
         ${isGps ? '<span class="gps-indicator">📍</span>' : ''}

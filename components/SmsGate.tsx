@@ -223,12 +223,12 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
                       type="tel"
                       value={driverPhone}
                       onChange={(e) => setDriverPhone(e.target.value)}
-                      className="flex-1 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                      className="flex-1 bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
                     />
                     <select
                       value={selectedDriverId || ''}
                       onChange={(e) => handleDriverChange(Number(e.target.value))}
-                      className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                      className="bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
                     >
                       <option value="">{t('smsGate.changeDriver')}</option>
                       {people.filter(p => p.role === 'Driver').map(p => (
@@ -252,10 +252,10 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
                       value={latestRideSms}
                       onChange={(e) => setLatestRideSms(e.target.value)}
                       rows={4}
-                      className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                      className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
                     />
                   ) : (
-                    <div className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm whitespace-pre-wrap max-h-20 overflow-y-auto">
+                    <div className="bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm whitespace-pre-wrap max-h-20 overflow-y-auto">
                       {latestRideSms}
                     </div>
                   )}
@@ -280,7 +280,7 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
                 <select
                   value={selectedNewSmsDriverId || ''}
                   onChange={(e) => handleNewSmsDriverChange(Number(e.target.value) || 0)}
-                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm mb-2"
+                  className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm mb-2"
                 >
                   <option value="">{t('smsGate.customRecipient')}</option>
                   {people.filter(p => p.role === 'Driver').map(p => (
@@ -299,14 +299,14 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
                   }
                 }}
                 placeholder={t('smsGate.recipientPhone')}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
               />
               <textarea
                 value={newSmsMessage}
                 onChange={(e) => setNewSmsMessage(e.target.value)}
                 placeholder={t('smsGate.message')}
                 rows={3}
-                className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
               />
               <button
                 onClick={handleSendNewSms}
@@ -328,7 +328,7 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
                   onChange={(e) => setReplyMessage(e.target.value)}
                   placeholder={t('smsGate.replyMessage')}
                   rows={2}
-                  className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-sm"
+                className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
                 />
                 <div className="flex space-x-2">
                   <button
@@ -360,7 +360,7 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
                 value={filterPhone}
                 onChange={(e) => setFilterPhone(e.target.value)}
                 placeholder={t('smsGate.filterByPhone')}
-                className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs w-32"
+                className="bg-slate-700 border-0 rounded px-2 py-1 text-white text-xs w-32"
               />
               {filterPhone && (
                  <button

@@ -102,7 +102,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                    id="language-select"
                    value={language}
                    onChange={(e) => changeLanguage(e.target.value)}
-                   className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3 text-white"
+                   className="bg-slate-700 border-0 rounded-md py-1 px-3 text-white"
                  >
                   <option value="cs">Čeština</option>
                   <option value="en">English</option>
@@ -126,7 +126,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                    id="messaging-app-select"
                    value={messagingApp}
                    onChange={(e) => onMessagingAppChange(e.target.value as MessagingApp)}
-                   className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3 text-white"
+                   className="bg-slate-700 border-0 rounded-md py-1 px-3 text-white"
                  >
                   {Object.values(AppType).map(app => (
                     <option key={app} value={app}>{app}</option>
@@ -139,7 +139,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                    id="preferred-nav-select"
                    value={preferredNav}
                    onChange={(e) => onPreferredNavChange?.(e.target.value as 'google' | 'waze')}
-                   className="bg-slate-700 border border-slate-600 rounded-md py-1 px-3 text-white"
+                   className="bg-slate-700 border-0 rounded-md py-1 px-3 text-white"
                  >
                   <option value="google">Google Maps</option>
                   <option value="waze">Waze</option>
@@ -155,14 +155,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="bg-slate-700 p-3 rounded-lg">
                 <label htmlFor="diesel-price" className="block text-sm font-medium text-gray-300 mb-1">{t('settings.fuel.diesel')}</label>
                 <div className="relative">
-                  <input type="number" step="0.1" id="diesel-price" value={fuelPrices.DIESEL} onChange={(e) => handleFuelPriceChange('DIESEL', e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-md py-1 pl-3 pr-12 text-white" />
+                  <input type="number" step="0.1" id="diesel-price" value={fuelPrices.DIESEL} onChange={(e) => handleFuelPriceChange('DIESEL', e.target.value)} className="w-full bg-slate-700 border-0 rounded-md py-1 pl-3 pr-12 text-white" />
                   <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400">Kč/L</span>
                 </div>
               </div>
               <div className="bg-slate-700 p-3 rounded-lg">
                 <label htmlFor="petrol-price" className="block text-sm font-medium text-gray-300 mb-1">{t('settings.fuel.petrol')}</label>
                 <div className="relative">
-                  <input type="number" step="0.1" id="petrol-price" value={fuelPrices.PETROL} onChange={(e) => handleFuelPriceChange('PETROL', e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-md py-1 pl-3 pr-12 text-white" />
+                  <input type="number" step="0.1" id="petrol-price" value={fuelPrices.PETROL} onChange={(e) => handleFuelPriceChange('PETROL', e.target.value)} className="w-full bg-slate-700 border-0 rounded-md py-1 pl-3 pr-12 text-white" />
                   <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400">Kč/L</span>
                 </div>
               </div>
@@ -175,15 +175,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
              <div className="space-y-4">
                <div className="bg-slate-700 p-3 rounded-lg">
                  <label htmlFor="sms-server" className="block text-sm font-medium text-gray-300 mb-1">Server Address</label>
-                 <input type="text" id="sms-server" value={smsGateConfig.server} onChange={(e) => onSmsGateConfigChange({ ...smsGateConfig, server: e.target.value })} className="w-full bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white" placeholder="e.g., api.sms-gate.app:443" />
+                 <input type="text" id="sms-server" value={smsGateConfig.server} onChange={(e) => onSmsGateConfigChange({ ...smsGateConfig, server: e.target.value })} className="w-full bg-slate-800 border-0 rounded-md py-2 px-3 text-white" placeholder="e.g., api.sms-gate.app:443" />
                </div>
                <div className="bg-slate-700 p-3 rounded-lg">
                  <label htmlFor="sms-username" className="block text-sm font-medium text-gray-300 mb-1">Username</label>
-                 <input type="text" id="sms-username" value={smsGateConfig.username} onChange={(e) => onSmsGateConfigChange({ ...smsGateConfig, username: e.target.value })} className="w-full bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                 <input type="text" id="sms-username" value={smsGateConfig.username} onChange={(e) => onSmsGateConfigChange({ ...smsGateConfig, username: e.target.value })} className="w-full bg-slate-800 border-0 rounded-md py-2 px-3 text-white" />
                </div>
                <div className="bg-slate-700 p-3 rounded-lg">
                  <label htmlFor="sms-password" className="block text-sm font-medium text-gray-300 mb-1">Password</label>
-                 <input type="password" id="sms-password" value={smsGateConfig.password} onChange={(e) => onSmsGateConfigChange({ ...smsGateConfig, password: e.target.value })} className="w-full bg-slate-800 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                 <input type="password" id="sms-password" value={smsGateConfig.password} onChange={(e) => onSmsGateConfigChange({ ...smsGateConfig, password: e.target.value })} className="w-full bg-slate-800 border-0 rounded-md py-2 px-3 text-white" />
                </div>
              </div>
            </section>
@@ -307,7 +307,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                      id="company-name"
                      value={companyInfo.name}
                      onChange={(e) => onCompanyInfoChange({ ...companyInfo, name: e.target.value })}
-                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      className="w-full bg-slate-700 border-0 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                    />
                  </div>
                  <div>
@@ -319,7 +319,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                      id="company-address"
                      value={companyInfo.address}
                      onChange={(e) => onCompanyInfoChange({ ...companyInfo, address: e.target.value })}
-                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      className="w-full bg-slate-700 border-0 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                    />
                  </div>
                </div>
@@ -334,7 +334,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                      id="company-phone"
                      value={companyInfo.phone}
                      onChange={(e) => onCompanyInfoChange({ ...companyInfo, phone: e.target.value })}
-                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      className="w-full bg-slate-700 border-0 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                    />
                  </div>
                  <div>
@@ -346,7 +346,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                      id="company-email"
                      value={companyInfo.email}
                      onChange={(e) => onCompanyInfoChange({ ...companyInfo, email: e.target.value })}
-                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      className="w-full bg-slate-700 border-0 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                    />
                  </div>
                </div>
@@ -361,7 +361,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                      id="company-ico"
                      value={companyInfo.ico}
                      onChange={(e) => onCompanyInfoChange({ ...companyInfo, ico: e.target.value })}
-                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      className="w-full bg-slate-700 border-0 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                    />
                  </div>
                  <div>
@@ -373,7 +373,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                      id="company-dic"
                      value={companyInfo.dic}
                      onChange={(e) => onCompanyInfoChange({ ...companyInfo, dic: e.target.value })}
-                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      className="w-full bg-slate-700 border-0 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
                    />
                  </div>
                </div>

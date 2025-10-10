@@ -233,35 +233,21 @@ const AppContent: React.FC = () => {
   // Gamification modal
    const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
 
-       // Apply dashboard theme
+        // Apply modern Nord theme
         useEffect(() => {
-          document.body.className = 'theme-dashboard';
-          const bgUrl = `url(${bgr})`;
-          const nordGradient = 'linear-gradient(135deg, #2E3440 0%, #3B4252 25%, #434C5E 50%, #4C566A 75%, #5E81AC 100%)';
+          const nordBase = 'rgb(46, 52, 64)';
+          const nordMid = 'rgb(59, 66, 82)';
+          const nordDark = 'rgb(42, 48, 58)';
+          const modernGradient = `linear-gradient(135deg, ${nordBase} 0%, ${nordMid} 50%, ${nordDark} 100%)`;
 
-          const finalBackground = `${bgUrl}, ${nordGradient}`;
+          document.body.style.background = `url(${bgr}), ${modernGradient}`;
+          document.body.style.backgroundSize = 'cover';
+          document.body.style.backgroundAttachment = 'fixed';
+          document.body.style.backgroundBlendMode = 'overlay';
+          document.body.style.transition = 'background 1s ease-in-out';
 
-          // Set background with image and gradient fallback using inline styles (highest specificity)
-          document.body.setAttribute('style',
-            `background: ${finalBackground} !important; ` +
-            `background-size: cover !important; ` +
-            `background-position: center !important; ` +
-            `background-attachment: fixed !important; ` +
-            `background-repeat: no-repeat !important; ` +
-            `transition: background 1s ease-in-out !important;`
-          );
-
-          // Also set on html element for complete coverage
-          document.documentElement.setAttribute('style',
-            `background: ${finalBackground} !important; ` +
-            `background-size: cover !important; ` +
-            `background-position: center !important; ` +
-            `background-attachment: fixed !important; ` +
-            `background-repeat: no-repeat !important; ` +
-            `transition: background 1s ease-in-out !important;`
-          );
-
-          console.log('Background applied:', finalBackground);
+          document.documentElement.style.background = modernGradient;
+          document.documentElement.style.transition = 'background 1s ease-in-out';
         }, []);
 
 
@@ -729,6 +715,7 @@ const AppContent: React.FC = () => {
       if (!manualAssignmentDetails) return;
 
       const { rideRequest, vehicle, estimatedPrice } = manualAssignmentDetails;
+      const fuelCost = assignmentResult?.rideDistance ? calculateFuelCost(vehicle, assignmentResult.rideDistance) : undefined;
       const finalStops = assignmentResult?.optimizedStops || rideRequest.stops;
       const destination = finalStops[finalStops.length - 1];
 
@@ -973,7 +960,7 @@ const AppContent: React.FC = () => {
           const totalDistance = stopCoords.reduce((dist, coord, i) => {
             if (i === 0) return 0;
             const prev = stopCoords[i-1];
-            return dist + haversineDistance(prev.lat, prev.lng, coord.lat, coord.lng);
+            return dist + haversineDistance(prev.lat, prev.lon, coord.lat, coord.lon);
           }, 0);
           const duration = Math.max(30, Math.round(totalDistance * 2 + (stopCoords.length - 1) * 10)) + 5; // 2 min per km + 10 min per stop + 5 min buffer
           updatedLog.estimatedCompletionTimestamp = Date.now() + duration * 60 * 1000;
@@ -1465,29 +1452,29 @@ const AppContent: React.FC = () => {
   // If user is not authenticated, show login/register options
   if (!user) {
     return (
-      <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-gray-100 to-gray-200">
+      <div className="flex flex-col min-h-screen p-4 sm:p-6 lg:p-8 glass card-hover">
         <div className="flex items-center justify-center flex-1">
           <div className="text-center space-y-8">
             <div className="flex items-center justify-center space-x-3 mb-8">
-              <ShamanIcon className="text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.7)] w-16 h-16" />
+              <ShamanIcon className="text-accent animate-glow w-16 h-16" />
               <h1 className="text-5xl font-bold text-white tracking-wider font-sans">
-                Shaman<span className="text-emerald-400">Ride</span>
+                Shaman<span className="text-primary">Ride</span>
               </h1>
             </div>
             <div className="space-y-4">
-              <p className="text-gray-300 text-lg">
+              <p className="text-white/80 text-lg">
                 Pro přístup k aplikaci se musíte přihlásit nebo zaregistrovat.
               </p>
               <div className="flex justify-center space-x-4">
                 <button
                   onClick={() => setIsLoginModalOpen(true)}
-                  className="px-6 py-3 text-lg font-medium rounded-md shadow-sm bg-cyan-600 hover:bg-cyan-500 text-white transition-colors"
+                  className="px-6 py-3 text-lg font-medium rounded-xl btn-modern bg-primary hover:bg-nord-frost3 text-slate-900 shadow-frost transition-all"
                 >
                   Přihlásit se
                 </button>
                 <button
                   onClick={() => setIsRegisterModalOpen(true)}
-                  className="px-6 py-3 text-lg font-medium rounded-md shadow-sm bg-slate-600 hover:bg-slate-500 text-white transition-colors"
+                  className="px-6 py-3 text-lg font-medium rounded-xl btn-modern bg-secondary hover:bg-nord-aurora4 text-slate-900 shadow-frost transition-all"
                 >
                   Zaregistrovat se
                 </button>
@@ -1518,7 +1505,7 @@ const AppContent: React.FC = () => {
   }
 
    return (
-     <div className="relative flex flex-col min-h-screen bg-slate-50 animate-fade-in overflow-auto">
+     <div className="relative flex flex-col min-h-screen animate-fade-in overflow-auto">
        {/* Subtle background pattern */}
        <div className="absolute inset-0 opacity-5" style={{
          backgroundImage: `radial-gradient(circle at 25% 25%, hsl(142, 76%, 36%) 2px, transparent 2px),
@@ -1527,20 +1514,22 @@ const AppContent: React.FC = () => {
        }} aria-hidden></div>
 
       <NotificationCenter notifications={notifications} onDismiss={handleDismissNotification} />
-        <header className="bg-slate-800 backdrop-blur-sm border-b border-slate-700 px-4 py-2 mb-4 flex-shrink-0 animate-slide-in">
+        <header className="glass border-b border-slate-300 px-4 py-2 mb-4 flex-shrink-0 animate-slide-in">
            <div className="flex justify-between items-center">
              {/* Logo and Brand */}
              <div className="flex items-center space-x-3">
                <div className="flex items-center space-x-2">
-                 <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                   <ShamanIcon className="text-white w-4 h-4" />
-                 </div>
-                  <div>
-                    <h1 className="text-lg font-bold bg-gradient-to-r from-[#81A1C1] to-[#5E81AC] bg-clip-text text-transparent">
-                      ShamanRide
-                    </h1>
-                    <p className="text-xs text-slate-400">Dispatch & Fleet</p>
+                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <svg className="text-white w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H15V3H13V5H11V3H9V5H6.5C5.84 5 5.29 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01ZM7 17C6.45 17 6 16.55 6 16S6.45 15 7 15 8 15.45 8 16 7.55 17 7 17ZM17 17C16.45 17 16 16.55 16 16S16.45 15 17 15 18 15.45 18 16 17.55 17 17 17ZM5 13L6.5 7H17.5L19 13H5Z"/>
+                    </svg>
                   </div>
+                   <div>
+                     <h1 className="text-lg font-bold bg-gradient-to-r from-[#81A1C1] to-[#5E81AC] bg-clip-text text-transparent">
+                       TaxiRide
+                     </h1>
+                     <p className="text-xs text-slate-400">Dispatch & Fleet</p>
+                   </div>
                </div>
              </div>
 
@@ -1549,14 +1538,14 @@ const AppContent: React.FC = () => {
                <div className="max-w-sm">
                  <div className="relative">
                    <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                     <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <svg className="h-4 w-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                      </svg>
                    </div>
                    <input
                      type="text"
                      placeholder="Search rides, vehicles..."
-                     className="block w-full pl-8 pr-3 py-1 border border-slate-600 rounded-md bg-slate-700 focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-white text-sm placeholder-slate-400"
+                     className="block w-full pl-8 pr-3 py-1 border border-slate-300 rounded-md bg-slate-200 focus:ring-1 focus:ring-primary focus:border-primary text-slate-900 text-sm placeholder-slate-400"
                    />
                  </div>
                </div>

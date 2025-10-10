@@ -1,25 +1,23 @@
 @import "tailwindcss";
 
-@import "tailwindcss";
-
+/* Minimal Nord landing styles */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-    overflow: auto;
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow: auto;
 }
 
 .hero-bg {
-    background-color: #2E3440;
-    background-image:
-        radial-gradient(circle at 10% 20%, rgba(136, 192, 208, 0.2) 0%, transparent 40%),
-        radial-gradient(circle at 90% 80%, rgba(163, 190, 140, 0.15) 0%, transparent 40%);
+  background: linear-gradient(135deg, rgb(var(--nord-polar-1)), rgb(var(--nord-polar-2))),
+              radial-gradient(circle at 10% 20%, rgba(var(--nord-frost-2), 0.15), transparent 40%),
+              radial-gradient(circle at 90% 80%, rgba(var(--nord-aurora-4), 0.1), transparent 40%);
 }
 
 .cta-button {
-    transition: all 0.3s ease-in-out;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(var(--nord-polar-4), 0.3);
 }
 
 .cta-button:hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), 0 0 25px rgba(136, 192, 208, 0.3);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 10px 20px rgba(var(--nord-polar-4), 0.4), 0 0 30px rgba(var(--nord-frost-2), 0.2);
 }

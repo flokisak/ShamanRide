@@ -49,8 +49,7 @@ export const ClipboardIcon: React.FC<IconProps> = ({ className, size=24 }) => (
 
 export const ShamanIcon: React.FC<IconProps> = ({ className, size = 32 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-        <path d="M17.25 10.25L12 2L6.75 10.25L12 12.75L17.25 10.25Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M6.75 13.75L12 22L17.25 13.75L12 11.25L6.75 13.75Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H15V3H13V5H11V3H9V5H6.5C5.84 5 5.29 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01ZM7 17C6.45 17 6 16.55 6 16S6.45 15 7 15 8 15.45 8 16 7.55 17 7 17ZM17 17C16.45 17 16 16.55 16 16S16.45 15 17 15 18 15.45 18 16 17.55 17 17 17ZM5 13L6.5 7H17.5L19 13H5Z" fill="currentColor"/>
     </svg>
 );
 
