@@ -50,24 +50,85 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
     const cacheKey = `${address}_${lang}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
-    const fetchCoords = async (addrToTry: string): Promise<Coords | null> => {
+    const fetchNominatimCoords = async (addrToTry: string): Promise<Coords | null> => {
         const proxyUrl = 'https://corsproxy.io/?';
         const addr = addrToTry.split('|')[0]; // Strip placeId if present
 
-        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=cz&viewbox=${EXPANDED_VIEWBOX}&accept-language=${lang},en;q=0.5&limit=1`;
+        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=cz&viewbox=${EXPANDED_VIEWBOX}&accept-language=${lang},en;q=0.5&limit=10`;
 
         const response = await fetch(nominatimUrl, { headers: { 'User-Agent': 'RapidDispatchAI/1.0' } });
         if (!response.ok) return null;
         const data = await response.json();
-        return data?.[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null;
+        if (data && Array.isArray(data) && data.length > 0) {
+            // First priority: results within South Moravia bounds
+            for (const result of data) {
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
+                if (lon >= 16.3 && lon <= 17.2 && lat >= 48.7 && lat <= 49.3) {
+                    return [lat, lon];
+                }
+            }
+            // Second priority: results within Czech Republic
+            for (const result of data) {
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
+                if (lon >= 12.0 && lon <= 18.9 && lat >= 48.5 && lat <= 51.1) {
+                    return [lat, lon];
+                }
+            }
+            // Third priority: any result
+            const result = data[0];
+            return [parseFloat(result.lat), parseFloat(result.lon)];
+        }
+        return null;
+    };
+
+    const fetchPhotonCoords = async (addrToTry: string): Promise<Coords | null> => {
+        const addr = addrToTry.split('|')[0];
+        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(addr)}&limit=10&bbox=12.0,46.0,24.0,52.0`;
+        const response = await fetch(photonUrl);
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (data && data.features && Array.isArray(data.features) && data.features.length > 0) {
+            // First priority: results within South Moravia bounds
+            for (const feature of data.features) {
+                const coords = feature.geometry.coordinates;
+                const lon = coords[0];
+                const lat = coords[1];
+                if (lon >= 16.3 && lon <= 17.2 && lat >= 48.7 && lat <= 49.3) {
+                    return [lat, lon];
+                }
+            }
+            // Second priority: results within Czech Republic
+            for (const feature of data.features) {
+                const coords = feature.geometry.coordinates;
+                const lon = coords[0];
+                const lat = coords[1];
+                if (lon >= 12.0 && lon <= 18.9 && lat >= 48.5 && lat <= 51.1) {
+                    return [lat, lon];
+                }
+            }
+            // Third priority: any result within expanded bounds
+            const coords = data.features[0].geometry.coordinates;
+            return [coords[1], coords[0]];
+        }
+        return null;
     };
 
     try {
-        let result = await fetchCoords(address);
+        // Try Nominatim first
+        let result = await fetchNominatimCoords(address);
+        if (!result) {
+            // Fallback to Photon
+            result = await fetchPhotonCoords(address);
+        }
         if (!result) {
             const city = address.split(',').map(p => p.trim()).pop();
             if (city && city.toLowerCase() !== address.toLowerCase()) {
-                result = await fetchCoords(city);
+                result = await fetchNominatimCoords(city);
+                if (!result) {
+                    result = await fetchPhotonCoords(city);
+                }
             }
         }
         if (result) {
