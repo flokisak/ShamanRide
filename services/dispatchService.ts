@@ -487,8 +487,30 @@ async function fetchPOISuggestions(query: string, categories: string[], language
 }
 
 /**
+ * Fetches address suggestions from Google Places Autocomplete API as fallback.
+ */
+async function getGoogleSuggestions(query: string): Promise<string[]> {
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+    if (!apiKey) return [];
+
+    try {
+        const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&components=country:cz&language=cs`;
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.status === 'OK' && data.predictions) {
+            return data.predictions.slice(0, 5).map((pred: any) => pred.description);
+        }
+        return [];
+    } catch (error) {
+        console.error("Google suggestions error:", error);
+        return [];
+    }
+}
+
+/**
  * Fetches address suggestions from Photon API based on user input.
  * Enhanced with POI detection and specialized search for hotels, wineries, restaurants, etc.
+ * Falls back to Google Places Autocomplete if Photon returns few results.
  */
 export async function getAddressSuggestions(query: string, language: string): Promise<string[]> {
     if (!query || query.trim().length < 3) {
@@ -561,6 +583,15 @@ export async function getAddressSuggestions(query: string, language: string): Pr
 
                 suggestions.push(...filteredGeneral);
             }
+        }
+
+        // Fallback to Google if we have few suggestions
+        if (suggestions.length < 3) {
+            const googleSuggestions = await getGoogleSuggestions(query);
+            const filteredGoogle = googleSuggestions.filter(sugg =>
+                !suggestions.some(existing => existing.toLowerCase().includes(sugg.toLowerCase()) || sugg.toLowerCase().includes(existing.toLowerCase()))
+            );
+            suggestions.push(...filteredGoogle);
         }
 
         // Add frequent addresses
