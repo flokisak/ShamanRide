@@ -57,6 +57,7 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
+  const selectedDate = dateFilter.startsWith('custom') ? new Date(dateFilter.split('-')[1]) : null;
 
 
   const getStatusSelectClass = (status: RideStatus) => {
@@ -281,8 +282,8 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                      : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
                  }`}
                >
-                 {dateFilter.startsWith('custom')
-                   ? new Date(dateFilter.split('-')[1]).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short' })
+                 {selectedDate
+                   ? selectedDate.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short' })
                    : 'Vybrat datum'
                  }
                  <CalendarIcon className="w-3 h-3" />
@@ -290,7 +291,7 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
 
                {showCalendar && (
                  <SimpleCalendar
-                   selectedDate={dateFilter.startsWith('custom') ? new Date(dateFilter.split('-')[1]) : null}
+                   selectedDate={selectedDate}
                    onDateSelect={(date) => {
                      onDateFilterChange(`custom-${date.toISOString().split('T')[0]}`);
                      setShowCalendar(false);
@@ -301,18 +302,14 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
              </div>
           </div>
 
-          {(dateFilter !== 'all' || selectedDate) && (
-            <button
-              onClick={() => {
-                setDateFilter('all');
-                setSelectedDate(null);
-              }}
-              className="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded"
-              title="Vymazat filtr"
-            >
-              ✕
-            </button>
-          )}
+           {dateFilter !== 'all' && (
+             <button
+               onClick={() => onDateFilterChange('all')}
+               className="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded"
+             >
+               Vymazat filtr
+             </button>
+           )}
         </div>
       </div>
       {logs.length === 0 ? (
