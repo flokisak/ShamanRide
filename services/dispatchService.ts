@@ -539,7 +539,7 @@ async function getGoogleSuggestions(query: string): Promise<{text: string, place
 
     try {
         // Autocomplete without type restrictions for best POI and address coverage
-        const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&components=country:cz&language=cs`;
+        const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=cs`;
         const autoResponse = await fetch(autoUrl);
         const autoData = await autoResponse.json();
         if (autoData.status === 'OK' && autoData.predictions && autoData.predictions.length > 0) {
@@ -576,12 +576,34 @@ export async function getAddressSuggestions(query: string, language: string): Pr
         return suggestionsCache.get(cacheKey)!;
     }
 
+    const poiCategories = detectPOICategories(query);
+    const isPOISearch = poiCategories.length > 0;
+
     try {
+        const suggestions: {text: string, placeId?: string}[] = [];
+
         // Fetch Google suggestions (includes POI and addresses)
         const googleSuggestions = await getGoogleSuggestions(query);
+        suggestions.push(...googleSuggestions);
 
-        // Fetch Photon general suggestions only if Google returned few results
-        if (googleSuggestions.length < 5) {
+        // If POI keywords detected and Google returned few results, fetch POI-specific results from Photon
+        if (isPOISearch && suggestions.length < 5) {
+            const poiFeatures = await fetchPOISuggestions(query, poiCategories, language);
+            const poiSuggestions = poiFeatures.map((feature: any) => {
+                const props = feature.properties;
+                const name = props.name || '';
+                const city = props.city || props.town || props.village || '';
+                const street = props.street || '';
+                const housenumber = props.housenumber || '';
+                const category = props.osm_value || '';
+                const address = [name, street, housenumber, city].filter(Boolean).join(', ');
+                return { text: address };
+            }).filter(s => s.text.trim());
+            suggestions.push(...poiSuggestions);
+        }
+
+        // Fetch Photon general suggestions only if still few results
+        if (suggestions.length < 5) {
             const generalUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
             const generalResponse = await fetch(generalUrl);
             if (generalResponse.ok) {
@@ -597,7 +619,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
                         return { text: shortenAddress(address) };
                     }).filter(s => s.text.trim());
 
-                    googleSuggestions.push(...generalSuggestions);
+                    suggestions.push(...generalSuggestions);
                 }
             }
         }
@@ -627,7 +649,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
 
         // Add frequent addresses
         const frequentSuggestions = getMatchingFrequentAddresses(query).map(text => ({ text }));
-        const allSuggestions = [...frequentSuggestions, ...googleSuggestions.filter(s =>
+        const allSuggestions = [...frequentSuggestions, ...suggestions.filter(s =>
             !frequentSuggestions.some(f => f.text.toLowerCase() === s.text.toLowerCase())
         )];
 
