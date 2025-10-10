@@ -1482,7 +1482,7 @@ const AppContent: React.FC = () => {
 
       if (startDate && endDate) {
         filtered = filtered.filter(log => {
-          const logDate = new Date(log.estimatedPickupTimestamp || log.timestamp);
+          const logDate = log.pickupTime && log.pickupTime !== 'ihned' ? new Date(log.pickupTime) : new Date(log.timestamp);
           return logDate >= startDate && logDate < endDate;
         });
       }
@@ -1491,8 +1491,9 @@ const AppContent: React.FC = () => {
     // Apply time filter based on pickupTime
     if (timeFilter !== 'all') {
       filtered = filtered.filter(log => {
-        if (!log.pickupTime) return false;
-        const [hours] = log.pickupTime.split(':').map(Number);
+        if (!log.pickupTime || log.pickupTime === 'ihned') return false;
+        const date = new Date(log.pickupTime);
+        const hours = date.getHours();
         switch (timeFilter) {
           case 'morning':
             return hours >= 6 && hours < 12;
