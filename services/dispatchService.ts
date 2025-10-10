@@ -251,6 +251,8 @@ export async function geocodeAddress(address: string, language: string): Promise
         const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
         if (!apiKey) return null;
 
+        const proxyUrl = 'https://corsproxy.io/?';
+
         try {
             // Check if address contains placeId
             const parts = addrToTry.split('|');
@@ -259,7 +261,7 @@ export async function geocodeAddress(address: string, language: string): Promise
 
             if (placeId) {
                 // Use Places Details API for exact location
-                const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${apiKey}&fields=geometry`;
+                const detailsUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${apiKey}&fields=geometry`;
                 const response = await fetch(detailsUrl);
                 const data = await response.json();
                 if (data.status === 'OK' && data.result && data.result.geometry) {
@@ -269,7 +271,7 @@ export async function geocodeAddress(address: string, language: string): Promise
             } else {
                 // Use bounds to bias results to the search area
                 const bounds = `${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMin}|${EXPANDED_SEARCH_BOUNDS.latMax},${EXPANDED_SEARCH_BOUNDS.lonMax}`;
-                const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}&components=country:cz&bounds=${bounds}`;
+                const geoUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}&components=country:cz&bounds=${bounds}`;
                 const response = await fetch(geoUrl);
                 const data = await response.json();
                 if (data.status === 'OK' && data.results && data.results.length > 0) {
@@ -537,12 +539,14 @@ async function getGoogleSuggestions(query: string, isPOISearch: boolean = false)
     const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
     if (!apiKey) return [];
 
+    const proxyUrl = 'https://corsproxy.io/?';
+
     try {
         let suggestions: {text: string, placeId?: string}[] = [];
 
         if (isPOISearch) {
             // For POI searches, use Text Search API which is better for finding businesses
-            const textUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=cs&region=cz`;
+            const textUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=cs&region=cz`;
             const textResponse = await fetch(textUrl);
             const textData = await textResponse.json();
             if (textData.status === 'OK' && textData.results && textData.results.length > 0) {
@@ -553,7 +557,7 @@ async function getGoogleSuggestions(query: string, isPOISearch: boolean = false)
             }
         } else {
             // For address searches, use Autocomplete
-            const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=cs`;
+            const autoUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${apiKey}&language=cs`;
             const autoResponse = await fetch(autoUrl);
             const autoData = await autoResponse.json();
             if (autoData.status === 'OK' && autoData.predictions && autoData.predictions.length > 0) {
@@ -566,7 +570,7 @@ async function getGoogleSuggestions(query: string, isPOISearch: boolean = false)
 
         // If no results, try geocoding as fallback
         if (suggestions.length === 0) {
-            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
+            const geoUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query)}&key=${apiKey}`;
             const geoResponse = await fetch(geoUrl);
             const geoData = await geoResponse.json();
             if (geoData.status === 'OK' && geoData.results && geoData.results.length > 0) {
