@@ -44,31 +44,34 @@ const generateColorForVehicle = (vehicleId: number): string => {
 };
 
 
-async function geocodeWithGoogle(address: string): Promise<Coords> {
-    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
-    if (!apiKey) {
-        throw new Error('Google API key not found');
-    }
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data.status === 'OK' && data.results.length > 0) {
-        const loc = data.results[0].geometry.location;
-        return [loc.lat, loc.lng];
-    }
-    throw new Error(`Google geocoding failed: ${data.status}`);
-}
+
 
 async function geocodeAddress(address: string, lang: string): Promise<Coords> {
     const cacheKey = `${address}_${lang}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
     const fetchCoords = async (addrToTry: string): Promise<Coords | null> => {
-        const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrToTry)}&countrycodes=cz&viewbox=${SOUTH_MORAVIA_VIEWBOX}&bounded=1&accept-language=${lang},en;q=0.5&limit=1`;
+        const proxyUrl = 'https://corsproxy.io/?';
+        const parts = addrToTry.split('|');
+        const addr = parts[0];
+        const placeId = parts[1];
+
+        let nominatimUrl: string;
+        if (placeId) {
+            nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/details?place_id=${encodeURIComponent(placeId)}&format=json`;
+        } else {
+            nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=cz&viewbox=${SOUTH_MORAVIA_VIEWBOX}&bounded=1&accept-language=${lang},en;q=0.5&limit=1`;
+        }
+
         const response = await fetch(nominatimUrl, { headers: { 'User-Agent': 'RapidDispatchAI/1.0' } });
         if (!response.ok) return null;
         const data = await response.json();
-        return data?.[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null;
+
+        if (placeId) {
+            return data?.lat && data?.lon ? [parseFloat(data.lat), parseFloat(data.lon)] : null;
+        } else {
+            return data?.[0] ? [parseFloat(data[0].lat), parseFloat(data[0].lon)] : null;
+        }
     };
 
     try {
@@ -83,13 +86,10 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
             geocodeCache.set(cacheKey, result);
             return result;
         }
-        // Fallback to Google Maps if OSM doesn't find the address
-        const googleResult = await geocodeWithGoogle(address);
-        geocodeCache.set(cacheKey, googleResult);
-        return googleResult;
+        throw new Error(`Address not found: ${address}`);
     } catch (error) {
-          console.error(`Could not geocode address for map: ${address}`, error);
-          throw error;
+           console.error(`Could not geocode address for map: ${address}`, error);
+           throw error;
     }
 }
 

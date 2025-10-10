@@ -249,30 +249,52 @@ export async function geocodeAddress(address: string, language: string): Promise
 
     const fetchNominatimCoords = async (addrToTry: string) => {
         try {
-            const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrToTry)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+            const proxyUrl = 'https://corsproxy.io/?';
+            const parts = addrToTry.split('|');
+            const address = parts[0];
+            const placeId = parts[1];
+
+            let nominatimUrl: string;
+            if (placeId) {
+                // Use Nominatim details API for exact location
+                nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/details?place_id=${encodeURIComponent(placeId)}&format=json`;
+            } else {
+                // Use search API
+                nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+            }
+
             const response = await fetch(nominatimUrl);
             if (!response.ok) return null;
             const data = await response.json();
-            if (data && Array.isArray(data) && data.length > 0) {
-                // First priority: results within South Moravia bounds
-                for (const result of data) {
-                    const lat = parseFloat(result.lat);
-                    const lon = parseFloat(result.lon);
-                    if (isInSouthMoravia(lat, lon)) {
-                        return { lat, lon };
-                    }
+
+            if (placeId) {
+                // Details API returns single object
+                if (data && data.lat && data.lon) {
+                    return { lat: parseFloat(data.lat), lon: parseFloat(data.lon) };
                 }
-                // Second priority: results within Czech Republic
-                for (const result of data) {
-                    const lat = parseFloat(result.lat);
-                    const lon = parseFloat(result.lon);
-                    if (isInCzechRepublic(lat, lon)) {
-                        return { lat, lon };
+            } else {
+                // Search API returns array
+                if (data && Array.isArray(data) && data.length > 0) {
+                    // First priority: results within South Moravia bounds
+                    for (const result of data) {
+                        const lat = parseFloat(result.lat);
+                        const lon = parseFloat(result.lon);
+                        if (isInSouthMoravia(lat, lon)) {
+                            return { lat, lon };
+                        }
                     }
+                    // Second priority: results within Czech Republic
+                    for (const result of data) {
+                        const lat = parseFloat(result.lat);
+                        const lon = parseFloat(result.lon);
+                        if (isInCzechRepublic(lat, lon)) {
+                            return { lat, lon };
+                        }
+                    }
+                    // Third priority: any result
+                    const result = data[0];
+                    return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
                 }
-                // Third priority: any result
-                const result = data[0];
-                return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
             }
         } catch (error) {
             console.error("Nominatim geocoding error:", error);
@@ -534,8 +556,9 @@ async function getNominatimSuggestions(query: string, isPOISearch: boolean = fal
     try {
         let suggestions: {text: string, placeId?: string}[] = [];
 
-        // Use Nominatim search
-        const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+        // Use CORS proxy to bypass browser restrictions
+        const proxyUrl = 'https://corsproxy.io/?';
+        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
         const response = await fetch(nominatimUrl);
         if (response.ok) {
             const data = await response.json();
