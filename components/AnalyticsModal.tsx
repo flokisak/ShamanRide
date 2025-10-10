@@ -104,7 +104,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
             }
         });
         
-        const vehicleStatsArray = Object.values(vehicleStats).sort((a,b) => b.rideCount - a.rideCount);
+        const vehicleStatsArray = Object.values(vehicleStats).filter(v => v.rideCount > 0).sort((a,b) => b.rideCount - a.rideCount);
 
         const chartData = vehicleStatsArray
             .filter(v => v.rideCount > 0)

@@ -456,9 +456,9 @@ const AppContent: React.FC = () => {
 
     const syncData = async () => {
       try {
-        console.log('🔄 Starting continuous sync (fetch & save) with Supabase...');
+        console.log('🔄 Starting continuous sync (save only) with Supabase...');
 
-        // First, save current local data to Supabase
+        // Save current local data to Supabase
         await Promise.all([
           supabaseService.updatePeople(people).catch(err => console.warn('Failed to sync people:', err)),
           supabaseService.updateVehicles(vehicles).catch(err => console.warn('Failed to sync vehicles:', err)),
@@ -468,44 +468,10 @@ const AppContent: React.FC = () => {
           supabaseService.updateFuelPrices(fuelPrices).catch(err => console.warn('Failed to sync fuel prices:', err)),
           supabaseService.updateCompanyInfo(companyInfo).catch(err => console.warn('Failed to sync company info:', err)),
           supabaseService.updateMessagingApp(messagingApp as any).catch(err => console.warn('Failed to sync messaging app:', err)),
-        supabaseService.updateSmsMessages(smsMessages).catch(err => console.warn('Failed to sync SMS messages:', err)),
+          supabaseService.updateSmsMessages(smsMessages).catch(err => console.warn('Failed to sync SMS messages:', err)),
         ]);
 
-        // Then, fetch latest data from Supabase
-        const [ppl, veh, rl, notif, tf, ci, ms] = await Promise.all([
-          supabaseService.getPeople().catch(() => null),
-          supabaseService.getVehicles().catch(() => null),
-          supabaseService.getRideLogs().catch(() => null),
-          supabaseService.getNotifications().catch(() => null),
-          supabaseService.getTariff().catch(() => null),
-          supabaseService.getCompanyInfo().catch(() => null),
-          supabaseService.getMessagingApp().catch(() => null),
-        ]);
-
-        // Update state only if data was successfully fetched
-        if (Array.isArray(ppl) && ppl.length > 0) {
-          const normalizedPeople = ppl.map((p: Person) => ({ ...p, role: normalizeRole((p as any).role) }));
-          setPeople(normalizedPeople);
-        }
-        if (Array.isArray(veh) && veh.length > 0 && !(JSON.stringify(veh) === JSON.stringify(initialVehicles) && JSON.stringify(vehicles) !== JSON.stringify(initialVehicles))) {
-          setVehicles(veh);
-        }
-        // Don't overwrite ride logs from sync to prevent status resets
-        // Ride logs are updated individually and loaded on app start
-        if (Array.isArray(notif)) {
-          setNotifications(notif);
-        }
-        if (tf) {
-          setTariff(tf);
-        }
-        if (ci) {
-          setCompanyInfo(ci);
-        }
-        if (ms) {
-          setMessagingApp(ms as any);
-        }
-
-        console.log('✅ Continuous sync (fetch & save) completed successfully');
+        console.log('✅ Continuous sync (save only) completed successfully');
       } catch (err) {
         console.warn('⚠️ Continuous sync failed, will retry in 1 minute:', err);
         // Don't show error to user, just log it
