@@ -20,6 +20,8 @@ interface RideLogTableProps {
     onSendSms: (logId: string) => void;
     showCompleted: boolean;
     onToggleShowCompleted: () => void;
+    dateFilter: string;
+    onDateFilterChange: (date: string) => void;
   }
 
 const SortableHeader: React.FC<{
@@ -51,60 +53,12 @@ const SortableHeader: React.FC<{
 };
 
 
-export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onToggleSmsSent, onStatusChange, onDelete, onEdit, onSendSms, showCompleted, onToggleShowCompleted }) => {
+export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onToggleSmsSent, onStatusChange, onDelete, onEdit, onSendSms, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange }) => {
   const { t, language } = useTranslation();
 
-  // Date filtering state
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
 
-  // Date filtering logic
-  const filteredLogs = useMemo(() => {
-    let filtered = logs;
 
-    if (dateFilter !== 'all') {
-      const now = new Date();
-      let startDate: Date;
-      let endDate: Date;
-
-      switch (dateFilter) {
-        case 'today':
-          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-          break;
-        case 'week':
-          const weekStart = new Date(now);
-          weekStart.setDate(now.getDate() - now.getDay());
-          weekStart.setHours(0, 0, 0, 0);
-          startDate = weekStart;
-          endDate = new Date(weekStart);
-          endDate.setDate(weekStart.getDate() + 7);
-          break;
-        case 'month':
-          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-          break;
-        case 'custom':
-          if (selectedDate) {
-            startDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-            endDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1);
-          } else {
-            return filtered;
-          }
-          break;
-        default:
-          return filtered;
-      }
-
-      filtered = logs.filter(log => {
-        const logDate = new Date(log.timestamp);
-        return logDate >= startDate && logDate < endDate;
-      });
-    }
-
-    return filtered;
-  }, [logs, dateFilter, selectedDate]);
   const getStatusSelectClass = (status: RideStatus) => {
     const base = "w-full rounded-md border-0 py-1 pl-3 pr-8 text-xs font-medium focus:ring-2 focus:ring-inset focus:ring-cyan-500 cursor-pointer transition-colors capitalize";
     switch (status) {
@@ -240,16 +194,15 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
         </div>
 
         <div className="flex justify-between mt-4">
-          <button
-            onClick={() => {
-              setSelectedDate(null);
-              setDateFilter('all');
-              onClose();
-            }}
-            className="px-3 py-1 text-sm bg-slate-600 hover:bg-slate-500 text-white rounded"
-          >
-            Vymazat
-          </button>
+           <button
+             onClick={() => {
+               onDateFilterChange('all');
+               onClose();
+             }}
+             className="px-3 py-1 text-sm bg-slate-600 hover:bg-slate-500 text-white rounded"
+           >
+             Vymazat
+           </button>
           <button
             onClick={onClose}
             className="px-3 py-1 text-sm bg-cyan-600 hover:bg-cyan-500 text-white rounded"
@@ -305,50 +258,47 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
               { key: 'today', label: 'Dnes' },
               { key: 'week', label: 'Týden' },
               { key: 'month', label: 'Měsíc' }
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => {
-                  setDateFilter(key as any);
-                  setSelectedDate(null);
-                }}
-                className={`px-3 py-1 text-xs rounded transition-colors ${
-                  dateFilter === key && key !== 'custom'
-                    ? 'bg-cyan-600 text-white'
-                    : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+             ].map(({ key, label }) => (
+               <button
+                 key={key}
+                 onClick={() => onDateFilterChange(key)}
+                 className={`px-3 py-1 text-xs rounded transition-colors ${
+                   dateFilter === key
+                     ? 'bg-cyan-600 text-white'
+                     : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                 }`}
+               >
+                 {label}
+               </button>
+             ))}
 
-            <div className="relative">
-              <button
-                onClick={() => setShowCalendar(!showCalendar)}
-                className={`px-3 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
-                  dateFilter === 'custom'
-                    ? 'bg-cyan-600 text-white'
-                    : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
-                }`}
-              >
-                {selectedDate
-                  ? selectedDate.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short' })
-                  : 'Vybrat datum'
-                }
-                <CalendarIcon className="w-3 h-3" />
-              </button>
+             <div className="relative">
+               <button
+                 onClick={() => setShowCalendar(!showCalendar)}
+                 className={`px-3 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
+                   dateFilter.startsWith('custom')
+                     ? 'bg-cyan-600 text-white'
+                     : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                 }`}
+               >
+                 {dateFilter.startsWith('custom')
+                   ? new Date(dateFilter.split('-')[1]).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'short' })
+                   : 'Vybrat datum'
+                 }
+                 <CalendarIcon className="w-3 h-3" />
+               </button>
 
-              {showCalendar && (
-                <SimpleCalendar
-                  selectedDate={selectedDate}
-                  onDateSelect={(date) => {
-                    setSelectedDate(date);
-                    setDateFilter('custom');
-                  }}
-                  onClose={() => setShowCalendar(false)}
-                />
-              )}
-            </div>
+               {showCalendar && (
+                 <SimpleCalendar
+                   selectedDate={dateFilter.startsWith('custom') ? new Date(dateFilter.split('-')[1]) : null}
+                   onDateSelect={(date) => {
+                     onDateFilterChange(`custom-${date.toISOString().split('T')[0]}`);
+                     setShowCalendar(false);
+                   }}
+                   onClose={() => setShowCalendar(false)}
+                 />
+               )}
+             </div>
           </div>
 
           {(dateFilter !== 'all' || selectedDate) && (
@@ -365,7 +315,7 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
           )}
         </div>
       </div>
-      {filteredLogs.length === 0 ? (
+      {logs.length === 0 ? (
          <p className="text-gray-400 text-center py-4">
              {dateFilter === 'all'
                ? (showCompleted ? t('rideLog.noRidesYet') : t('rideLog.noActiveRides'))
@@ -388,7 +338,7 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                </tr>
             </thead>
              <tbody>
-               {filteredLogs.map((log) => {
+                {logs.map((log) => {
                 const vehicle = vehicles.find(v => v.id === log.vehicleId);
                 const driver = vehicle ? people.find(p => p.id === vehicle.driverId) : null;
                 

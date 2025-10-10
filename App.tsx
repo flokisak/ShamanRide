@@ -221,6 +221,7 @@ const AppContent: React.FC = () => {
   
   const [routeToPreview, setRouteToPreview] = useState<string[] | null>(null);
   const [showCompletedRides, setShowCompletedRides] = useState(false);
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('all');
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
   const [isAnalyticsModalOpen, setIsAnalyticsModalOpen] = useState(false);
@@ -1442,13 +1443,56 @@ const AppContent: React.FC = () => {
   };
 
   const sortedRideLog = useMemo(() => {
-    const filtered = showCompletedRides ? [...rideLog] : rideLog.filter(log => log.status !== RideStatus.Completed && log.status !== RideStatus.Cancelled);
+    let filtered = showCompletedRides ? [...rideLog] : rideLog.filter(log => log.status !== RideStatus.Completed && log.status !== RideStatus.Cancelled);
+
+    // Apply date filter
+    if (dateFilter !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+      let endDate: Date;
+
+      switch (dateFilter) {
+        case 'today':
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          break;
+        case 'week':
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay());
+          weekStart.setHours(0, 0, 0, 0);
+          startDate = weekStart;
+          endDate = new Date(weekStart);
+          endDate.setDate(weekStart.getDate() + 7);
+          break;
+        case 'month':
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          break;
+        default:
+          if (dateFilter.startsWith('custom-')) {
+            const dateStr = dateFilter.split('-')[1];
+            const customDate = new Date(dateStr);
+            startDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate());
+            endDate = new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate() + 1);
+          } else {
+            break;
+          }
+      }
+
+      if (startDate && endDate) {
+        filtered = filtered.filter(log => {
+          const logDate = new Date(log.estimatedPickupTimestamp || log.timestamp);
+          return logDate >= startDate && logDate < endDate;
+        });
+      }
+    }
+
     const sorted = filtered.sort((a, b) => {
         if (sortConfig.key === 'timestamp') return a.timestamp - b.timestamp;
         return a.customerName.localeCompare(b.customerName, language);
     });
     return sortConfig.direction === 'asc' ? sorted : sorted.reverse();
-  }, [rideLog, sortConfig, showCompletedRides, language]);
+  }, [rideLog, sortConfig, showCompletedRides, language, dateFilter]);
 
   const recentRideLog = sortedRideLog.filter(log => log.timestamp > Date.now() - 12 * 60 * 60 * 1000);
 
@@ -1456,7 +1500,7 @@ const AppContent: React.FC = () => {
     dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
     vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} />,
     map: <OpenStreetMap vehicles={vehicles} people={people} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
-    rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onToggleSmsSent={handleToggleSmsSent} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} />,
+     rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onToggleSmsSent={handleToggleSmsSent} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
