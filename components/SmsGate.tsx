@@ -26,9 +26,9 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
   const [isEditingSms, setIsEditingSms] = useState(false);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState('');
-   const [newSmsRecipient, setNewSmsRecipient] = useState('');
-   const [newSmsMessage, setNewSmsMessage] = useState('');
-   const [selectedNewSmsDriverId, setSelectedNewSmsDriverId] = useState<number | null>(null);
+    const [newSmsRecipient, setNewSmsRecipient] = useState('');
+    const [newSmsMessage, setNewSmsMessage] = useState('');
+    const [selectedNewSmsDriverIds, setSelectedNewSmsDriverIds] = useState<number[]>([]);
    const [filterPhone, setFilterPhone] = useState('');
    // show persisted messages if provided
    const persisted = smsMessages || [];
@@ -129,14 +129,11 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
     }
   };
 
-  const handleNewSmsDriverChange = (driverId: number) => {
-    const driver = people.find(p => p.id === driverId);
-    if (driver) {
-      setSelectedNewSmsDriverId(driver.id);
-      setNewSmsRecipient(driver.phone);
+  const handleNewSmsDriverToggle = (driverId: number, checked: boolean) => {
+    if (checked) {
+      setSelectedNewSmsDriverIds(prev => [...prev, driverId]);
     } else {
-      setSelectedNewSmsDriverId(null);
-      setNewSmsRecipient('');
+      setSelectedNewSmsDriverIds(prev => prev.filter(id => id !== driverId));
     }
   };
 
@@ -176,23 +173,28 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
   };
 
   const handleSendNewSms = async () => {
-    if (!newSmsRecipient.trim() || !newSmsMessage.trim()) return;
+    const selectedPhones = selectedNewSmsDriverIds.map(id => people.find(p => p.id === id)?.phone).filter(Boolean) as string[];
+    const customPhones = newSmsRecipient.split(',').map(s => s.trim()).filter(s => s);
+    const allPhones = [...selectedPhones, ...customPhones];
+    if (allPhones.length === 0 || !newSmsMessage.trim()) return;
     setSending(true);
     try {
-      const normalizedPhone = newSmsRecipient.replace(/\s/g, '');
-      const result = await sendSms([normalizedPhone], newSmsMessage);
+      const normalizedPhones = allPhones.map(phone => phone.replace(/\s/g, ''));
+      const result = await sendSms(normalizedPhones, newSmsMessage);
       if (result.success) {
-        const record = {
-          id: Date.now().toString(),
-          timestamp: Date.now(),
-          direction: 'outgoing' as const,
-          to: normalizedPhone,
-          text: newSmsMessage,
-          status: 'sent' as const,
-        };
-        await smsService.saveOutgoing(record);
+        for (const phone of normalizedPhones) {
+          const record = {
+            id: `${Date.now()}-${phone}`,
+            timestamp: Date.now(),
+            direction: 'outgoing' as const,
+            to: phone,
+            text: newSmsMessage,
+            status: 'sent' as const,
+          };
+          await smsService.saveOutgoing(record);
+        }
         onSmsSent?.();
-        setNewSmsMessage(''); // Keep recipient, clear message
+        setNewSmsMessage(''); // Clear message
         alert(t('smsGate.smsSent'));
       } else {
         alert('Failed to send SMS');
@@ -208,15 +210,20 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
   const handleSendToAllActiveDrivers = async () => {
     if (!newSmsMessage.trim()) return;
     // Get active drivers: drivers assigned to vehicles that are not NotDrivingToday
-    const activeDriverPhones = vehicles
+    const activeDrivers = vehicles
       .filter(v => v.driverId && v.status !== 'NOT_DRIVING_TODAY')
-      .map(v => people.find(p => p.id === v.driverId)?.phone)
-      .filter(phone => phone) as string[];
+      .map(v => people.find(p => p.id === v.driverId))
+      .filter(Boolean) as typeof people;
 
-    if (activeDriverPhones.length === 0) {
+    if (activeDrivers.length === 0) {
       alert(t('smsGate.noActiveDrivers'));
       return;
     }
+
+    const names = activeDrivers.map(d => d.name).join(', ');
+    if (!confirm(`Send to: ${names}?`)) return;
+
+    const activeDriverPhones = activeDrivers.map(d => d.phone);
 
     setSending(true);
     try {
@@ -318,33 +325,30 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
           {/* New SMS Section */}
           <div className="p-3 bg-slate-800/40 rounded-md">
             <h5 className="text-sm text-white mb-2">{t('smsGate.newSms')}</h5>
-            <div className="space-y-2">
-              <div>
-                <label className="block text-xs text-gray-300 mb-1">{t('smsGate.selectDriver')}</label>
-                <select
-                  value={selectedNewSmsDriverId || ''}
-                  onChange={(e) => handleNewSmsDriverChange(Number(e.target.value) || 0)}
-                  className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm mb-2"
-                >
-                  <option value="">{t('smsGate.customRecipient')}</option>
-                  {people.filter(p => p.role === 'Driver').map(p => (
-                    <option key={p.id} value={p.id}>{p.name} - {p.phone}</option>
-                  ))}
-                </select>
-              </div>
-              <input
-                type="tel"
-                value={newSmsRecipient}
-                onChange={(e) => {
-                  setNewSmsRecipient(e.target.value);
-                  // Clear selected driver if user manually edits phone
-                  if (selectedNewSmsDriverId !== null) {
-                    setSelectedNewSmsDriverId(null);
-                  }
-                }}
-                placeholder={t('smsGate.recipientPhone')}
-                className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
-              />
+             <div className="space-y-2">
+               <div>
+                 <label className="block text-xs text-gray-300 mb-1">{t('smsGate.selectDrivers')}</label>
+                 <div className="max-h-32 overflow-y-auto bg-slate-700 rounded px-2 py-1">
+                   {people.filter(p => p.role === 'Driver').map(p => (
+                     <label key={p.id} className="flex items-center space-x-2 text-white text-sm">
+                       <input
+                         type="checkbox"
+                         checked={selectedNewSmsDriverIds.includes(p.id)}
+                         onChange={(e) => handleNewSmsDriverToggle(p.id, e.target.checked)}
+                         className="text-emerald-500"
+                       />
+                       <span>{p.name} - {p.phone}</span>
+                     </label>
+                   ))}
+                 </div>
+               </div>
+               <input
+                 type="tel"
+                 value={newSmsRecipient}
+                 onChange={(e) => setNewSmsRecipient(e.target.value)}
+                 placeholder={t('smsGate.recipientPhone')} // Allow comma-separated for multiple
+                 className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
+               />
               <textarea
                 value={newSmsMessage}
                 onChange={(e) => setNewSmsMessage(e.target.value)}
@@ -354,7 +358,7 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
               />
                <button
                  onClick={handleSendNewSms}
-                 disabled={sending || !newSmsRecipient.trim() || !newSmsMessage.trim()}
+                 disabled={sending || (selectedNewSmsDriverIds.length === 0 && !newSmsRecipient.trim()) || !newSmsMessage.trim()}
                  className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white text-sm rounded"
                >
                  {sending ? t('smsGate.sending') : t('smsGate.sendSms')}
