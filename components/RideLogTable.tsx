@@ -78,22 +78,20 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
     }
   };
   
-  const renderRoute = (stops: string[]) => {
-    if (!stops || stops.length === 0) return 'N/A';
-    if (stops.length === 1) return stops[0];
-    if (stops.length === 2) {
-      return (
-        <div className="flex flex-col max-h-16 overflow-hidden" title={`${stops[0]} -> ${stops[1]}`}>
-          <span className="truncate"><strong>{t('rideLog.table.from')}:</strong> {stops[0]}</span>
-          <span className="truncate"><strong>{t('rideLog.table.to')}:</strong> {stops[1]}</span>
-        </div>
-      );
-    }
-    const fullRouteTooltip = stops.map((s, i) => `${i + 1}. ${s}`).join('\n');
+  const renderRoute = (stops: string[], notes?: string) => {
+    const routeText = (() => {
+      if (!stops || stops.length === 0) return 'N/A';
+      if (stops.length === 1) return stops[0];
+      if (stops.length === 2) return `${stops[0]} -> ${stops[1]}`;
+      return `${stops[0]} -> ${stops[stops.length - 1]} (+${stops.length - 2} ${t('rideLog.table.stops')})`;
+    })();
+
+    const fullRouteTooltip = stops && stops.length > 0 ? stops.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
+
     return (
       <div className="flex flex-col max-h-16 overflow-hidden" title={fullRouteTooltip}>
-        <span className="truncate"><strong>{t('rideLog.table.from')}:</strong> {stops[0]}</span>
-        <span className="truncate"><strong>{t('rideLog.table.to')}:</strong> {stops[stops.length - 1]} (+{stops.length - 2} {t('rideLog.table.stops')})</span>
+        <span className="truncate text-white">{routeText}</span>
+        {notes && <span className="truncate text-gray-400 text-xs">{notes}</span>}
       </div>
     );
   };
@@ -393,15 +391,9 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                      <div className="text-gray-400 text-xs">{log.customerPhone}</div>
                    </td>
                    <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-200">{log.passengers}</td>
-                   <td className="px-3 py-2 text-sm text-gray-400 max-w-xs">
-                    {renderRoute(log.stops)}
-                    <span className="truncate text-teal-400 text-xs"><strong>{t('rideLog.table.pickup')}:</strong> {log.pickupTime}</span>
-                    {log.notes && (
-                      <span className="truncate text-yellow-300 text-xs" title={log.notes}>
-                        <strong>{t('rideLog.table.note')}:</strong> {log.notes}
-                      </span>
-                    )}
-                  </td>
+                    <td className="px-3 py-2 text-sm text-gray-400 max-w-xs">
+                     {renderRoute(log.stops, log.notes)}
+                   </td>
                    <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-400">
                      <select
                         value={log.status}
