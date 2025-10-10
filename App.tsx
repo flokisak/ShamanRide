@@ -309,12 +309,15 @@ const AppContent: React.FC = () => {
         try {
           const us = (ms as any) || {};
         } catch {}
-        try {
-          const userSettings = (await supabaseService.getUserSettings((user as any)?.id || 'local')) || {};
-          setPreferredNav((userSettings.preferred_nav as 'google' | 'waze') || 'google');
-        } catch (err) {
-          // ignore
-        }
+         try {
+           const userSettings = (await supabaseService.getUserSettings((user as any)?.id || 'local')) || {};
+           setPreferredNav((userSettings.preferred_nav as 'google' | 'waze') || 'google');
+           if (userSettings.is_ai_enabled !== undefined) {
+             setIsAiEnabled(userSettings.is_ai_enabled);
+           }
+         } catch (err) {
+           // ignore
+         }
         // load sms messages as well
         try {
           const sm = await (await import('./services/smsService')).smsService.getMessages();

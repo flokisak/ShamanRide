@@ -241,13 +241,31 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
 }
 
 /**
- * Converts an address to geographic coordinates using Photon (OpenStreetMap-based).
+ * Converts an address to geographic coordinates using Google Geocoding API, falling back to Photon.
  */
 export async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
     const cacheKey = `${address}_${language}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
-    const fetchCoords = async (addrToTry: string, lang: string) => {
+    const fetchGoogleCoords = async (addrToTry: string) => {
+        const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+        if (!apiKey) return null;
+
+        try {
+            const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addrToTry)}&key=${apiKey}&components=country:cz`;
+            const response = await fetch(geoUrl);
+            const data = await response.json();
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
+                const location = data.results[0].geometry.location;
+                return { lat: location.lat, lon: location.lng };
+            }
+        } catch (error) {
+            console.error("Google geocoding error:", error);
+        }
+        return null;
+    };
+
+    const fetchPhotonCoords = async (addrToTry: string, lang: string) => {
         // First try with expanded bounds to find results including foreign countries
         const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(addrToTry)}&limit=10&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
         const response = await fetch(photonUrl);
@@ -280,11 +298,19 @@ export async function geocodeAddress(address: string, language: string): Promise
     };
 
     try {
-        let result = await fetchCoords(address, language);
+        // Try Google first for consistency with suggestions
+        let result = await fetchGoogleCoords(address);
+        if (!result) {
+            // Fallback to Photon
+            result = await fetchPhotonCoords(address, language);
+        }
         if (!result) {
             const city = address.split(',').map(p => p.trim()).pop();
             if (city && city.toLowerCase() !== address.toLowerCase()) {
-                result = await fetchCoords(city, language);
+                result = await fetchGoogleCoords(city);
+                if (!result) {
+                    result = await fetchPhotonCoords(city, language);
+                }
             }
         }
 
