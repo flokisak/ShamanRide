@@ -528,7 +528,11 @@ export async function getAddressSuggestions(query: string, language: string): Pr
     try {
         const suggestions: string[] = [];
 
-        // If POI keywords detected, fetch POI-specific results first
+        // Always fetch Google suggestions first for better accuracy
+        const googleSuggestions = await getGoogleSuggestions(query);
+        suggestions.push(...googleSuggestions);
+
+        // If POI keywords detected, fetch POI-specific results
         if (isPOISearch) {
             const poiFeatures = await fetchPOISuggestions(query, poiCategories, language);
             const poiSuggestions = poiFeatures.map((feature: any) => {
@@ -556,42 +560,39 @@ export async function getAddressSuggestions(query: string, language: string): Pr
 
                 return `${categoryEmoji} ${shortenAddress(address)}`;
             });
-            suggestions.push(...poiSuggestions);
-        }
-
-        // Always fetch general address suggestions
-        const generalUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=${isPOISearch ? 3 : 5}&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
-        const generalResponse = await fetch(generalUrl);
-
-        if (generalResponse.ok) {
-            const data = await generalResponse.json();
-            if (data?.features) {
-                const generalSuggestions = data.features.map((feature: any) => {
-                    const props = feature.properties;
-                    const name = props.name || '';
-                    const city = props.city || props.town || props.village || '';
-                    const street = props.street || '';
-                    const housenumber = props.housenumber || '';
-                    const address = [name, street, housenumber, city].filter(Boolean).join(', ');
-                    return shortenAddress(address);
-                });
-
-                // Filter out duplicates with POI suggestions
-                const filteredGeneral = generalSuggestions.filter(suggestion =>
-                    !suggestions.some(poi => poi.includes(suggestion) || suggestion.includes(poi.replace(/^[^\s]+ /, '')))
-                );
-
-                suggestions.push(...filteredGeneral);
-            }
-        }
-
-        // Fallback to Google if we have few suggestions
-        if (suggestions.length < 3) {
-            const googleSuggestions = await getGoogleSuggestions(query);
-            const filteredGoogle = googleSuggestions.filter(sugg =>
-                !suggestions.some(existing => existing.toLowerCase().includes(sugg.toLowerCase()) || sugg.toLowerCase().includes(existing.toLowerCase()))
+            // Filter duplicates with Google
+            const filteredPoi = poiSuggestions.filter(poi =>
+                !suggestions.some(existing => existing.toLowerCase().includes(poi.replace(/^[^\s]+ /, '').toLowerCase()) || poi.replace(/^[^\s]+ /, '').toLowerCase().includes(existing.toLowerCase()))
             );
-            suggestions.push(...filteredGoogle);
+            suggestions.push(...filteredPoi);
+        }
+
+        // Fetch Photon general suggestions if we need more
+        if (suggestions.length < 5) {
+            const generalUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=${isPOISearch ? 3 : 5}&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+            const generalResponse = await fetch(generalUrl);
+
+            if (generalResponse.ok) {
+                const data = await generalResponse.json();
+                if (data?.features) {
+                    const generalSuggestions = data.features.map((feature: any) => {
+                        const props = feature.properties;
+                        const name = props.name || '';
+                        const city = props.city || props.town || props.village || '';
+                        const street = props.street || '';
+                        const housenumber = props.housenumber || '';
+                        const address = [name, street, housenumber, city].filter(Boolean).join(', ');
+                        return shortenAddress(address);
+                    });
+
+                    // Filter out duplicates
+                    const filteredGeneral = generalSuggestions.filter(suggestion =>
+                        !suggestions.some(existing => existing.toLowerCase().includes(suggestion.toLowerCase()) || suggestion.toLowerCase().includes(existing.toLowerCase()))
+                    );
+
+                    suggestions.push(...filteredGeneral);
+                }
+            }
         }
 
         // Add frequent addresses
