@@ -130,7 +130,9 @@
     "replyMessage": "Reply message",
     "sendReply": "Send Reply",
     "smsSent": "SMS sent successfully",
-    "replySent": "Reply sent successfully"
+    "replySent": "Reply sent successfully",
+    "sendToAllActiveDrivers": "Send to All Active Drivers",
+    "noActiveDrivers": "No active drivers found"
   },
   "vehicles": {
     "title": "Vehicle Status",

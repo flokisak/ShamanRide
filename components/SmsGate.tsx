@@ -205,6 +205,50 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
     }
   };
 
+  const handleSendToAllActiveDrivers = async () => {
+    if (!newSmsMessage.trim()) return;
+    // Get active drivers: drivers assigned to vehicles that are not NotDrivingToday
+    const activeDriverPhones = vehicles
+      .filter(v => v.driverId && v.status !== 'NOT_DRIVING_TODAY')
+      .map(v => people.find(p => p.id === v.driverId)?.phone)
+      .filter(phone => phone) as string[];
+
+    if (activeDriverPhones.length === 0) {
+      alert(t('smsGate.noActiveDrivers'));
+      return;
+    }
+
+    setSending(true);
+    try {
+      const normalizedPhones = activeDriverPhones.map(phone => phone.replace(/\s/g, ''));
+      const result = await sendSms(normalizedPhones, newSmsMessage);
+      if (result.success) {
+        // Save records for each
+        for (const phone of normalizedPhones) {
+          const record = {
+            id: `${Date.now()}-${phone}`,
+            timestamp: Date.now(),
+            direction: 'outgoing' as const,
+            to: phone,
+            text: newSmsMessage,
+            status: 'sent' as const,
+          };
+          await smsService.saveOutgoing(record);
+        }
+        onSmsSent?.();
+        setNewSmsMessage(''); // Clear message
+        alert(`${t('smsGate.smsSent')} to ${activeDriverPhones.length} drivers`);
+      } else {
+        alert('Failed to send SMS');
+      }
+    } catch (error) {
+      console.error('Error sending SMS to all drivers:', error);
+      alert('Error sending SMS');
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
 
@@ -308,13 +352,20 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
                 rows={3}
                 className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
               />
-              <button
-                onClick={handleSendNewSms}
-                disabled={sending || !newSmsRecipient.trim() || !newSmsMessage.trim()}
-                className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white text-sm rounded"
-              >
-                {sending ? t('smsGate.sending') : t('smsGate.sendSms')}
-              </button>
+               <button
+                 onClick={handleSendNewSms}
+                 disabled={sending || !newSmsRecipient.trim() || !newSmsMessage.trim()}
+                 className="w-full px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white text-sm rounded"
+               >
+                 {sending ? t('smsGate.sending') : t('smsGate.sendSms')}
+               </button>
+               <button
+                 onClick={handleSendToAllActiveDrivers}
+                 disabled={sending || !newSmsMessage.trim()}
+                 className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 text-white text-sm rounded mt-2"
+               >
+                 {sending ? t('smsGate.sending') : t('smsGate.sendToAllActiveDrivers')}
+               </button>
             </div>
           </div>
 

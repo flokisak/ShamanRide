@@ -132,7 +132,9 @@
      "replyMessage": "Zpráva odpovědi",
      "sendReply": "Odeslat odpověď",
      "smsSent": "SMS úspěšně odeslána",
-     "replySent": "Odpověď úspěšně odeslána"
+     "replySent": "Odpověď úspěšně odeslána",
+    "sendToAllActiveDrivers": "Odeslat všem aktivním řidičům",
+    "noActiveDrivers": "Žádní aktivní řidiči nenalezeni"
    },
   "vehicles": {
     "title": "Status Vozidel",
