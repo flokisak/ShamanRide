@@ -260,7 +260,7 @@ export async function geocodeAddress(address: string, language: string): Promise
             const placeId = parts[1];
 
             if (placeId) {
-                // Use Places Details API for exact location
+                // Use Places Details API for exact location (should be enabled if Places API is enabled)
                 const detailsUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${apiKey}&fields=geometry`;
                 const response = await fetch(detailsUrl);
                 const data = await response.json();
@@ -269,10 +269,9 @@ export async function geocodeAddress(address: string, language: string): Promise
                     return { lat: location.lat, lon: location.lng };
                 }
             } else {
-                // Use bounds to bias results to the search area
-                const bounds = `${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMin}|${EXPANDED_SEARCH_BOUNDS.latMax},${EXPANDED_SEARCH_BOUNDS.lonMax}`;
-                const geoUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}&components=country:cz&bounds=${bounds}`;
-                const response = await fetch(geoUrl);
+                // Use Places Text Search as fallback for geocoding
+                const textUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(address)}&key=${apiKey}&region=cz`;
+                const response = await fetch(textUrl);
                 const data = await response.json();
                 if (data.status === 'OK' && data.results && data.results.length > 0) {
                     const location = data.results[0].geometry.location;
