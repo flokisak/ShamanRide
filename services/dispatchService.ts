@@ -580,7 +580,26 @@ export async function getAddressSuggestions(query: string, language: string): Pr
     try {
         const suggestions: {text: string, placeId?: string}[] = [];
 
-        // Fetch Nominatim suggestions (includes POI and addresses)
+        // Fetch Photon suggestions first (no rate limit)
+        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+        const photonResponse = await fetch(photonUrl);
+        if (photonResponse.ok) {
+            const photonData = await photonResponse.json();
+            if (photonData?.features) {
+                const photonSuggestions = photonData.features.map((feature: any) => {
+                    const props = feature.properties;
+                    const name = props.name || '';
+                    const city = props.city || props.town || props.village || '';
+                    const street = props.street || '';
+                    const housenumber = props.housenumber || '';
+                    const address = [name, street, housenumber, city].filter(Boolean).join(', ');
+                    return { text: address };
+                }).filter(s => s.text.trim());
+                suggestions.push(...photonSuggestions);
+            }
+        }
+
+        // Fetch Nominatim suggestions as fallback
         const nominatimSuggestions = await getNominatimSuggestions(query, isPOISearch);
         suggestions.push(...nominatimSuggestions);
 

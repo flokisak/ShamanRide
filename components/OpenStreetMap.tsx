@@ -116,18 +116,18 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
     };
 
     try {
-        // Try Nominatim first
-        let result = await fetchNominatimCoords(address);
+        // Try Photon first (no rate limit)
+        let result = await fetchPhotonCoords(address);
         if (!result) {
-            // Fallback to Photon
-            result = await fetchPhotonCoords(address);
+            // Fallback to Nominatim
+            result = await fetchNominatimCoords(address);
         }
         if (!result) {
             const city = address.split(',').map(p => p.trim()).pop();
             if (city && city.toLowerCase() !== address.toLowerCase()) {
-                result = await fetchNominatimCoords(city);
+                result = await fetchPhotonCoords(city);
                 if (!result) {
-                    result = await fetchPhotonCoords(city);
+                    result = await fetchNominatimCoords(city);
                 }
             }
         }
