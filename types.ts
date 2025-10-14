@@ -57,7 +57,7 @@ export interface Vehicle {
   capacity: number;
   driverId: number | null; // Link to a Person
   // Timestamp for when the vehicle becomes free
-  freeAt?: number; 
+  freeAt?: number;
   // New vehicle management fields
   mileage?: number;
   serviceInterval?: number; // in km
@@ -67,6 +67,7 @@ export interface Vehicle {
   vehicleNotes?: string;
   fuelType?: FuelType;
   fuelConsumption?: number; // L/100km
+  phone?: string; // Phone number for the vehicle's built-in phone
 }
 
 export interface RideRequest {

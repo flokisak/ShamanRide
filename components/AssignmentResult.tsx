@@ -92,8 +92,8 @@ export const AssignmentResult: React.FC<AssignmentResultProps> = ({ result, erro
   const smsText = result?.sms || '';
   const navigationUrl = result?.navigationUrl || 'https://maps.google.com';
   const driver = result ? people.find(p => p.id === result.vehicle.driverId) : null;
-  const driverPhoneNumber = driver?.phone.replace(/\s/g, '');
-  const shareLink = generateShareLink(messagingApp, driverPhoneNumber || '', smsText);
+  const phoneNumber = result?.vehicle.phone || driver?.phone?.replace(/\s/g, '');
+  const shareLink = generateShareLink(messagingApp, phoneNumber || '', smsText);
   
   const handleCopy = () => {
     if (smsText) {
@@ -198,8 +198,8 @@ export const AssignmentResult: React.FC<AssignmentResultProps> = ({ result, erro
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 rounded-md bg-slate-700 text-gray-300 transition-colors enabled:hover:bg-slate-600 enabled:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={driverPhoneNumber ? t('assignment.sendVia', { app: messagingApp }) : t('assignment.noDriverAssigned')}
-                  onClick={(e) => !driverPhoneNumber && e.preventDefault()}
+                  title={phoneNumber ? t('assignment.sendVia', { app: messagingApp }) : t('assignment.noPhoneNumber')}
+                  onClick={(e) => !phoneNumber && e.preventDefault()}
                 >
                   <ShareIcon className="w-5 h-5"/>
                 </a>

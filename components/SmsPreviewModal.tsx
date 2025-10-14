@@ -6,7 +6,7 @@ import { generateShareLink } from '../services/dispatchService';
 
 interface SmsPreviewModalProps {
   sms: string;
-  driverPhone?: string;
+  phone?: string;
   navigationUrl: string;
   messagingApp: MessagingApp;
   onClose: () => void;
@@ -14,12 +14,12 @@ interface SmsPreviewModalProps {
   onSendViaGateway?: () => Promise<void> | void;
 }
 
-export const SmsPreviewModal: React.FC<SmsPreviewModalProps> = ({ sms, driverPhone, navigationUrl, messagingApp, onClose, onConfirm, onSendViaGateway }) => {
+export const SmsPreviewModal: React.FC<SmsPreviewModalProps> = ({ sms, phone, navigationUrl, messagingApp, onClose, onConfirm, onSendViaGateway }) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
-  const cleanDriverPhone = driverPhone?.replace(/\s/g, '');
-  
-  const shareLink = generateShareLink(messagingApp, cleanDriverPhone || '', sms);
+  const cleanPhone = phone?.replace(/\s/g, '');
+
+  const shareLink = generateShareLink(messagingApp, cleanPhone || '', sms);
   // Try to derive a Waze link from the provided navigationUrl (which is usually a Google Maps ?api=1 URL)
   const deriveWazeUrl = (nav: string) => {
     try {
@@ -115,10 +115,10 @@ export const SmsPreviewModal: React.FC<SmsPreviewModalProps> = ({ sms, driverPho
           </button>
         </div>
         <div className="p-6">
-          {driverPhone && (
-            <p className="mb-4">
-              <strong className='text-gray-400'>{t('smsPreview.driverPhone')}:</strong> 
-              <a href={`tel:${driverPhone}`} className="font-mono text-teal-400 hover:underline ml-2">{driverPhone}</a>
+          {phone && (
+            <p className="mb-2">
+              <strong className='text-gray-400'>{t('smsPreview.phone')}:</strong>
+              <a href={`tel:${phone}`} className="font-mono text-teal-400 hover:underline ml-2">{phone}</a>
             </p>
           )}
           <div className="relative bg-slate-900 p-4 rounded-lg border border-slate-700">
@@ -154,10 +154,10 @@ export const SmsPreviewModal: React.FC<SmsPreviewModalProps> = ({ sms, driverPho
               {messagingApp === 'SMS' ? (
                 <button
                   type="button"
-                  onClick={async () => cleanDriverPhone && onSendViaGateway && await onSendViaGateway()}
-                  className={`p-2 rounded-md bg-slate-700 text-gray-300 transition-colors ${!cleanDriverPhone || !onSendViaGateway ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-600 hover:text-white'}`}
-                  title={cleanDriverPhone ? t('assignment.sendVia', { app: messagingApp }) : t('smsPreview.noPhoneNumber')}
-                  disabled={!cleanDriverPhone || !onSendViaGateway}
+                  onClick={async () => cleanPhone && onSendViaGateway && await onSendViaGateway()}
+                  className={`p-2 rounded-md bg-slate-700 text-gray-300 transition-colors ${!cleanPhone || !onSendViaGateway ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-600 hover:text-white'}`}
+                  title={cleanPhone ? t('assignment.sendVia', { app: messagingApp }) : t('smsPreview.noPhoneNumber')}
+                  disabled={!cleanPhone || !onSendViaGateway}
                 >
                   <ShareIcon className="w-5 h-5"/>
                 </button>
@@ -166,9 +166,9 @@ export const SmsPreviewModal: React.FC<SmsPreviewModalProps> = ({ sms, driverPho
                   href={shareLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`p-2 rounded-md bg-slate-700 text-gray-300 transition-colors ${!cleanDriverPhone ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-600 hover:text-white'}`}
-                  title={cleanDriverPhone ? t('assignment.sendVia', { app: messagingApp }) : t('smsPreview.noPhoneNumber')}
-                  onClick={(e) => !cleanDriverPhone && e.preventDefault()}
+                  className={`p-2 rounded-md bg-slate-700 text-gray-300 transition-colors ${!cleanPhone ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-600 hover:text-white'}`}
+                  title={cleanPhone ? t('assignment.sendVia', { app: messagingApp }) : t('smsPreview.noPhoneNumber')}
+                  onClick={(e) => !cleanPhone && e.preventDefault()}
                 >
                   <ShareIcon className="w-5 h-5"/>
                 </a>

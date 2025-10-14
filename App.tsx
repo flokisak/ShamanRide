@@ -149,7 +149,7 @@ const AppContent: React.FC = () => {
   const [isCreatingRide, setIsCreatingRide] = useState(false);
   const [isRideBookOpen, setIsRideBookOpen] = useState(false);
   const [manualAssignmentDetails, setManualAssignmentDetails] = useState<{rideRequest: RideRequest, vehicle: Vehicle, rideDuration: number, sms: string, estimatedPrice: number, navigationUrl: string} | null>(null);
-  const [smsToPreview, setSmsToPreview] = useState<{ sms: string; driverPhone?: string; navigationUrl: string; logId?: string } | null>(null);
+  const [smsToPreview, setSmsToPreview] = useState<{ sms: string; phone?: string; navigationUrl: string; logId?: string } | null>(null);
   const [scheduledRideToDispatch, setScheduledRideToDispatch] = useState<RideLog | null>(null);
 
   const [isAiEnabled, setIsAiEnabled] = useState<boolean>(true);
@@ -1004,6 +1004,13 @@ const AppContent: React.FC = () => {
         const assignedVehicle = vehicles.find(v => v.id === updatedLog.vehicleId);
         const driver = people.find(p => p.id === assignedVehicle?.driverId);
         const driverNav = driver?.navigationApp || preferredNav;
+        const phone = assignedVehicle?.phone || driver?.phone;
+        if (!phone) {
+          alert(t('smsPreview.noPhoneNumber'));
+          setEditingRideLog(null);
+          setIsRideBookOpen(true);
+          return;
+        }
         let navigationUrl = 'https://maps.google.com';
         try {
             if (assignedVehicle) {
@@ -1024,7 +1031,7 @@ const AppContent: React.FC = () => {
 
         setSmsToPreview({
             sms: smsText,
-            driverPhone: driver?.phone,
+            phone: phone,
             navigationUrl: navigationUrl,
         });
         setScheduledRideToDispatch(updatedLog); // Store the pending update
@@ -1076,12 +1083,14 @@ const AppContent: React.FC = () => {
     }
 
     const driver = people.find(p => p.id === vehicle.driverId);
-    if (!driver) {
-      alert(t('smsPreview.noDriverAssigned'));
+
+    const driverNav = driver?.navigationApp || preferredNav;
+    const phone = vehicle.phone || driver?.phone;
+    if (!phone) {
+      alert(t('smsPreview.noPhoneNumber'));
       return;
     }
 
-    const driverNav = driver.navigationApp || preferredNav;
     try {
     const vehicleCoords = await geocodeAddress(vehicle.location, language);
     const stopCoords = await Promise.all(log.stops.map(s => geocodeAddress(s, language)));
@@ -1091,7 +1100,7 @@ const AppContent: React.FC = () => {
 
     setSmsToPreview({
       sms: smsText,
-      driverPhone: driver.phone,
+      phone: phone,
       navigationUrl: navigationUrl,
       logId: log.id,
     });

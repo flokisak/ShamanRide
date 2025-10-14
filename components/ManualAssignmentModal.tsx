@@ -25,8 +25,8 @@ export const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({ de
   const [copied, setCopied] = useState(false);
   
   const driver = people.find(p => p.id === vehicle.driverId);
-  const driverPhoneNumber = driver?.phone.replace(/\s/g, '');
-  const shareLink = generateShareLink(messagingApp, driverPhoneNumber || '', sms);
+  const phoneNumber = vehicle.phone || driver?.phone?.replace(/\s/g, '');
+  const shareLink = generateShareLink(messagingApp, phoneNumber || '', sms);
 
   useEffect(() => {
     setDuration(rideDuration);
@@ -104,7 +104,7 @@ export const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({ de
             
             {/* SMS Message */}
             <div className="border-t border-slate-700 pt-4">
-                {driver?.phone && <p className="mb-2"><strong className='text-gray-400'>{t('smsPreview.driverPhone')}:</strong> <a href={`tel:${driver.phone}`} className="font-mono text-teal-400 hover:underline">{driver.phone}</a></p>}
+                {(vehicle.phone || driver?.phone) && <p className="mb-2"><strong className='text-gray-400'>{t('smsPreview.phone')}:</strong> <a href={`tel:${vehicle.phone || driver?.phone}`} className="font-mono text-teal-400 hover:underline">{vehicle.phone || driver?.phone}</a></p>}
                 <h4 className="text-sm text-gray-400 font-medium mb-2">{t('assignment.communication')}</h4>
                 <div className="relative bg-slate-900 p-4 rounded-lg border border-slate-700">
                 <p className="text-gray-200 whitespace-pre-wrap font-mono text-sm">{sms}</p>
@@ -123,8 +123,8 @@ export const ManualAssignmentModal: React.FC<ManualAssignmentModalProps> = ({ de
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-2 rounded-md bg-slate-700 text-gray-300 transition-colors enabled:hover:bg-slate-600 enabled:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={driverPhoneNumber ? t('assignment.sendVia', { app: messagingApp }) : t('assignment.noDriverAssigned')}
-                      onClick={(e) => !driverPhoneNumber && e.preventDefault()}
+                      title={phoneNumber ? t('assignment.sendVia', { app: messagingApp }) : t('assignment.noPhoneNumber')}
+                      onClick={(e) => !phoneNumber && e.preventDefault()}
                     >
                       <ShareIcon className="w-5 h-5"/>
                     </a>

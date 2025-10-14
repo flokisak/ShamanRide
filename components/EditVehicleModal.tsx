@@ -102,10 +102,14 @@ export const EditVehicleModal: React.FC<EditVehicleModalProps> = ({ vehicle, peo
               <label htmlFor="licensePlate" className="block text-sm font-medium text-gray-300 mb-1">{t('vehicles.fields.licensePlate')}</label>
               <input type="text" id="licensePlate" name="licensePlate" value={formData.licensePlate} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" />
             </div>
-            <div>
-              <label htmlFor="location" className="block text-sm font-medium text-gray-300 mb-1">{t('vehicles.fields.location')}</label>
-              <input type="text" id="location" name="location" value={formData.location} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" />
-            </div>
+             <div>
+               <label htmlFor="location" className="block text-sm font-medium text-gray-300 mb-1">{t('vehicles.fields.location')}</label>
+               <input type="text" id="location" name="location" value={formData.location} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" />
+             </div>
+             <div>
+               <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-1">{t('vehicles.fields.phone')}</label>
+               <input type="tel" id="phone" name="phone" value={formData.phone || ''} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" />
+             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label htmlFor="type" className="block text-sm font-medium text-gray-300 mb-1">{t('vehicles.fields.type')}</label>

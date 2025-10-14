@@ -699,10 +699,19 @@ function calculatePrice(
 
     for (const rate of tariff.flatRates) {
         const rateNameLower = rate.name.toLowerCase();
-        if ((rateNameLower.includes("mikulov") && pickupLower.includes("mikulov") && destLower.includes("mikulov")) ||
-            (rateNameLower.includes("hustopeč") && pickupLower.includes("hustopeče") && destLower.includes("hustopeče")) ||
-            (rateNameLower.includes("zaječí") && (pickupLower.includes("zaječí") || destLower.includes("zaječí")))) {
+        if (rateNameLower.includes("mikulov") && pickupLower.includes("mikulov") && destLower.includes("mikulov")) {
             return chargeVanPrice ? rate.priceVan : rate.priceCar;
+        } else if (rateNameLower.includes("hustopeč") && pickupLower.includes("hustopeče") && destLower.includes("hustopeče")) {
+            return chargeVanPrice ? rate.priceVan : rate.priceCar;
+        } else if (rateNameLower.includes("zaječí")) {
+            // Zaječí flat rate applies only for rides between any address in Zaječí and Retro music club
+            const isPickupInZajeci = pickupLower.includes("zaječí");
+            const isDestInZajeci = destLower.includes("zaječí");
+            const isPickupRetro = pickupLower.includes("retro");
+            const isDestRetro = destLower.includes("retro");
+            if ((isPickupInZajeci && isDestRetro) || (isPickupRetro && isDestInZajeci)) {
+                return chargeVanPrice ? rate.priceVan : rate.priceCar;
+            }
         }
     }
 
