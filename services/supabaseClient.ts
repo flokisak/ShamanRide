@@ -165,6 +165,7 @@ export const supabaseService = SUPABASE_ENABLED
           vignette_expiry: v.vignetteExpiry ?? null,
            fuel_type: v.fuelType ? v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1).toLowerCase() : null,
           fuel_consumption: v.fuelConsumption ?? null,
+          phone: v.phone ?? null,
         };
       },
       _fromDbVehicle(db: any) {
@@ -185,6 +186,7 @@ export const supabaseService = SUPABASE_ENABLED
           vignetteExpiry: db.vignette_expiry ?? null,
            fuelType: db.fuel_type ? db.fuel_type.toUpperCase() : null,
           fuelConsumption: db.fuel_consumption ?? null,
+          phone: db.phone ?? null,
         };
       },
 

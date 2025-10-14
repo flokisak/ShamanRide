@@ -653,10 +653,11 @@ const AppContent: React.FC = () => {
       }
       const fuelCost = totalDistance ? calculateFuelCost(chosenVehicle, totalDistance) : undefined;
 
-     setVehicles(prev => prev.map(v => v.id === chosenVehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v));
+      const updatedVehicles = vehicles.map(v => v.id === chosenVehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v);
+      setVehicles(updatedVehicles);
 
-     // Ensure vehicle update is saved to database immediately
-     supabaseService.updateVehicles(vehicles).catch(err => console.error('Error saving vehicle update', err));
+      // Ensure vehicle update is saved to database immediately
+      supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
 
      if (!isAiEnabled) {
          try {
@@ -760,10 +761,11 @@ const AppContent: React.FC = () => {
       const generatedCustomerSms = generateCustomerSms(vehicle, eta, driverName);
       setCustomerSms(generatedCustomerSms);
 
-      setVehicles(prev => prev.map(v => v.id === vehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v));
+      const updatedVehicles = vehicles.map(v => v.id === vehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v);
+      setVehicles(updatedVehicles);
 
       // Ensure vehicle update is saved to database immediately
-      supabaseService.updateVehicles(vehicles).catch(err => console.error('Error saving vehicle update', err));
+      supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
 
       const newLog: RideLog = {
         id: `ride-${Date.now()}`,
@@ -898,7 +900,9 @@ const AppContent: React.FC = () => {
         await supabaseService.deletePerson(personId);
         setPeople(prev => prev.filter(p => p.id !== personId));
         // Unassign this person from any vehicle they are driving
-        setVehicles(prev => prev.map(v => v.driverId === personId ? { ...v, driverId: null } : v));
+        const updatedVehicles = vehicles.map(v => v.driverId === personId ? { ...v, driverId: null } : v);
+        await supabaseService.updateVehicles(updatedVehicles);
+        setVehicles(updatedVehicles);
       } catch (err) {
         console.error('Failed to delete person', err);
         alert('Failed to delete person. Please try again.');
