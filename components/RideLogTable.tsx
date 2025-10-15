@@ -13,7 +13,6 @@ interface RideLogTableProps {
       key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime';
       direction: 'asc' | 'desc';
     };
-     onToggleSmsSent: (logId: string) => void;
      onStatusChange: (logId: string, newStatus: RideStatus) => void;
     onDelete: (logId: string) => void;
     onEdit: (logId: string) => void;
@@ -55,7 +54,7 @@ const SortableHeader: React.FC<{
 };
 
 
-export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onToggleSmsSent, onStatusChange, onDelete, onEdit, onSendSms, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange }) => {
+export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onStatusChange, onDelete, onEdit, onSendSms, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange }) => {
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
