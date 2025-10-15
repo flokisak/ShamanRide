@@ -102,23 +102,23 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         event: 'INSERT',
         schema: 'public',
         table: 'driver_messages'
-      }, (payload) => {
-        const newMessage = payload.new as ChatMessage;
-        // Check if the message is relevant (between dispatcher and selected vehicle)
-        const isRelevant = (newMessage.sender_id === 'dispatcher' && newMessage.receiver_id === 'driver_' + selectedVehicleId) ||
-                           (newMessage.sender_id === 'driver_' + selectedVehicleId && newMessage.receiver_id === 'dispatcher');
-        if (isRelevant) {
-          setMessages(prev => [...prev, newMessage]);
+       }, (payload) => {
+         const incomingMessage = payload.new as ChatMessage;
+         // Check if the message is relevant (between dispatcher and selected vehicle)
+         const isRelevant = (incomingMessage.sender_id === 'dispatcher' && incomingMessage.receiver_id === 'driver_' + selectedVehicleId) ||
+                            (incomingMessage.sender_id === 'driver_' + selectedVehicleId && incomingMessage.receiver_id === 'dispatcher');
+         if (isRelevant) {
+           setMessages(prev => [...prev, incomingMessage]);
 
-          // Notify about new message if it's from a vehicle
-          if (newMessage.sender_id.startsWith('driver_')) {
-            const vehicleId = parseInt(newMessage.sender_id.replace('driver_', ''));
-            if (onNewMessage) {
-              onNewMessage(vehicleId, newMessage.message);
-            }
-          }
-        }
-      })
+           // Notify about new message if it's from a vehicle
+           if (incomingMessage.sender_id.startsWith('driver_')) {
+             const vehicleId = parseInt(incomingMessage.sender_id.replace('driver_', ''));
+             if (onNewMessage) {
+               onNewMessage(vehicleId, incomingMessage.message);
+             }
+           }
+         }
+       })
       .subscribe();
 
     return () => {
