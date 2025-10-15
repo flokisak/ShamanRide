@@ -429,6 +429,7 @@
   "vehicleStatus": {
     "AVAILABLE": "Available",
     "BUSY": "Busy",
+    "BREAK": "Break",
     "OUT_OF_SERVICE": "Out of Service",
     "NOT_DRIVING_TODAY": "Not Driving Today"
   },

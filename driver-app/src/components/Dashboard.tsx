@@ -7,6 +7,7 @@ import { useTranslation } from '../contexts/LanguageContext';
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
   const [driverStatus, setDriverStatus] = useState('offline');
+  const [breakEndTime, setBreakEndTime] = useState<number | null>(null);
   const [currentRide, setCurrentRide] = useState<RideLog | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
@@ -137,10 +138,83 @@ const Dashboard: React.FC = () => {
     };
   }, [driverStatus]);
 
+  // Handle break timer
+  useEffect(() => {
+    if (breakEndTime && driverStatus === 'break') {
+      const checkBreakEnd = async () => {
+        if (Date.now() >= breakEndTime) {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            // Update driver status to available
+            await supabase.from('drivers').update({
+              current_status: 'available',
+              break_end_time: null,
+              updated_at: new Date().toISOString()
+            }).eq('id', user.id);
+
+            // Update associated vehicle status to available
+            const { data: driver } = await supabase.from('drivers').select('vehicle_id').eq('id', user.id).single();
+            if (driver?.vehicle_id) {
+              await supabase.from('vehicles').update({
+                status: 'AVAILABLE',
+                updated_at: new Date().toISOString()
+              }).eq('id', driver.vehicle_id);
+            }
+
+            setDriverStatus('available');
+            setBreakEndTime(null);
+          }
+        }
+      };
+
+      // Check immediately
+      checkBreakEnd();
+
+      // Set up interval to check every minute
+      const breakInterval = setInterval(checkBreakEnd, 60000);
+
+      return () => clearInterval(breakInterval);
+    }
+  }, [breakEndTime, driverStatus]);
+
   const updateDriverStatus = async (status: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from('drivers').update({ current_status: status, updated_at: new Date().toISOString() }).eq('id', user.id);
+      let breakEndTimeValue = null;
+      let vehicleStatus = status;
+
+      // Handle break times
+      if (status.startsWith('break_')) {
+        const breakMinutes = parseInt(status.split('_')[1]);
+        breakEndTimeValue = Date.now() + (breakMinutes * 60 * 1000);
+        setBreakEndTime(breakEndTimeValue);
+        vehicleStatus = 'BREAK'; // Vehicle status should be BREAK
+        status = 'break'; // Driver status stored as 'break'
+      } else {
+        setBreakEndTime(null);
+        // Map driver status to vehicle status
+        if (status === 'available') vehicleStatus = 'AVAILABLE';
+        else if (status === 'on_ride') vehicleStatus = 'BUSY';
+        else if (status === 'offline') vehicleStatus = 'OUT_OF_SERVICE';
+        else vehicleStatus = status.toUpperCase();
+      }
+
+      // Update driver status
+      await supabase.from('drivers').update({
+        current_status: status,
+        break_end_time: breakEndTimeValue,
+        updated_at: new Date().toISOString()
+      }).eq('id', user.id);
+
+      // Also update associated vehicle status
+      const { data: driver } = await supabase.from('drivers').select('vehicle_id').eq('id', user.id).single();
+      if (driver?.vehicle_id) {
+        await supabase.from('vehicles').update({
+          status: vehicleStatus,
+          updated_at: new Date().toISOString()
+        }).eq('id', driver.vehicle_id);
+      }
+
       setDriverStatus(status);
     }
   };
@@ -203,10 +277,19 @@ const Dashboard: React.FC = () => {
           >
             <option value="available">{t('dashboard.available')}</option>
             <option value="on_ride">{t('dashboard.onRide')}</option>
+            <option value="break_10">Pauza 10 min</option>
+            <option value="break_20">Pauza 20 min</option>
+            <option value="break_30">Pauza 30 min</option>
+            <option value="break_60">Pauza 1 hod</option>
             <option value="pause">{t('dashboard.pause')}</option>
             <option value="refueling">{t('dashboard.refueling')}</option>
             <option value="offline">{t('dashboard.offline')}</option>
           </select>
+          {driverStatus === 'break' && breakEndTime && (
+            <div className="mt-2 text-sm text-warning">
+              {t('dashboard.breakEndsIn')}: {Math.max(0, Math.ceil((breakEndTime - Date.now()) / (1000 * 60)))} min
+            </div>
+          )}
         </div>
 
         {/* Current Ride */}

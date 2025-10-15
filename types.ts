@@ -6,6 +6,7 @@ export enum VehicleType {
 export enum VehicleStatus {
   Available = 'AVAILABLE',
   Busy = 'BUSY',
+  Break = 'BREAK',
   OutOfService = 'OUT_OF_SERVICE',
   NotDrivingToday = 'NOT_DRIVING_TODAY',
 }

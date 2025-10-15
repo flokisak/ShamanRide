@@ -139,6 +139,7 @@ export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles
     switch (status) {
       case VehicleStatus.Available: return 'text-green-400';
       case VehicleStatus.Busy: return 'text-yellow-400';
+      case VehicleStatus.Break: return 'text-orange-400';
       case VehicleStatus.OutOfService: return 'text-red-400';
       case VehicleStatus.NotDrivingToday: return 'text-sky-400';
       default: return 'text-gray-400';
@@ -149,6 +150,7 @@ export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles
     switch (status) {
       case VehicleStatus.Available: return 'bg-green-500';
       case VehicleStatus.Busy: return 'bg-yellow-500';
+      case VehicleStatus.Break: return 'bg-orange-500';
       case VehicleStatus.OutOfService: return 'bg-red-500';
       case VehicleStatus.NotDrivingToday: return 'bg-sky-500';
       default: return 'bg-gray-500';
@@ -174,6 +176,7 @@ export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles
     { value: 'all', label: t('vehicles.filters.allStatuses') },
     { value: VehicleStatus.Available, label: t('vehicleStatus.AVAILABLE') },
     { value: VehicleStatus.Busy, label: t('vehicleStatus.BUSY') },
+    { value: VehicleStatus.Break, label: t('vehicleStatus.BREAK') },
     { value: VehicleStatus.OutOfService, label: t('vehicleStatus.OUT_OF_SERVICE') },
     { value: VehicleStatus.NotDrivingToday, label: t('vehicleStatus.NOT_DRIVING_TODAY') },
   ];
