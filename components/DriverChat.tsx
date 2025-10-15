@@ -38,26 +38,27 @@ const addDriverMessage = (message: ChatMessage) => {
   saveDriverMessages(messages);
 };
 
+// Chat history item interface
+interface ChatHistoryItem {
+  vehicleId: number;
+  vehicleName: string;
+  lastMessage: string;
+  timestamp: string;
+  unreadCount: number;
+}
+
 export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }) => {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [allMessages, setAllMessages] = useState<ChatMessage[]>([]); // Store messages from all chats
   const [newMessage, setNewMessage] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Calculate unread message counts for each vehicle
-  const unreadCounts = vehicles.reduce((acc, vehicle) => {
-    const vehicleMessages = messages.filter(msg =>
-      (msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === currentUserId && !msg.read)
-    );
-    acc[vehicle.id] = vehicleMessages.length;
-    return acc;
-  }, {} as Record<number, number>);
-
-  // Get current user (dispatcher)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
+  // Get current user (dispatcher) - moved up for proper variable order
   useEffect(() => {
     const getCurrentUser = async () => {
       try {
@@ -69,6 +70,85 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     };
     getCurrentUser();
   }, []);
+
+  // Load all messages for all vehicles (for chat history)
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const loadAllMessages = async () => {
+      try {
+        if (SUPABASE_ENABLED) {
+          const { data, error } = await supabase.from('driver_messages').select('*')
+            .or(`receiver_id.eq.${currentUserId},sender_id.eq.${currentUserId}`)
+            .order('timestamp', { ascending: true });
+
+          if (error) {
+            console.warn('Could not load all messages:', error);
+            return;
+          }
+
+          if (data) {
+            setAllMessages(data);
+          }
+        } else {
+          // Load from localStorage
+          const localMessages = getDriverMessages();
+          setAllMessages(localMessages);
+        }
+      } catch (err) {
+        console.warn('Error loading all messages:', err);
+      }
+    };
+
+    loadAllMessages();
+  }, [currentUserId]);
+
+  // Calculate chat history and unread counts
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const historyMap = new Map<number, ChatHistoryItem>();
+
+    vehicles.forEach(vehicle => {
+      const vehicleMessages = allMessages.filter(msg =>
+        (msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === currentUserId) ||
+        (msg.sender_id === currentUserId && msg.receiver_id === `driver_${vehicle.id}`)
+      );
+
+      if (vehicleMessages.length > 0) {
+        const unreadCount = vehicleMessages.filter(msg =>
+          msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === currentUserId && !msg.read
+        ).length;
+
+        const lastMessage = vehicleMessages.sort((a, b) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )[0];
+
+        historyMap.set(vehicle.id, {
+          vehicleId: vehicle.id,
+          vehicleName: vehicle.name,
+          lastMessage: lastMessage.message,
+          timestamp: lastMessage.timestamp,
+          unreadCount
+        });
+      } else {
+        // Include vehicle in history even if no messages yet
+        historyMap.set(vehicle.id, {
+          vehicleId: vehicle.id,
+          vehicleName: vehicle.name,
+          lastMessage: '',
+          timestamp: '',
+          unreadCount: 0
+        });
+      }
+    });
+
+    const history = Array.from(historyMap.values()).sort((a, b) =>
+      new Date(b.timestamp || '1970-01-01').getTime() - new Date(a.timestamp || '1970-01-01').getTime()
+    );
+
+    setChatHistory(history);
+  }, [vehicles, allMessages, currentUserId]);
 
   // Load messages for selected vehicle
   useEffect(() => {
@@ -85,7 +165,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           console.warn('Could not load messages 2:', error2);
         }
         const data = [...(data1 || []), ...(data2 || [])];
-        data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
         setMessages(data);
       } catch (err) {
         console.warn('Error loading messages:', err);
@@ -95,29 +175,43 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     loadMessages();
   }, [selectedVehicleId]);
 
-  // Subscribe to new messages (only when Supabase is enabled)
+  // Subscribe to new messages globally (for all vehicles)
   useEffect(() => {
-    if (!selectedVehicleId || !currentUserId || !SUPABASE_ENABLED) return;
+    if (!currentUserId || !SUPABASE_ENABLED) return;
 
     const channel = supabase
-      .channel('driver_messages')
+      .channel('driver_messages_global')
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'driver_messages'
        }, (payload) => {
         const incomingMessage = payload.new as ChatMessage;
-        // Check if the message is relevant (between dispatcher and selected vehicle)
-        const isRelevant = (incomingMessage.sender_id === 'dispatcher' && incomingMessage.receiver_id === 'driver_' + selectedVehicleId) ||
-                           (incomingMessage.sender_id === 'driver_' + selectedVehicleId && incomingMessage.receiver_id === 'dispatcher');
-        if (isRelevant) {
-          setMessages(prev => [...prev, incomingMessage]);
 
-          // Notify about new message if it's from a vehicle
-          if (incomingMessage.sender_id.startsWith('driver_')) {
-            const vehicleId = parseInt(incomingMessage.sender_id.replace('driver_', ''));
-            if (onNewMessage) {
-              onNewMessage(vehicleId, incomingMessage.message);
+        // Update allMessages for chat history
+        setAllMessages(prev => {
+          const exists = prev.some(m => m.id === incomingMessage.id);
+          if (!exists) {
+            return [...prev, incomingMessage].sort((a, b) =>
+              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            );
+          }
+          return prev;
+        });
+
+        // Check if the message is relevant (between dispatcher and selected vehicle)
+        if (selectedVehicleId) {
+          const isRelevant = (incomingMessage.sender_id === 'dispatcher' && incomingMessage.receiver_id === 'driver_' + selectedVehicleId) ||
+                             (incomingMessage.sender_id === 'driver_' + selectedVehicleId && incomingMessage.receiver_id === 'dispatcher');
+          if (isRelevant) {
+            setMessages(prev => [...prev, incomingMessage]);
+
+            // Notify about new message if it's from a vehicle
+            if (incomingMessage.sender_id.startsWith('driver_')) {
+              const vehicleId = parseInt(incomingMessage.sender_id.replace('driver_', ''));
+              if (onNewMessage) {
+                onNewMessage(vehicleId, incomingMessage.message);
+              }
             }
           }
         }
@@ -127,7 +221,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedVehicleId, currentUserId]);
+  }, [selectedVehicleId, currentUserId, onNewMessage]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -147,6 +241,8 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         read: false
       };
 
+      let newMessageData;
+
       if (SUPABASE_ENABLED) {
         const { data, error } = await supabase
           .from('driver_messages')
@@ -161,14 +257,16 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
         if (error) throw error;
         // Use the returned data which includes the database timestamp
-        addDriverMessage(data);
-        setMessages(prev => [...prev, data]);
+        newMessageData = data;
       } else {
         // Local storage fallback
-        addDriverMessage(messageData);
-        // Update local state immediately
-        setMessages(prev => [...prev, messageData]);
+        newMessageData = { ...messageData, id: `local-${Date.now()}` };
       }
+
+      // Store message in local cache/history
+      addDriverMessage(newMessageData);
+      // Update local state immediately
+      setMessages(prev => [newMessageData, ...prev]);
 
       setNewMessage('');
     } catch (error) {
@@ -254,74 +352,157 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         </h3>
       </div>
 
-      <div className="flex-shrink-0 mb-3">
-        <select
-          value={selectedVehicleId || ''}
-          onChange={(e) => setSelectedVehicleId(e.target.value ? parseInt(e.target.value) : null)}
-          className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-        >
-          <option value="">Vyberte vozidlo...</option>
-           {vehicles.map(vehicle => (
-            <option key={vehicle.id} value={vehicle.id}>
-              {vehicle.name} {unreadCounts[vehicle.id] > 0 && `(${unreadCounts[vehicle.id]})`}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Two-column layout */}
+      <div className="flex-1 flex gap-3 overflow-hidden">
+        {/* Left column: Chat History */}
+        <div className="w-1/3 bg-slate-900/50 rounded-lg overflow-hidden flex flex-col">
+          <div className="flex-shrink-0 p-3 border-b border-slate-600">
+            <h4 className="text-sm font-medium text-white flex items-center">
+              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2z m0 7a1 1 0 110-2 1 1 0 010 2z m0 7a1 1 0 110-2 1 1 0 010 2z" />
+              </svg>
+              Historie chatů
+            </h4>
+          </div>
 
-      {selectedVehicleId && (
-        <>
-          <div className="flex-1 overflow-y-auto mb-3 bg-slate-900/50 rounded-lg p-3 min-h-0">
-             {messages.length === 0 ? (
-               <p className="text-sm text-slate-400 italic text-center">
-                 Žádné zprávy s tímto vozidlem
-               </p>
-            ) : (
-              <div className="space-y-2">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
-                  >
-                    <div
-                      className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                        msg.sender_id === currentUserId
-                          ? 'bg-primary text-slate-900'
-                          : 'bg-slate-700 text-white'
-                      }`}
-                    >
-                      <div className="text-xs opacity-75 mb-1">
-                        {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
+          <div className="flex-1 overflow-y-auto">
+            {chatHistory.map(chat => (
+              <div
+                key={chat.vehicleId}
+                onClick={() => setSelectedVehicleId(chat.vehicleId)}
+                className={`p-3 border-b border-slate-700 cursor-pointer hover:bg-slate-700/50 transition-colors ${
+                  selectedVehicleId === chat.vehicleId ? 'bg-slate-700 border-l-4 border-primary' : ''
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-white font-medium text-sm truncate">{chat.vehicleName}</div>
+                    {chat.lastMessage && (
+                      <div className="text-slate-400 text-xs truncate mt-1">{chat.lastMessage}</div>
+                    )}
+                    {chat.timestamp && (
+                      <div className="text-slate-500 text-xs mt-1">
+                        {new Date(chat.timestamp).toLocaleTimeString('cs-CZ', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          day: '2-digit',
+                          month: '2-digit'
+                        })}
                       </div>
-                      <div>{msg.message}</div>
-                    </div>
+                    )}
                   </div>
-                ))}
-                <div ref={messagesEndRef} />
+                  {chat.unreadCount > 0 && (
+                    <div className="flex-shrink-0 ml-2">
+                      <div className="bg-primary text-slate-900 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                        {chat.unreadCount}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {chatHistory.length === 0 && (
+              <div className="p-4 text-center text-slate-500 text-sm">
+                Žádné vozidlo nenalezeno
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right column: Active Chat */}
+        <div className="flex-1 bg-slate-900/50 rounded-lg overflow-hidden flex flex-col">
+          <div className="flex-shrink-0 p-3 border-b border-slate-600">
+            {selectedVehicleId ? (
+              <div className="flex items-center">
+                <div className="w-6 h-6 bg-[#8FBCBB]/80 rounded-lg flex items-center justify-center mr-2">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03 8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <h4 className="text-sm font-medium text-white">
+                  Chat s {vehicles.find(v => v.id === selectedVehicleId)?.name || 'vozidlem'}
+                </h4>
+              </div>
+            ) : (
+              <div className="text-slate-400 text-sm">
+                Vyberte chat zleva
               </div>
             )}
           </div>
 
-          <div className="flex-shrink-0 flex gap-2">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Napište zprávu..."
-              className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-              disabled={sending}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!newMessage.trim() || sending}
-              className="px-4 py-2 bg-primary hover:bg-nord-frost4 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium text-sm whitespace-nowrap"
-            >
-              {sending ? 'Odesílání...' : 'Odeslat'}
-            </button>
-          </div>
-        </>
-      )}
+          {selectedVehicleId ? (
+            <>
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-3 min-h-0">
+                {messages.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic text-center">
+                    Žádné zprávy s tímto vozidlem
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {messages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                            msg.sender_id === currentUserId
+                              ? 'bg-primary text-slate-900'
+                              : 'bg-slate-700 text-white'
+                          }`}
+                        >
+                          <div className="text-xs opacity-75 mb-1">
+                            {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
+                          </div>
+                          <div>{msg.message}</div>
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
+                )}
+              </div>
+
+              {/* Message input */}
+              <div className="flex-shrink-0 p-3 border-t border-slate-600">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Napište zprávu..."
+                    className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                    disabled={sending}
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={!newMessage.trim() || sending}
+                    className="px-4 py-2 bg-primary hover:bg-nord-frost4 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium text-sm whitespace-nowrap"
+                  >
+                    {sending ? 'Odesílání...' : 'Odeslat'}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-slate-400">
+                <div className="w-16 h-16 mx-auto mb-4 bg-slate-800 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <p className="text-lg font-medium">Vyberte vozidlo zleva</p>
+                <p className="text-sm mt-2">Začněte konverzaci se svým řidičem</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+
     </div>
   );
 };

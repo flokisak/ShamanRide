@@ -158,7 +158,7 @@ const Dashboard: React.FC = () => {
       if (vehicleNumber) {
         const { data } = await supabase.from('driver_messages').select('*')
           .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
-          .order('timestamp', { ascending: true });
+          .order('timestamp', { ascending: false });
         if (data) {
           setMessages(data);
         }
@@ -198,7 +198,7 @@ const Dashboard: React.FC = () => {
           });
           try {
             const result = await supabase.from('locations').insert({
-              driver_id: userId, // Use user id as driver_id for locations
+              driver_id: vehicleNumber.toString(),
               latitude: currentPosition.lat,
               longitude: currentPosition.lng,
               timestamp: new Date().toISOString(),
@@ -209,7 +209,7 @@ const Dashboard: React.FC = () => {
             // For offline queuing, could store in localStorage
             const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
             queued.push({
-              driver_id: userId,
+              driver_id: vehicleNumber.toString(),
               latitude: currentPosition!.lat,
               longitude: currentPosition!.lng,
               timestamp: new Date().toISOString(),
@@ -242,7 +242,7 @@ const Dashboard: React.FC = () => {
         try {
           const { data, error } = await supabase.from('driver_messages').select('*')
             .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
-            .order('timestamp', { ascending: true });
+            .order('timestamp', { ascending: false });
           if (error) {
             console.warn('Could not load messages:', error);
           } else if (data) {
@@ -389,6 +389,10 @@ const Dashboard: React.FC = () => {
       read: false
     });
     setNewMessage('');
+  };
+
+  const getSenderName = (senderId: string) => {
+    return senderId === 'dispatcher' ? 'Dispečer' : 'Vy';
   };
 
   // Show loading state
