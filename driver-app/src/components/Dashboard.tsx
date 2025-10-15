@@ -34,12 +34,20 @@ const Dashboard: React.FC = () => {
           return;
         }
 
-        // Extract vehicle number from email (vinnetaxi1@gmail.com -> 1)
-        const emailMatch = user.email?.match(/vinnetaxi(\d+)@gmail\.com/);
-        const vehicleNum = emailMatch ? parseInt(emailMatch[1]) : null;
+        // Map auth user UUID to vehicle number
+        const uuidToVehicleMap: { [key: string]: number } = {
+          'b69d3d53-6360-4408-a411-a83da97284ce': 1, // vinnetaxi1@gmail.com
+          'fc906dca-4b65-4439-9944-47eb31c3f87e': 2, // vinnetaxi2@gmail.com
+          '4d34449f-cbed-40f5-8766-bfd8f1f52385': 3, // vinnetaxi3@gmail.com
+          'bce8ba6c-ed9b-4f03-9ae8-6537c958f44c': 4, // vinnetaxi4@gmail.com
+          '9861ac0d-17a9-423d-aaeb-b36f1e48dd8c': 5, // vinnetaxi5@gmail.com
+          'a8bd73f8-d090-4858-b853-43b174c844ba': 6, // vinnetaxi6@gmail.com
+        };
+
+        const vehicleNum = uuidToVehicleMap[user.id];
 
         if (!vehicleNum) {
-          setError('Invalid vehicle email format');
+          setError('Vehicle not found for this user account');
           return;
         }
 

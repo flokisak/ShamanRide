@@ -18,10 +18,11 @@ CREATE TABLE IF NOT EXISTS driver_messages (
 ALTER TABLE driver_messages ENABLE ROW LEVEL SECURITY;
 
 -- 3. Create RLS Policies (allow all authenticated users for simplicity)
-CREATE POLICY IF NOT EXISTS "Authenticated users can read driver messages" ON driver_messages
+-- Note: If you get "policy already exists" errors, you can safely ignore them
+CREATE POLICY "Authenticated users can read driver messages" ON driver_messages
   FOR SELECT USING (auth.role() = 'authenticated');
 
-CREATE POLICY IF NOT EXISTS "Authenticated users can send driver messages" ON driver_messages
+CREATE POLICY "Authenticated users can send driver messages" ON driver_messages
   FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
 -- 4. Create indexes for performance
@@ -38,8 +39,14 @@ CREATE INDEX IF NOT EXISTS idx_driver_messages_participants ON driver_messages(s
 
 -- 1. Create vehicle auth accounts:
 -- Go to Authentication > Users in Supabase dashboard
--- Create users with emails: vinnetaxi1@gmail.com through vinnetaxi7@gmail.com
--- Set passwords for each account
+-- Create users with these exact UUIDs and emails:
+-- vinnetaxi1@gmail.com (UUID: b69d3d53-6360-4408-a411-a83da97284ce)
+-- vinnetaxi2@gmail.com (UUID: fc906dca-4b65-4439-9944-47eb31c3f87e)
+-- vinnetaxi3@gmail.com (UUID: 4d34449f-cbed-40f5-8766-bfd8f1f52385)
+-- vinnetaxi4@gmail.com (UUID: bce8ba6c-ed9b-4f03-9ae8-6537c958f44c)
+-- vinnetaxi5@gmail.com (UUID: 9861ac0d-17a9-423d-aaeb-b36f1e48dd8c)
+-- vinnetaxi6@gmail.com (UUID: a8bd73f8-d090-4858-b853-43b174c844ba)
+-- Set secure passwords for each account
 -- These accounts are tied to vehicles, not individual drivers
 */
 
@@ -55,14 +62,13 @@ UPDATE vehicles SET phone = '+420 792 892 655' WHERE id = 7; -- Vlado
 */
 
 -- 3. Update vehicles with car phone numbers:
-/*
-UPDATE vehicles SET phone = '+420 736 168 796' WHERE id = 1; -- Pavel Osička
-UPDATE vehicles SET phone = '+420 739 355 521' WHERE id = 2; -- Kuba
-UPDATE vehicles SET phone = '+420 730 635 302' WHERE id = 3; -- Kamil
-UPDATE vehicles SET phone = '+420 720 581 296' WHERE id = 4; -- Petr
-UPDATE vehicles SET phone = '+420 777 807 874' WHERE id = 5; -- Adam
-UPDATE vehicles SET phone = '+420 720 758 823' WHERE id = 6; -- Honza
-UPDATE vehicles SET phone = '+420 792 892 655' WHERE id = 7; -- Vlado
+-- Note: Update these with your actual vehicle phone numbers
+UPDATE vehicles SET phone = '+420 736 168 796' WHERE id = 1; -- vinnetaxi1@gmail.com
+UPDATE vehicles SET phone = '+420 739 355 521' WHERE id = 2; -- vinnetaxi2@gmail.com
+UPDATE vehicles SET phone = '+420 730 635 302' WHERE id = 3; -- vinnetaxi3@gmail.com
+UPDATE vehicles SET phone = '+420 720 581 296' WHERE id = 4; -- vinnetaxi4@gmail.com
+UPDATE vehicles SET phone = '+420 777 807 874' WHERE id = 5; -- vinnetaxi5@gmail.com
+UPDATE vehicles SET phone = '+420 720 758 823' WHERE id = 6; -- vinnetaxi6@gmail.com
 */
 
 -- ===========================================
@@ -76,7 +82,7 @@ UPDATE vehicles SET phone = '+420 792 892 655' WHERE id = 7; -- Vlado
 -- SELECT id, email, created_at FROM auth.users WHERE email LIKE 'vinnetaxi%@gmail.com' ORDER BY email;
 
 -- Check vehicle phone numbers:
--- SELECT id, name, phone FROM vehicles WHERE id <= 7 ORDER BY id;
+-- SELECT id, name, phone FROM vehicles WHERE id <= 6 ORDER BY id;
 
 -- Check RLS policies:
 -- SELECT schemaname, tablename, policyname FROM pg_policies WHERE tablename = 'driver_messages';
