@@ -40,7 +40,7 @@
       "vehicles": "Status vozidel",
       "map": "Mapa",
       "rideLog": "Historie jízd",
-      "smsGate": "SMS brána"
+      "smsGate": "Komunikace se zákazníky"
     },
     "layout": {
       "title": "Rozložení",
@@ -104,26 +104,25 @@
     "phoneNotEdited": "Telefon nebyl upraven. Ověřte prosím číslo nebo potvrďte odeslání.",
     "confirmSubmitWithUneditedPhone": "Telefonní číslo nebylo upraveno. Chcete přesto odeslat objednávku?"
   },
-   "smsGate": {
-     "title": "SMS Brána",
-     "connected": "Brána nakonfigurována",
-     "notConfigured": "Pouze lokální",
-     "noOutgoing": "Žádné čekající jízdy",
-     "inbox": "Historie SMS",
-     "inboxEmpty": "Žádné zprávy",
-     "noMessagesForPhone": "Žádné zprávy pro toto číslo",
-     "filterByPhone": "Filtrovat podle čísla",
-     "sending": "Odesílání...",
-     "send": "Odeslat SMS",
-     "select": "Vybrat",
-     "latestRide": "Odeslat SMS pro nejnovější jízdu",
-    "phone": "Telefon",
-    "changeVehicle": "Změnit vozidlo",
-    "sendSms": "Odeslat SMS",
-    "selectVehicles": "Vybrat vozidla",
-    "sendToAllActiveVehicles": "Odeslat všem aktivním vozidlům",
-    "noActiveVehicles": "Žádná aktivní vozidla nenalezena"
-   },
+    "smsGate": {
+      "title": "Komunikace se zákazníky",
+      "connected": "Brána nakonfigurována",
+      "notConfigured": "Pouze lokální",
+      "inbox": "Historie SMS",
+      "inboxEmpty": "Žádné zprávy",
+      "noMessagesForPhone": "Žádné zprávy pro toto číslo",
+      "filterByPhone": "Filtrovat podle čísla",
+      "sending": "Odesílání...",
+      "sendSms": "Odeslat SMS",
+      "newSms": "Nová SMS zpráva",
+      "recipientPhone": "Telefon příjemce (oddělte čárkou pro více)",
+      "message": "Zpráva",
+      "replyTo": "Odpověď na",
+      "replyMessage": "Zpráva odpovědi",
+      "sendReply": "Odeslat odpověď",
+      "smsSent": "SMS odeslána",
+      "replySent": "Odpověď odeslána"
+    },
   "vehicles": {
     "title": "Status Vozidel",
     "addVehicle": "Přidat nové vozidlo",
@@ -296,6 +295,10 @@
     "customerOrder": {
       "title": "Nová objednávka od zákazníka",
       "message": "{customerName} objednal odvoz z {pickupAddress} do {destinationAddress}. Přiřaďte vozidlo."
+    },
+    "driverMessage": {
+      "title": "Nová zpráva od řidiče",
+      "message": "{driverName}: {message}"
     },
     "rideScheduled": "Jízda byla naplánována a přidána do seznamu.",
     "noRidesToExport": "Historie jízd je prázdná, není co exportovat.",

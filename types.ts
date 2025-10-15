@@ -144,7 +144,7 @@ export interface RideLog {
 }
 
 // Types for customizable layout
-export type WidgetId = 'dispatch' | 'vehicles' | 'rideLog' | 'map' | 'leaderboard' | 'smsGate' | 'dailyStats';
+export type WidgetId = 'dispatch' | 'vehicles' | 'rideLog' | 'map' | 'leaderboard' | 'smsGate' | 'dailyStats' | 'driverChat';
 
 export interface LayoutItem {
   id: WidgetId;

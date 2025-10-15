@@ -25,6 +25,7 @@ import { TariffSettingsModal } from './components/TariffSettingsModal';
 import { AnalyticsModal } from './components/AnalyticsModal';
 import { SmsPreviewModal } from './components/SmsPreviewModal';
 import SmsGate from './components/SmsGate';
+import { DriverChat } from './components/DriverChat';
 import { useTranslation } from './contexts/LanguageContext';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -61,10 +62,10 @@ type SortKey = 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'd
 type SortDirection = 'asc' | 'desc';
 
 const DEFAULT_LAYOUT: LayoutConfig = [
-  // Row 1: dispatch (left), map (top right), smsGate (bottom right)
+  // Row 1: dispatch (left), map (top right), driverChat (bottom right)
   { id: 'dispatch', colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 2 },
   { id: 'map', colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1 },
-  { id: 'smsGate', colStart: 2, colSpan: 1, rowStart: 2, rowSpan: 1 },
+  { id: 'driverChat', colStart: 2, colSpan: 1, rowStart: 2, rowSpan: 1 },
   // Row 2: rideLog (left 2/3), vehicles (right 1/3)
   { id: 'rideLog', colStart: 1, colSpan: 2, rowStart: 3, rowSpan: 1 },
   { id: 'vehicles', colStart: 3, colSpan: 1, rowStart: 3, rowSpan: 1 },
@@ -78,6 +79,7 @@ const DEFAULT_WIDGET_VISIBILITY: Record<WidgetId, boolean> = {
     leaderboard: true,
     smsGate: true,
     dailyStats: true,
+    driverChat: true,
 };
 
 export const DEFAULT_TARIFF: Tariff = {
@@ -1548,6 +1550,19 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
+     driverChat: <DriverChat people={people} vehicles={vehicles} onNewMessage={(driverId, message) => {
+       const driver = people.find(p => p.id === driverId);
+       if (driver) {
+         setNotifications(prev => [...prev, {
+           id: `driver-msg-${Date.now()}`,
+           type: 'info',
+           titleKey: 'notifications.driverMessage.title',
+           messageKey: 'notifications.driverMessage.message',
+           messageParams: { driverName: driver.name, message: message.length > 50 ? message.substring(0, 50) + '...' : message },
+           timestamp: Date.now(),
+         }]);
+       }
+     }} />,
   };
 
   const visibleLayout = layout.filter(item => widgetVisibility[item.id]);
@@ -1791,26 +1806,16 @@ const AppContent: React.FC = () => {
                          </div>
                       )}
 
-                      {/* SMS Communications - Dynamic columns and row */}
-                      {widgetVisibility.smsGate && (
-                        <div className={`col-start-${smsColStart} row-start-${smsRowStart} col-span-${smsColSpan}`}>
-                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
-                             <div className="p-3 border-b border-slate-700">
-                               <h3 className="text-sm font-semibold text-white flex items-center">
-                                 <div className="w-6 h-6 bg-[#B48EAD]/80 rounded-lg flex items-center justify-center mr-2">
-                                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                  </svg>
-                                 </div>
-                                 SMS komunikace
-                               </h3>
-                             </div>
-                             <div className="p-4 overflow-y-auto h-full">
-                               {widgetMap.smsGate}
-                             </div>
-                           </div>
-                         </div>
-                      )}
+                       {/* Driver Chat - Dynamic columns and row */}
+                       {widgetVisibility.driverChat && (
+                         <div className={`col-start-${smsColStart} row-start-${smsRowStart} col-span-${smsColSpan}`}>
+                            <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
+                              <div className="p-4 h-full">
+                                {widgetMap.driverChat}
+                              </div>
+                            </div>
+                          </div>
+                       )}
 
                       {/* Ride History - Dynamic columns, Row 3 */}
                       {widgetVisibility.rideLog && (
@@ -1900,26 +1905,16 @@ const AppContent: React.FC = () => {
                    </div>
                 )}
 
-                {/* SMS Communications - Columns 2-3, Row 2 */}
-                {widgetVisibility.smsGate && (
-                  <div className="col-start-2 row-start-2 col-span-2">
-                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
-                       <div className="p-3 border-b border-slate-700">
-                         <h3 className="text-sm font-semibold text-white flex items-center">
-                           <div className="w-6 h-6 bg-[#B48EAD]/80 rounded-lg flex items-center justify-center mr-2">
-                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                            </svg>
-                           </div>
-                           SMS komunikace
-                         </h3>
+                 {/* Driver Chat - Columns 2-3, Row 2 */}
+                 {widgetVisibility.driverChat && (
+                   <div className="col-start-2 row-start-2 col-span-2">
+                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
+                        <div className="p-4 h-full">
+                         {widgetMap.driverChat}
                        </div>
-                       <div className="p-4 overflow-y-auto h-full">
-                        {widgetMap.smsGate}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                     </div>
+                   </div>
+                 )}
 
                 {/* Ride History - Column 1-2, Row 3 */}
                 {widgetVisibility.rideLog && (

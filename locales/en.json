@@ -40,7 +40,7 @@
       "vehicles": "Vehicle Status",
       "map": "Map",
       "rideLog": "Ride History",
-      "smsGate": "SMS Gate"
+      "smsGate": "Customer Communications"
     },
     "layout": {
       "title": "Layout",
@@ -105,22 +105,21 @@
     "confirmSubmitWithUneditedPhone": "Phone number was not edited. Do you still want to submit the order?"
   },
   "smsGate": {
-    "title": "SMS Gateway",
+    "title": "Customer Communications",
     "connected": "Gateway configured",
     "notConfigured": "Local only",
-    "noOutgoing": "No pending rides",
     "inbox": "SMS History",
     "inboxEmpty": "No messages",
     "sending": "Sending...",
-    "send": "Send SMS",
-    "select": "Select",
-    "latestRide": "Send SMS for Latest Ride",
-    "phone": "Phone",
-    "changeVehicle": "Change Vehicle",
     "sendSms": "Send SMS",
-    "selectVehicles": "Select Vehicles",
-    "sendToAllActiveVehicles": "Send to All Active Vehicles",
-    "noActiveVehicles": "No active vehicles found"
+    "newSms": "New SMS Message",
+    "recipientPhone": "Recipient phone (comma-separated for multiple)",
+    "message": "Message",
+    "replyTo": "Reply to",
+    "replyMessage": "Reply message",
+    "sendReply": "Send Reply",
+    "smsSent": "SMS sent",
+    "replySent": "Reply sent"
   },
   "vehicles": {
     "title": "Vehicle Status",
@@ -274,6 +273,10 @@
     "smsReminder": {
       "title": "Forgotten SMS?",
       "message": "SMS for ride to {customerName} (driver: {driverName}) has not been confirmed as sent for over 5 minutes."
+    },
+    "driverMessage": {
+      "title": "New message from driver",
+      "message": "{driverName}: {message}"
     },
     "rideScheduled": "The ride has been scheduled and added to the list.",
     "noRidesToExport": "Ride history is empty, nothing to export.",

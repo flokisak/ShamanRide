@@ -56,7 +56,35 @@ CREATE POLICY "Users can read their messages" ON messages
 CREATE POLICY "Users can send messages" ON messages
   FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
+-- 4. Create driver_messages table for dispatcher-driver chat
+CREATE TABLE IF NOT EXISTS driver_messages (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  sender_id TEXT NOT NULL, -- dispatcher user ID or 'driver_X' for drivers
+  receiver_id TEXT NOT NULL, -- 'driver_X' for drivers or dispatcher user ID
+  message TEXT NOT NULL,
+  timestamp BIGINT NOT NULL, -- Unix timestamp in milliseconds
+  read BOOLEAN DEFAULT FALSE
+);
+
+-- Enable Row Level Security for driver_messages
+ALTER TABLE driver_messages ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies for driver_messages (dispatcher can read/write all, drivers can read/write their own)
+CREATE POLICY "Dispatchers can read all driver messages" ON driver_messages
+  FOR SELECT USING (auth.jwt() ->> 'role' = 'dispatcher');
+
+CREATE POLICY "Dispatchers can send driver messages" ON driver_messages
+  FOR INSERT WITH CHECK (auth.jwt() ->> 'role' = 'dispatcher');
+
+CREATE POLICY "Drivers can read their messages" ON driver_messages
+  FOR SELECT USING (receiver_id = ('driver_' || (SELECT id FROM drivers WHERE id = auth.uid())::text) OR sender_id = ('driver_' || (SELECT id FROM drivers WHERE id = auth.uid())::text));
+
+CREATE POLICY "Drivers can send messages" ON driver_messages
+  FOR INSERT WITH CHECK (sender_id = ('driver_' || (SELECT id FROM drivers WHERE id = auth.uid())::text));
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_locations_driver_timestamp ON locations(driver_id, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_participants ON messages(sender_id, receiver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_messages_timestamp ON driver_messages(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_driver_messages_participants ON driver_messages(sender_id, receiver_id);
