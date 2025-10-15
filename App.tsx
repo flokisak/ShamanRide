@@ -688,49 +688,7 @@ const AppContent: React.FC = () => {
     return undefined;
   }, [fuelPrices]);
 
-  const sendRideToDriver = async (rideLog: RideLog, vehicle: any) => {
-    try {
-      // Find the driver (person) associated with this vehicle
-      const driver = people.find(p => p.id === vehicle.driverId);
-      if (!driver) {
-        console.warn('No driver found for vehicle', vehicle.id);
-        return;
-      }
 
-      // Generate navigation URL
-      const vehicleCoords = await geocodeAddress(vehicle.location, language);
-      const stopCoords = await Promise.all(rideLog.stops.map(s => geocodeAddress(s, language)));
-      const navigationUrl = generateNavigationUrl(vehicleCoords, stopCoords, 'google');
-
-      // Create message for driver
-      const driverMessage = `🚗 Nová jízda přiřazena!\n\n` +
-        `Zákazník: ${rideLog.customerName}\n` +
-        `Odkud: ${rideLog.stops[0]}\n` +
-        `Kam: ${rideLog.stops[rideLog.stops.length - 1]}\n` +
-        `Počet cestujících: ${rideLog.passengers}\n` +
-        `Odhadovaná cena: ${rideLog.estimatedPrice} Kč\n\n` +
-        `📍 Navigace: ${navigationUrl}\n\n` +
-        `Potvrďte přijetí jízdy v aplikaci řidiče.`;
-
-       // Send message to driver via driver_messages table
-       const { error } = await supabase
-         .from('driver_messages')
-         .insert({
-           sender_id: 'dispatcher', // From dispatcher
-           receiver_id: `driver_${vehicle.id}`, // To specific driver by vehicle number
-           message: driverMessage,
-           read: false
-         });
-
-      if (error) {
-        console.error('Error sending ride to driver:', error);
-      } else {
-        console.log('Ride sent to driver successfully');
-      }
-    } catch (error) {
-      console.error('Error in sendRideToDriver:', error);
-    }
-  };
 
   const handleConfirmAssignment = useCallback(async (option: AssignmentAlternative) => {
       const { rideRequest, rideDuration, optimizedStops } = assignmentResult!;
@@ -810,13 +768,12 @@ const AppContent: React.FC = () => {
       const generatedCustomerSms = generateCustomerSms(chosenVehicle, alternative.eta, driverName);
       setCustomerSms(generatedCustomerSms);
 
-       setRideLog(prev => [newLog, ...prev]);
-       setAssignmentResult(null);
+        setRideLog(prev => [newLog, ...prev]);
+        setAssignmentResult(null);
 
-       // Automatically send ride to driver app
-       await sendRideToDriver(newLog, chosenVehicle);
+        // Ride is automatically sent to driver app via real-time subscription
 
-       // Automatically open SMS modal for the customer
+        // Automatically open SMS modal for the customer
        handleSendSms(newLog.id);
    }, [assignmentResult, isAiEnabled, people, t, language, calculateFuelCost]);
   
@@ -1158,6 +1115,9 @@ const AppContent: React.FC = () => {
     setRideLog(prev => prev.map(log => log.id === updatedLog.id ? updatedLog : log));
 
     if (originalLog && originalLog.status !== updatedLog.status && updatedLog.vehicleId) {
+        // Send notification message to driver about status change
+        sendStatusChangeMessageToDriver(updatedLog, originalLog.status);
+
         if (updatedLog.status === RideStatus.Completed || updatedLog.status === RideStatus.Cancelled) {
             setVehicles(prev => prev.map(v => (v.id === updatedLog.vehicleId && v.status === VehicleStatus.Busy) ? { ...v, status: VehicleStatus.Available, freeAt: undefined } : v));
 
@@ -1176,6 +1136,40 @@ const AppContent: React.FC = () => {
     }
 
     setEditingRideLog(null);
+  };
+
+  const sendStatusChangeMessageToDriver = async (updatedLog: RideLog, oldStatus: RideStatus) => {
+    try {
+      if (!updatedLog.vehicleId) return;
+
+      let message = '';
+      if (updatedLog.status === RideStatus.Cancelled) {
+        message = `❌ Jízda zrušena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDůvod: Zrušeno dispečerem`;
+      } else if (updatedLog.status === RideStatus.Completed) {
+        message = `✅ Jízda dokončena\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDěkujeme za dokončení jízdy!`;
+      } else if (updatedLog.status === RideStatus.Accepted && oldStatus === RideStatus.Pending) {
+        message = `📋 Jízda potvrzena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nPokračujte podle plánu.`;
+      }
+
+      if (message) {
+        const { error } = await supabase
+          .from('driver_messages')
+          .insert({
+            sender_id: 'dispatcher',
+            receiver_id: `driver_${updatedLog.vehicleId}`,
+            message: message,
+            read: false
+          });
+
+        if (error) {
+          console.error('Error sending status change message to driver:', error);
+        } else {
+          console.log('Status change message sent to driver');
+        }
+      }
+    } catch (error) {
+      console.error('Error in sendStatusChangeMessageToDriver:', error);
+    }
   };
 
   const handleSendSms = async (logId: string) => {

@@ -171,13 +171,7 @@ const Dashboard: React.FC = () => {
             if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
               // Notify user with sound and vibration for dispatcher or general message
               notifyUser();
-              if (payload.new.sender_id === 'dispatcher') {
-                alert(`Nová zpráva od dispečera: ${payload.new.message}`);
-                // Refresh ride data when receiving message from dispatcher
-                getVehicleInfo();
-              } else if (payload.new.receiver_id === 'general') {
-                alert(`Nová zpráva ve všeobecném chatu: ${payload.new.message}`);
-              }
+              // Messages will appear in the chat widget automatically
             }
           }
        })
