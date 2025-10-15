@@ -309,11 +309,24 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       },
 
        // Ride Logs
-       async getRideLogs() {
-         const { data, error } = await supabase.from('ride_logs').select('*');
-         if (error) throw error;
-         return (data || []).map((d: any) => this._fromDbRideLog(d));
-       },
+        async getRideLogs() {
+          const { data, error } = await supabase.from('ride_logs').select('*');
+          if (error) throw error;
+          return (data || []).map((d: any) => this._fromDbRideLog(d));
+        },
+        async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
+          let query = supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleId);
+          if (status) {
+            query = query.eq('status', status);
+          }
+          query = query.order('timestamp', { ascending: false });
+          if (limit) {
+            query = query.limit(limit);
+          }
+          const { data, error } = await query;
+          if (error) throw error;
+          return (data || []).map((d: any) => this._fromDbRideLog(d));
+        },
          async addRideLog(rideLog: any) {
            if (SUPABASE_ENABLED) {
              const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });

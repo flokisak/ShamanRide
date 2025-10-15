@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase, supabaseService } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser } from '../utils/notifications';
@@ -75,39 +75,45 @@ const Dashboard: React.FC = () => {
 
         // Get pending rides for this vehicle (queue: oldest first)
         console.log('Querying for rides with vehicle_id:', vehicleNum, 'status: pending');
-        const { data: pending, error: pendingError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', 'pending').order('timestamp', { ascending: true });
-        if (pendingError) {
-           console.warn('Could not load pending rides:', pendingError);
-        } else {
-           console.log('Found pending rides:', pending);
-           setPendingRides(pending || []);
+        try {
+          const pending = await supabaseService.getRideLogsByVehicle(vehicleNum, 'pending');
+          console.log('Found pending rides:', pending);
+          setPendingRides(pending);
+        } catch (error) {
+          console.warn('Could not load pending rides:', error);
+          setPendingRides([]);
         }
 
         // Get active ride for this vehicle (accepted or in progress)
-        const { data: rides, error: ridesError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', ['accepted', 'in_progress']);
-        if (ridesError) {
-          console.warn('Could not load active rides:', ridesError);
-        } else if (rides && rides.length > 0) {
-          setCurrentRide(rides[0]);
+        try {
+          const acceptedRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'accepted');
+          const inProgressRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'in_progress');
+          const activeRides = [...acceptedRides, ...inProgressRides];
+          if (activeRides.length > 0) {
+            setCurrentRide(activeRides[0]);
+          }
+        } catch (error) {
+          console.warn('Could not load active rides:', error);
         }
 
         // Get all rides for this vehicle (completed, pending, accepted, etc.)
-         const { data: history, error: historyError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).order('timestamp', { ascending: false }).limit(20);
-         if (historyError) {
-           console.warn('Could not load ride history:', historyError);
-         } else if (history) {
-           setRideHistory(history);
+        try {
+          const history = await supabaseService.getRideLogsByVehicle(vehicleNum, undefined, 20);
+          setRideHistory(history);
 
-            // Calculate daily cash from completed rides today
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const todayCompleted = history.filter(ride =>
-              ride.status === 'completed' &&
-              new Date(ride.timestamp) >= today
-            );
-           const totalCash = todayCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
-           setDailyCash(totalCash);
-         }
+          // Calculate daily cash from completed rides today
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const todayCompleted = history.filter(ride =>
+            ride.status === RideStatus.Completed &&
+            new Date(ride.timestamp) >= today
+          );
+          const totalCash = todayCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
+          setDailyCash(totalCash);
+        } catch (error) {
+          console.warn('Could not load ride history:', error);
+          setRideHistory([]);
+        }
 
         // Get other drivers for chat
          const { data: allVehicles, error: vehiclesError } = await supabase.from('vehicles').select('id, name, driver_id').neq('id', vehicleNum);
@@ -783,17 +789,17 @@ const Dashboard: React.FC = () => {
              </div>
 
              <div className="mt-4 space-y-2">
-                {currentRide.status === 'pending' && (
+                {currentRide.status === RideStatus.Pending && (
                   <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
                     {t('dashboard.acceptRide')}
                   </button>
                 )}
-                {currentRide.status === 'accepted' && (
+                {currentRide.status === RideStatus.Accepted && (
                   <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
                     {t('dashboard.startRide')}
                   </button>
                 )}
-                {currentRide.status === 'in_progress' && (
+                {currentRide.status === RideStatus.InProgress && (
                  <div className="space-y-2">
                    <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
                      {t('dashboard.completeRide')}
