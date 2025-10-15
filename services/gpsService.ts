@@ -22,20 +22,15 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
         // Get recent locations (last 5 minutes) with vehicle information
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-        const { data: locations, error } = await supabase
+        // First get recent locations
+        const { data: locations, error: locationsError } = await supabase
             .from('locations')
-            .select(`
-                vehicle_id,
-                latitude,
-                longitude,
-                timestamp,
-                vehicles(id, name, status)
-            `)
+            .select('vehicle_id, latitude, longitude, timestamp')
             .gte('timestamp', fiveMinutesAgo)
             .order('timestamp', { ascending: false });
 
-        if (error) {
-            console.error('Error fetching locations from Supabase:', error);
+        if (locationsError) {
+            console.error('Error fetching locations from Supabase:', locationsError);
             return [];
         }
 
@@ -44,14 +39,31 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
             return [];
         }
 
-        // Group by driver_id and get the most recent location for each vehicle
+        // Get unique vehicle IDs
+        const vehicleIds = [...new Set(locations.map(loc => loc.vehicle_id))];
+
+        // Get vehicle information
+        const { data: vehicles, error: vehiclesError } = await supabase
+            .from('vehicles')
+            .select('id, name, status')
+            .in('id', vehicleIds);
+
+        if (vehiclesError) {
+            console.error('Error fetching vehicles from Supabase:', vehiclesError);
+            return [];
+        }
+
+        // Create vehicle lookup map
+        const vehicleMap = new Map(vehicles?.map(v => [v.id, v]) || []);
+
+        // Group by vehicle_id and get the most recent location for each vehicle
         const vehiclePositions = new Map<string, GpsVehicle>();
 
         locations.forEach((location: any) => {
             const vehicleId = location.vehicle_id;
-            const vehicle = location.vehicles;
+            const vehicle = vehicleMap.get(vehicleId);
 
-            if (!vehiclePositions.has(vehicleId) || new Date(location.timestamp) > new Date(vehiclePositions.get(vehicleId)!.lastUpdate)) {
+            if (vehicle && (!vehiclePositions.has(vehicleId) || new Date(location.timestamp) > new Date(vehiclePositions.get(vehicleId)!.lastUpdate))) {
                 vehiclePositions.set(vehicleId, {
                     id: vehicle.id.toString(),
                     name: vehicle.name,

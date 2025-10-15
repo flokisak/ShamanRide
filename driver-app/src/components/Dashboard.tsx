@@ -483,9 +483,11 @@ const Dashboard: React.FC = () => {
     if (vehicleNumber) {
       await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', ride.id);
 
-      // Update vehicle status to BUSY when ride is accepted
+      // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+      const freeAt = ride.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
       await supabase.from('vehicles').update({
-        status: 'BUSY'
+        status: 'BUSY',
+        free_at: freeAt
       }).eq('id', vehicleNumber);
 
       // Remove from pending rides and set as current ride
@@ -498,9 +500,11 @@ const Dashboard: React.FC = () => {
     if (currentRide && vehicleNumber) {
       await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', currentRide.id);
 
-      // Update vehicle status to BUSY when ride is accepted
+      // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+      const freeAt = currentRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
       await supabase.from('vehicles').update({
-        status: 'BUSY'
+        status: 'BUSY',
+        free_at: freeAt
       }).eq('id', vehicleNumber);
 
       setCurrentRide({ ...currentRide, status: RideStatus.Accepted });
@@ -523,11 +527,13 @@ const Dashboard: React.FC = () => {
 
       if (nextRide) {
         // Automatically accept the next ride in queue
-        await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: new Date().toISOString() }).eq('id', nextRide.id);
+        await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', nextRide.id);
 
-        // Update vehicle status to BUSY
+        // Update vehicle status to BUSY, set freeAt to estimated completion time
+        const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
         const locationUpdate: any = {
-          status: 'BUSY'
+          status: 'BUSY',
+          free_at: freeAt
         };
 
         if (location) {
@@ -540,9 +546,10 @@ const Dashboard: React.FC = () => {
         setPendingRides(prev => prev.filter(r => r.id !== nextRide.id));
         setCurrentRide({ ...nextRide, status: RideStatus.Accepted });
       } else {
-        // No more rides, set to AVAILABLE
+        // No more rides, set to AVAILABLE and clear freeAt
         const locationUpdate: any = {
-          status: 'AVAILABLE'
+          status: 'AVAILABLE',
+          free_at: null
         };
 
         if (location) {
@@ -744,15 +751,15 @@ const Dashboard: React.FC = () => {
                   <div className="mt-3 space-y-2">
                     <button
                       onClick={() => acceptRideSpecific(ride)}
-                      className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium"
+                      className="w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg"
                     >
-                      Přijmout jízdu
+                      ✅ Přijmout
                     </button>
                     <button
                       onClick={() => navigateToDestination(ride)}
                       className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium"
                     >
-                      Navigovat
+                      🗺️ Navigovat
                     </button>
                   </div>
                 </div>
