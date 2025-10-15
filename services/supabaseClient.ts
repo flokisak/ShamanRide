@@ -216,37 +216,37 @@ export const supabaseService = SUPABASE_ENABLED
       },
 
       _toDbFuelPrices(fp: any) {
-        return { id: 1, diesel: fp.DIESEL ?? fp.DIESEL, petrol: fp.PETROL ?? fp.PETROL };
+        return { id: 1, diesel: fp.DIESEL, petrol: fp.PETROL };
       },
        _fromDbFuelPrices(db: any) {
-         if (!db) return null;
-         return { DIESEL: db.diesel ?? db.DIESEL, PETROL: db.petrol ?? db.PETROL };
-       },
-
-        _toDbRideLog(r: any) {
-          return {
-            id: r.id,
-            timestamp: r.timestamp,
-            vehicle_name: r.vehicleName ?? null,
-            vehicle_license_plate: r.vehicleLicensePlate ?? null,
-            driver_name: r.driverName ?? null,
-            vehicle_type: r.vehicleType ?? null,
-            customer_name: r.customerName,
-            ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
-            customer_phone: r.customerPhone,
-            stops: r.stops,
-            passengers: r.passengers,
-            pickup_time: r.pickupTime,
-             status: r.status.toLowerCase().replace(/_/g, '_'),
-            vehicle_id: r.vehicleId ?? null,
-            notes: r.notes ?? null,
-            estimated_price: r.estimatedPrice ?? null,
-            estimated_pickup_timestamp: r.estimatedPickupTimestamp ?? null,
-            estimated_completion_timestamp: r.estimatedCompletionTimestamp ?? null,
-            fuel_cost: r.fuelCost ?? null,
-            distance: r.distance ?? null,
-          };
+          if (!db) return null;
+          return { DIESEL: db.diesel, PETROL: db.petrol };
         },
+
+         _toDbRideLog(r: any) {
+           return {
+             id: r.id,
+             timestamp: new Date(r.timestamp).toISOString(),
+             vehicle_name: r.vehicleName ?? null,
+             vehicle_license_plate: r.vehicleLicensePlate ?? null,
+             driver_name: r.driverName ?? null,
+             vehicle_type: r.vehicleType ?? null,
+             customer_name: r.customerName,
+             ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
+             customer_phone: r.customerPhone,
+             stops: r.stops,
+             passengers: r.passengers,
+             pickup_time: r.pickupTime,
+              status: r.status.toLowerCase().replace(/_/g, '_'),
+             vehicle_id: r.vehicleId ?? null,
+             notes: r.notes ?? null,
+             estimated_price: r.estimatedPrice ?? null,
+             estimated_pickup_timestamp: r.estimatedPickupTimestamp ? new Date(r.estimatedPickupTimestamp).toISOString() : null,
+             estimated_completion_timestamp: r.estimatedCompletionTimestamp ? new Date(r.estimatedCompletionTimestamp).toISOString() : null,
+             fuel_cost: r.fuelCost ?? null,
+            distance: r.distance ?? null,
+           };
+         },
         _fromDbRideLog(db: any) {
           return {
             id: db.id,

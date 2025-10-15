@@ -77,7 +77,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     const loadMessages = async () => {
       try {
         const { data, error } = await supabase.from('driver_messages').select('*')
-          .or(`and(sender_id.eq.dispatcher,receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},receiver_id.eq.dispatcher)`)
+          .or('and(sender_id.eq.dispatcher,receiver_id.eq.driver_' + selectedVehicleId + '),and(sender_id.eq.driver_' + selectedVehicleId + ',receiver_id.eq.dispatcher)')
           .order('timestamp', { ascending: true });
         if (error) {
           console.warn('Could not load messages:', error);
@@ -105,8 +105,8 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
       }, (payload) => {
         const newMessage = payload.new as ChatMessage;
         // Check if the message is relevant (between dispatcher and selected vehicle)
-        const isRelevant = (newMessage.sender_id === 'dispatcher' && newMessage.receiver_id === `driver_${selectedVehicleId}`) ||
-                           (newMessage.sender_id === `driver_${selectedVehicleId}` && newMessage.receiver_id === 'dispatcher');
+        const isRelevant = (newMessage.sender_id === 'dispatcher' && newMessage.receiver_id === 'driver_' + selectedVehicleId) ||
+                           (newMessage.sender_id === 'driver_' + selectedVehicleId && newMessage.receiver_id === 'dispatcher');
         if (isRelevant) {
           setMessages(prev => [...prev, newMessage]);
 
