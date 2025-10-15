@@ -9,6 +9,7 @@ const Dashboard: React.FC = () => {
   const [driverStatus, setDriverStatus] = useState('offline');
   const [breakEndTime, setBreakEndTime] = useState<number | null>(null);
   const [currentRide, setCurrentRide] = useState<RideLog | null>(null);
+  const [pendingRides, setPendingRides] = useState<RideLog[]>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
   const [dailyCash, setDailyCash] = useState<number>(0);
@@ -72,8 +73,16 @@ const Dashboard: React.FC = () => {
           setLicensePlate(vehicle.license_plate);
         }
 
-        // Get active ride for this vehicle
-        const { data: rides, error: ridesError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', [RideStatus.Pending, RideStatus.Accepted, RideStatus.InProgress]);
+        // Get pending rides for this vehicle (queue: oldest first)
+        const { data: pending, error: pendingError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Pending).order('timestamp', { ascending: true });
+        if (pendingError) {
+          console.warn('Could not load pending rides:', pendingError);
+        } else {
+          setPendingRides(pending || []);
+        }
+
+        // Get active ride for this vehicle (accepted or in progress)
+        const { data: rides, error: ridesError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', [RideStatus.Accepted, RideStatus.InProgress]);
         if (ridesError) {
           console.warn('Could not load active rides:', ridesError);
         } else if (rides && rides.length > 0) {
@@ -480,6 +489,21 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const acceptRideSpecific = async (ride: RideLog) => {
+    if (vehicleNumber) {
+      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: new Date().toISOString() }).eq('id', ride.id);
+
+      // Update vehicle status to BUSY when ride is accepted
+      await supabase.from('vehicles').update({
+        status: 'BUSY'
+      }).eq('id', vehicleNumber);
+
+      // Remove from pending rides and set as current ride
+      setPendingRides(prev => prev.filter(r => r.id !== ride.id));
+      setCurrentRide({ ...ride, status: RideStatus.Accepted });
+    }
+  };
+
   const acceptRide = async () => {
     if (currentRide && vehicleNumber) {
       await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: new Date().toISOString() }).eq('id', currentRide.id);
@@ -504,24 +528,48 @@ const Dashboard: React.FC = () => {
     if (currentRide && vehicleNumber) {
       await supabase.from('ride_logs').update({ status: RideStatus.Completed, completed_at: new Date().toISOString() }).eq('id', currentRide.id);
 
-      // Update vehicle status to AVAILABLE and set current location
-      const locationUpdate: any = {
-        status: 'AVAILABLE'
-      };
+      // Check if there are pending rides in queue
+      const nextRide = pendingRides.length > 0 ? pendingRides[0] : null;
 
-      if (location) {
-        locationUpdate.location = `${location.lat}, ${location.lng}`;
+      if (nextRide) {
+        // Automatically accept the next ride in queue
+        await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: new Date().toISOString() }).eq('id', nextRide.id);
+
+        // Update vehicle status to BUSY
+        const locationUpdate: any = {
+          status: 'BUSY'
+        };
+
+        if (location) {
+          locationUpdate.location = `${location.lat}, ${location.lng}`;
+        }
+
+        await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
+
+        // Update state: remove from pending, set as current
+        setPendingRides(prev => prev.filter(r => r.id !== nextRide.id));
+        setCurrentRide({ ...nextRide, status: RideStatus.Accepted });
+      } else {
+        // No more rides, set to AVAILABLE
+        const locationUpdate: any = {
+          status: 'AVAILABLE'
+        };
+
+        if (location) {
+          locationUpdate.location = `${location.lat}, ${location.lng}`;
+        }
+
+        await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
+
+        setCurrentRide(null);
       }
-
-      await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
-
-      setCurrentRide(null);
     }
   };
 
-  const navigateToDestination = () => {
-    if (currentRide && currentRide.stops.length > 0) {
-      const destination = currentRide.stops[currentRide.stops.length - 1];
+  const navigateToDestination = (ride?: RideLog) => {
+    const targetRide = ride || currentRide;
+    if (targetRide && targetRide.stops.length > 0) {
+      const destination = targetRide.stops[targetRide.stops.length - 1];
       const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
       window.open(url, '_blank');
     }
@@ -689,6 +737,40 @@ const Dashboard: React.FC = () => {
           )}
         </div>
 
+        {/* New Rides */}
+        {pendingRides.length > 0 && (
+          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+            <h2 className="text-lg font-semibold mb-3 text-white">Nové jízdy</h2>
+            <div className="space-y-3">
+              {pendingRides.map((ride) => (
+                <div key={ride.id} className="bg-slate-800/50 rounded-lg p-3 border border-slate-600">
+                  <div className="space-y-2 text-slate-300">
+                    <p><span className="font-medium">Zákazník:</span> {ride.customerName}</p>
+                    <p><span className="font-medium">Telefon:</span> <a href={`tel:${ride.customerPhone}`} className="text-blue-400 underline hover:text-blue-300">{ride.customerPhone}</a></p>
+                    <p><span className="font-medium">Odkud:</span> {ride.stops[0]}</p>
+                    <p><span className="font-medium">Kam:</span> {ride.stops[ride.stops.length - 1]}</p>
+                    {ride.estimatedPrice && <p><span className="font-medium">Cena:</span> {ride.estimatedPrice} Kč</p>}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    <button
+                      onClick={() => acceptRideSpecific(ride)}
+                      className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium"
+                    >
+                      Přijmout jízdu
+                    </button>
+                    <button
+                      onClick={() => navigateToDestination(ride)}
+                      className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium"
+                    >
+                      Navigovat
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Current Ride */}
         {currentRide && (
           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
@@ -717,9 +799,9 @@ const Dashboard: React.FC = () => {
                    <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
                      {t('dashboard.completeRide')}
                    </button>
-                   <button onClick={navigateToDestination} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                     {t('dashboard.navigate')}
-                   </button>
+                    <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                      {t('dashboard.navigate')}
+                    </button>
                  </div>
                )}
              </div>
