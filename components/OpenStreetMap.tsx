@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import type { Vehicle, AssignmentResultData, Person } from '../types';
-import { VehicleType } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { fetchVehiclePositions, GpsVehicle } from '../services/gpsService';
 
@@ -27,7 +26,7 @@ L.Icon.Default.mergeOptions({
 interface OpenStreetMapProps {
     vehicles: Vehicle[];
     people: Person[];
-    locations: any[];
+    locations: Record<string, {latitude: number; longitude: number; timestamp: string}> | null;
     routeToPreview: string[] | null;
     confirmedAssignment: AssignmentResultData | null;
 }
@@ -414,36 +413,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
                           const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
                           return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} />;
                       })}
-                     {Object.entries(latestLocations).map(([driverId, loc]) => {
-                       const vehicle = vehicles.find(v => v.id.toString() === driverId);
-                       if (!vehicle) return null;
-                       return (
-                         <Marker key={`loc-${driverId}`} position={[loc.latitude, loc.longitude]}>
-                           <Popup>
-                             <div>
-                               <strong>{vehicle.name}</strong><br />
-                               Location: {loc.latitude}, {loc.longitude}<br />
-                               Time: {new Date(loc.timestamp).toLocaleString()}
-                             </div>
-                           </Popup>
-                         </Marker>
-                       );
-                     })}
-                         {Object.entries(latestLocations).map(([driverId, loc]) => {
-                           const vehicle = vehicles.find(v => v.id.toString() === driverId);
-                           if (!vehicle) return null;
-                           return (
-                             <Marker key={`loc-${driverId}`} position={[loc.latitude, loc.longitude]}>
-                               <Popup>
-                                 <div>
-                                   <strong>{vehicle.name}</strong><br />
-                                   Location: {loc.latitude}, {loc.longitude}<br />
-                                   Time: {new Date(loc.timestamp).toLocaleString()}
-                                 </div>
-                               </Popup>
-                             </Marker>
-                           );
-                         })}
+
                         <RouteDrawer
                             routeToPreview={routeToPreview}
                             confirmedAssignment={confirmedAssignment}
