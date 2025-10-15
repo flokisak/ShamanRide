@@ -144,9 +144,7 @@ async function runWithFallback<T>(
 }
 
 // Helper functions for data operations (real supabase or local fallback)
-let supabaseService: any;
-if (SUPABASE_ENABLED) {
-  supabaseService = {
+const supabaseService: any = SUPABASE_ENABLED ? {
       // --- Helpers to map between app's camelCase and DB snake_case ---
        _toDbVehicle(v: any) {
          return {
@@ -536,9 +534,7 @@ if (SUPABASE_ENABLED) {
           'Supabase updateUserSettings'
         );
       },
-    };
-} else {
-  supabaseService = {
+    } : {
       // LocalStorage fallback implementations
       async getVehicles() {
         return readTable('vehicles');
@@ -698,6 +694,5 @@ if (SUPABASE_ENABLED) {
         upsertLocal('user-settings', { user_id: userId, ...settings }, 'user_id');
       },
     };
-}
 
 export { supabaseService };

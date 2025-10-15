@@ -12,3 +12,6 @@ CREATE INDEX IF NOT EXISTS idx_locations_driver_timestamp ON locations(driver_id
 
 -- Disable RLS for locations table (as mentioned by user)
 ALTER TABLE locations DISABLE ROW LEVEL SECURITY;
+
+-- Grant permissions to anon role for locations table
+GRANT INSERT ON locations TO anon;
