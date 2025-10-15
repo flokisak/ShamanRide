@@ -366,15 +366,7 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
     const [flyToCoords, setFlyToCoords] = useState<Coords | null>(null);
     const center: Coords = useMemo(() => [48.85, 16.63], []); // Mikulov/Hustopeče area
 
-    const latestLocations = useMemo(() => {
-      return locations.reduce((acc, loc) => {
-        const key = loc.driver_id;
-        if (!acc[key] || new Date(loc.timestamp) > new Date(acc[key].timestamp)) {
-          acc[key] = loc;
-        }
-        return acc;
-      }, {} as Record<string, any>);
-    }, [locations]);
+    const latestLocations = locations;
 
     // Fetch GPS positions periodically
     // useEffect(() => {

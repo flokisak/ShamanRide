@@ -101,17 +101,21 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'driver_messages',
-        filter: `or(and(sender_id.eq.dispatcher,receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},receiver_id.eq.dispatcher))`
+        table: 'driver_messages'
       }, (payload) => {
         const newMessage = payload.new as ChatMessage;
-        setMessages(prev => [...prev, newMessage]);
+        // Check if the message is relevant (between dispatcher and selected vehicle)
+        const isRelevant = (newMessage.sender_id === 'dispatcher' && newMessage.receiver_id === `driver_${selectedVehicleId}`) ||
+                           (newMessage.sender_id === `driver_${selectedVehicleId}` && newMessage.receiver_id === 'dispatcher');
+        if (isRelevant) {
+          setMessages(prev => [...prev, newMessage]);
 
-        // Notify about new message if it's from a vehicle and not currently selected
-        if (newMessage.sender_id.startsWith('driver_') && newMessage.receiver_id !== `driver_${selectedVehicleId}`) {
-          const vehicleId = parseInt(newMessage.sender_id.replace('driver_', ''));
-          if (onNewMessage) {
-            onNewMessage(vehicleId, newMessage.message);
+          // Notify about new message if it's from a vehicle
+          if (newMessage.sender_id.startsWith('driver_')) {
+            const vehicleId = parseInt(newMessage.sender_id.replace('driver_', ''));
+            if (onNewMessage) {
+              onNewMessage(vehicleId, newMessage.message);
+            }
           }
         }
       })

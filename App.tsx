@@ -140,7 +140,7 @@ const AppContent: React.FC = () => {
   const [smsGateConfig, setSmsGateConfig] = useState({ server: '', username: '', password: '' });
 
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(DEFAULT_COMPANY_INFO);
-  const [locations, setLocations] = useState<any[]>([]);
+  const [locations, setLocations] = useState<Record<string, any>>({});
 
   const [assignmentResult, setAssignmentResult] = useState<AssignmentResultData | null>(null);
   const [customerSms, setCustomerSms] = useState<string>('');
@@ -303,7 +303,14 @@ const AppContent: React.FC = () => {
         setFuelPrices(fp || DEFAULT_FUEL_PRICES);
         setCompanyInfo(ci || DEFAULT_COMPANY_INFO);
         setMessagingApp((ms as any) || MessagingApp.SMS);
-        setLocations(loc);
+        const latestLocs = (loc as any[]).reduce((acc, l) => {
+          const key = l.driver_id;
+          if (!acc[key] || new Date(l.timestamp) > new Date(acc[key].timestamp)) {
+            acc[key] = l;
+          }
+          return acc;
+        }, {} as Record<string, any>);
+        setLocations(latestLocs);
         const sgc = localStorage.getItem('sms-gate-config');
         if (sgc) {
           try {
@@ -393,8 +400,25 @@ const AppContent: React.FC = () => {
       })
       .subscribe();
 
+    // Real-time subscription for location updates
+    const locationsChannel = supabase
+      .channel('locations_changes')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'locations'
+      }, (payload) => {
+        const newLocation = payload.new;
+        setLocations(prev => ({
+          ...prev,
+          [newLocation.driver_id]: newLocation
+        }));
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(vehicleChannel);
+      supabase.removeChannel(locationsChannel);
     };
   }, []);
 
