@@ -102,7 +102,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         event: 'INSERT',
         schema: 'public',
         table: 'driver_messages',
-        filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},or(receiver_id.eq.${currentUserId},receiver_id.eq.dispatcher)))`
+        filter: `or(and(sender_id.eq.dispatcher,receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},receiver_id.eq.dispatcher))`
       }, (payload) => {
         const newMessage = payload.new as ChatMessage;
         setMessages(prev => [...prev, newMessage]);
