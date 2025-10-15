@@ -49,6 +49,7 @@ const Dashboard: React.FC = () => {
 
         const vehicleNum = vehicleData.id;
         setVehicleNumber(vehicleNum);
+        console.log('Vehicle number set to:', vehicleNum);
 
         // Get vehicle status and license plate from vehicles table
         const { data: vehicle, error: vehicleError } = await supabase.from('vehicles').select('status, license_plate').eq('id', vehicleNum).single();
@@ -166,12 +167,13 @@ const Dashboard: React.FC = () => {
     let currentPosition: { lat: number; lng: number } | null = null;
 
     if (navigator.geolocation) {
-      watchId = navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          currentPosition = { lat: latitude, lng: longitude };
-          setLocation(currentPosition);
-        },
+        watchId = navigator.geolocation.watchPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            currentPosition = { lat: latitude, lng: longitude };
+            setLocation(currentPosition);
+            console.log('GPS position updated:', currentPosition);
+          },
         (error) => {
           console.error('GPS error:', error);
         },
@@ -185,13 +187,20 @@ const Dashboard: React.FC = () => {
       // Send location every 10-15 seconds if vehicle is loaded
       locationInterval = setInterval(async () => {
         if (currentPosition && vehicleNumber) {
+          console.log('Attempting to send location to Supabase:', {
+            driver_id: vehicleNumber.toString(),
+            latitude: currentPosition.lat,
+            longitude: currentPosition.lng,
+            timestamp: new Date().toISOString(),
+          });
           try {
-            await supabase.from('locations').insert({
+            const result = await supabase.from('locations').insert({
               driver_id: vehicleNumber.toString(), // Use vehicle number as driver_id for locations
               latitude: currentPosition.lat,
               longitude: currentPosition.lng,
               timestamp: new Date().toISOString(),
             });
+            console.log('Location sent successfully:', result);
           } catch (err) {
             console.warn('Failed to send location, queuing offline', err);
             // For offline queuing, could store in localStorage
@@ -204,6 +213,8 @@ const Dashboard: React.FC = () => {
             });
             localStorage.setItem('queued_locations', JSON.stringify(queued));
           }
+        } else {
+          console.log('Not sending location: currentPosition=', !!currentPosition, 'vehicleNumber=', vehicleNumber);
         }
       }, 12000); // 12 seconds
     }

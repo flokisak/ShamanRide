@@ -13,7 +13,7 @@ interface ChatMessage {
   sender_id: string;
   receiver_id: string;
   message: string;
-  timestamp: number;
+  timestamp: string;
   read: boolean;
 }
 
@@ -76,14 +76,17 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
     const loadMessages = async () => {
       try {
-        const { data, error } = await supabase.from('driver_messages').select('*')
-          .or('and(sender_id.eq.dispatcher,receiver_id.eq.driver_' + selectedVehicleId + '),and(sender_id.eq.driver_' + selectedVehicleId + ',receiver_id.eq.dispatcher)')
-          .order('timestamp', { ascending: true });
-        if (error) {
-          console.warn('Could not load messages:', error);
-        } else if (data) {
-          setMessages(data);
+        const { data1, error1 } = await supabase.from('driver_messages').select('*').eq('sender_id', 'dispatcher').eq('receiver_id', `driver_${selectedVehicleId}`).order('timestamp', { ascending: true });
+        const { data2, error2 } = await supabase.from('driver_messages').select('*').eq('sender_id', `driver_${selectedVehicleId}`).eq('receiver_id', 'dispatcher').order('timestamp', { ascending: true });
+        if (error1) {
+          console.warn('Could not load messages 1:', error1);
         }
+        if (error2) {
+          console.warn('Could not load messages 2:', error2);
+        }
+        const data = [...(data1 || []), ...(data2 || [])];
+        data.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        setMessages(data);
       } catch (err) {
         console.warn('Error loading messages:', err);
       }
@@ -182,7 +185,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     }
   };
 
-  const formatTime = (timestamp: number) => {
+  const formatTime = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString('cs-CZ', {
       hour: '2-digit',
       minute: '2-digit'

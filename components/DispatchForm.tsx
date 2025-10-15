@@ -146,7 +146,7 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
       const result = await sendSms([normalizedPhone], smsMessage);
       if (result.success) {
         const record: SmsMessageRecord = {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           timestamp: Date.now(),
           direction: 'outgoing',
           to: normalizedPhone,

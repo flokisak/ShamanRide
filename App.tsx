@@ -629,8 +629,8 @@ const AppContent: React.FC = () => {
 
   // --- Handlers ---
   const handleScheduleRide = useCallback((rideRequest: RideRequest) => {
-    const newLog: RideLog = {
-        id: `ride-${Date.now()}`,
+        const newLog: RideLog = {
+          id: crypto.randomUUID(),
         timestamp: Date.now(),
         vehicleName: null,
         vehicleLicensePlate: null,
@@ -872,8 +872,8 @@ const AppContent: React.FC = () => {
       // Ensure vehicle update is saved to database immediately
       supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
 
-      const newLog: RideLog = {
-        id: `ride-${Date.now()}`,
+          const newLog: RideLog = {
+          id: crypto.randomUUID(),
         timestamp: Date.now(),
         vehicleName: vehicle.name,
         vehicleLicensePlate: vehicle.licensePlate,

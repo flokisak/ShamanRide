@@ -70,7 +70,7 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
       const result = await sendSms([replyTo], replyMessage);
       if (result.success) {
         const record = {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           timestamp: Date.now(),
           direction: 'outgoing' as const,
           to: replyTo,
