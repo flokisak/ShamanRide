@@ -384,35 +384,76 @@ const Dashboard: React.FC = () => {
     };
   }, [vehicleNumber]);
 
-  // Auto-refresh messages every 30 seconds
-  useEffect(() => {
-    if (!vehicleNumber) return;
+   // Auto-refresh messages every 30 seconds
+   useEffect(() => {
+     if (!vehicleNumber) return;
 
-    const refreshInterval = setInterval(async () => {
-      try {
-        const { data, error } = await supabase.from('driver_messages').select('*')
-          .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
-          .order('timestamp', { ascending: false });
+     const refreshInterval = setInterval(async () => {
+       try {
+         const { data, error } = await supabase.from('driver_messages').select('*')
+           .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
+           .order('timestamp', { ascending: false });
 
-        if (error) {
-          console.warn('Could not refresh messages:', error);
-        } else if (data) {
-          // Only update if we have new messages or different data
-          const currentMessageIds = messages.map(m => m.id).sort();
-          const newMessageIds = data.map(m => m.id).sort();
+         if (error) {
+           console.warn('Could not refresh messages:', error);
+         } else if (data) {
+           // Only update if we have new messages or different data
+           const currentMessageIds = messages.map(m => m.id).sort();
+           const newMessageIds = data.map(m => m.id).sort();
 
-          if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
-            setMessages(data);
-            console.log('Messages refreshed automatically');
-          }
-        }
-      } catch (err) {
-        console.warn('Error refreshing messages:', err);
-      }
-    }, 30000); // Refresh every 30 seconds
+           if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
+             setMessages(data);
+             console.log('Messages refreshed automatically');
+           }
+         }
+       } catch (err) {
+         console.warn('Error refreshing messages:', err);
+       }
+     }, 30000); // Refresh every 30 seconds
 
-    return () => clearInterval(refreshInterval);
-  }, [vehicleNumber, messages]);
+     return () => clearInterval(refreshInterval);
+   }, [vehicleNumber, messages]);
+
+   // Auto-refresh ride data every 15 seconds (for local mode without real-time)
+   useEffect(() => {
+     if (!vehicleNumber) return;
+
+     const refreshInterval = setInterval(async () => {
+       try {
+         console.log('Auto-refreshing ride data...');
+         const pending = await supabaseService.getRideLogsByVehicle(vehicleNum, 'pending');
+         const acceptedRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'accepted');
+         const inProgressRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'in_progress');
+         const activeRides = [...acceptedRides, ...inProgressRides];
+
+         // Check if pending rides changed
+         const currentPendingIds = pendingRides.map(r => r.id).sort();
+         const newPendingIds = pending.map(r => r.id).sort();
+         if (JSON.stringify(currentPendingIds) !== JSON.stringify(newPendingIds)) {
+           console.log('Pending rides updated:', pending);
+           setPendingRides(pending);
+           // Notify if new rides were added
+           if (pending.length > pendingRides.length) {
+             notifyUser();
+           }
+         }
+
+         // Check if current ride changed
+         if (activeRides.length > 0 && (!currentRide || currentRide.id !== activeRides[0].id)) {
+           console.log('Current ride updated:', activeRides[0]);
+           setCurrentRide(activeRides[0]);
+         } else if (activeRides.length === 0 && currentRide) {
+           console.log('No active rides');
+           setCurrentRide(null);
+         }
+
+       } catch (err) {
+         console.warn('Error auto-refreshing ride data:', err);
+       }
+     }, 15000); // Refresh every 15 seconds
+
+     return () => clearInterval(refreshInterval);
+   }, [vehicleNumber, pendingRides, currentRide]);
 
   // Handle break timer
   useEffect(() => {
