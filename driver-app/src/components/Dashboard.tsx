@@ -119,6 +119,10 @@ const Dashboard: React.FC = () => {
           payload.new.receiver_id === `driver_${vehicleNumber}`
         )) {
           setMessages(prev => [...prev, payload.new]);
+          // Notify if message from dispatcher
+          if (payload.new.sender_id === 'dispatcher') {
+            alert(`Nová zpráva od dispečera: ${payload.new.message}`);
+          }
         }
       })
       .subscribe();
