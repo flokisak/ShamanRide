@@ -74,15 +74,17 @@ const Dashboard: React.FC = () => {
         }
 
         // Get pending rides for this vehicle (queue: oldest first)
-        const { data: pending, error: pendingError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Pending).order('timestamp', { ascending: true });
+        console.log('Querying for rides with vehicle_id:', vehicleNum, 'status: pending');
+        const { data: pending, error: pendingError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', 'pending').order('timestamp', { ascending: true });
         if (pendingError) {
-          console.warn('Could not load pending rides:', pendingError);
+           console.warn('Could not load pending rides:', pendingError);
         } else {
-          setPendingRides(pending || []);
+           console.log('Found pending rides:', pending);
+           setPendingRides(pending || []);
         }
 
         // Get active ride for this vehicle (accepted or in progress)
-        const { data: rides, error: ridesError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', [RideStatus.Accepted, RideStatus.InProgress]);
+        const { data: rides, error: ridesError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', ['accepted', 'in_progress']);
         if (ridesError) {
           console.warn('Could not load active rides:', ridesError);
         } else if (rides && rides.length > 0) {
@@ -96,13 +98,13 @@ const Dashboard: React.FC = () => {
          } else if (history) {
            setRideHistory(history);
 
-           // Calculate daily cash from completed rides today
-           const today = new Date();
-           today.setHours(0, 0, 0, 0);
-           const todayCompleted = history.filter(ride =>
-             ride.status === RideStatus.Completed &&
-             new Date(ride.timestamp) >= today
-           );
+            // Calculate daily cash from completed rides today
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayCompleted = history.filter(ride =>
+              ride.status === 'completed' &&
+              new Date(ride.timestamp) >= today
+            );
            const totalCash = todayCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
            setDailyCash(totalCash);
          }
@@ -781,17 +783,17 @@ const Dashboard: React.FC = () => {
              </div>
 
              <div className="mt-4 space-y-2">
-               {currentRide.status === RideStatus.Pending && (
-                 <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
-                   {t('dashboard.acceptRide')}
-                 </button>
-               )}
-               {currentRide.status === RideStatus.Accepted && (
-                 <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
-                   {t('dashboard.startRide')}
-                 </button>
-               )}
-               {currentRide.status === RideStatus.InProgress && (
+                {currentRide.status === 'pending' && (
+                  <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
+                    {t('dashboard.acceptRide')}
+                  </button>
+                )}
+                {currentRide.status === 'accepted' && (
+                  <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
+                    {t('dashboard.startRide')}
+                  </button>
+                )}
+                {currentRide.status === 'in_progress' && (
                  <div className="space-y-2">
                    <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
                      {t('dashboard.completeRide')}

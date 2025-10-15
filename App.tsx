@@ -768,6 +768,7 @@ const AppContent: React.FC = () => {
       const generatedCustomerSms = generateCustomerSms(chosenVehicle, alternative.eta, driverName);
       setCustomerSms(generatedCustomerSms);
 
+        console.log('Ride assigned:', newLog);
         setRideLog(prev => [newLog, ...prev]);
         setAssignmentResult(null);
 

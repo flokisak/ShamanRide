@@ -247,11 +247,11 @@ export const supabaseService = SUPABASE_ENABLED
             distance: r.distance ?? null,
            };
          },
-        _fromDbRideLog(db: any) {
-          return {
-            id: db.id,
-            timestamp: db.timestamp,
-            vehicleName: db.vehicle_name ?? null,
+          _fromDbRideLog(db: any) {
+           return {
+             id: db.id,
+             timestamp: db.timestamp ? new Date(db.timestamp).getTime() : null,
+             vehicleName: db.vehicle_name ?? null,
             vehicleLicensePlate: db.vehicle_license_plate ?? null,
             driverName: db.driver_name ?? null,
             vehicleType: db.vehicle_type ?? null,
@@ -265,8 +265,8 @@ export const supabaseService = SUPABASE_ENABLED
             vehicleId: db.vehicle_id ?? null,
             notes: db.notes ?? null,
             estimatedPrice: db.estimated_price ?? null,
-            estimatedPickupTimestamp: db.estimated_pickup_timestamp ?? null,
-            estimatedCompletionTimestamp: db.estimated_completion_timestamp ?? null,
+             estimatedPickupTimestamp: db.estimated_pickup_timestamp ? new Date(db.estimated_pickup_timestamp).getTime() : null,
+             estimatedCompletionTimestamp: db.estimated_completion_timestamp ? new Date(db.estimated_completion_timestamp).getTime() : null,
             fuelCost: db.fuel_cost ?? null,
            distance: db.distance ?? null,
          };
