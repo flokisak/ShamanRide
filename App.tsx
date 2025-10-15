@@ -1107,7 +1107,7 @@ const AppContent: React.FC = () => {
     }
 
     // Intercept dispatching of a scheduled ride to show confirmation modal first
-    if (originalLog && originalLog.status === RideStatus.Scheduled && updatedLog.status === RideStatus.OnTheWay && updatedLog.vehicleId) {
+    if (originalLog && originalLog.status === RideStatus.Scheduled && updatedLog.status === RideStatus.InProgress && updatedLog.vehicleId) {
         const assignedVehicle = vehicles.find(v => v.id === updatedLog.vehicleId);
         const driver = people.find(p => p.id === assignedVehicle?.driverId);
         const driverNav = driver?.navigationApp || preferredNav;
@@ -1390,7 +1390,7 @@ const AppContent: React.FC = () => {
         log.stops.slice(1).join('; ') || '', // Destinations
         log.pickupTime,
         log.status === 'Scheduled' ? t('rideStatus.SCHEDULED') :
-        log.status === 'OnTheWay' ? t('rideStatus.ON_THE_WAY') :
+        log.status === 'InProgress' ? t('rideStatus.IN_PROGRESS') :
         log.status === 'Completed' ? t('rideStatus.COMPLETED') :
         log.status === 'Cancelled' ? t('rideStatus.CANCELLED') : log.status,
         log.estimatedPrice ?? '',

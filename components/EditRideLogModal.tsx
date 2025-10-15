@@ -126,7 +126,7 @@ export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicle
     e.preventDefault();
     let dataToSave = { ...formData };
     
-    if (dataToSave.vehicleId && dataToSave.status === RideStatus.OnTheWay && log.status !== RideStatus.OnTheWay) {
+    if (dataToSave.vehicleId && dataToSave.status === RideStatus.InProgress && log.status !== RideStatus.InProgress) {
         try {
             const pickupTimestamp = new Date(dataToSave.pickupTime).getTime();
             const baseTimestamp = pickupTimestamp > Date.now() ? pickupTimestamp : Date.now();

@@ -66,7 +66,7 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
     switch (status) {
       case RideStatus.Scheduled:
         return `${base} bg-sky-400 text-white ring-1 ring-inset ring-sky-400 hover:bg-sky-500`;
-      case RideStatus.OnTheWay:
+      case RideStatus.InProgress:
         return `${base} bg-yellow-400 text-black ring-1 ring-inset ring-yellow-400 hover:bg-yellow-500`;
       case RideStatus.Completed:
         return `${base} bg-green-500 text-white ring-1 ring-inset ring-green-500 hover:bg-green-600`;
