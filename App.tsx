@@ -712,16 +712,15 @@ const AppContent: React.FC = () => {
         `📍 Navigace: ${navigationUrl}\n\n` +
         `Potvrďte přijetí jízdy v aplikaci řidiče.`;
 
-      // Send message to driver via driver_messages table
-      const { error } = await supabase
-        .from('driver_messages')
-        .insert({
-          sender_id: 'dispatcher', // From dispatcher
-          receiver_id: `driver_${vehicle.id}`, // To specific driver by vehicle number
-          message: driverMessage,
-          timestamp: Date.now(),
-          read: false
-        });
+       // Send message to driver via driver_messages table
+       const { error } = await supabase
+         .from('driver_messages')
+         .insert({
+           sender_id: 'dispatcher', // From dispatcher
+           receiver_id: `driver_${vehicle.id}`, // To specific driver by vehicle number
+           message: driverMessage,
+           read: false
+         });
 
       if (error) {
         console.error('Error sending ride to driver:', error);

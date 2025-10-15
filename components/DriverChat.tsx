@@ -57,6 +57,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Get current user (dispatcher) - moved up for proper variable order
   useEffect(() => {
@@ -330,10 +331,11 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
       // Store message in local cache/history
       addDriverMessage(newMessageData);
-      // Update local state immediately
-      setMessages(prev => [newMessageData, ...prev]);
+       // Update local state immediately
+       setMessages(prev => [newMessageData, ...prev]);
 
-      setNewMessage('');
+       setNewMessage('');
+       inputRef.current?.focus();
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -505,9 +507,9 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {messages
-                      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                      .map((msg) => (
+                     {messages
+                       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                       .map((msg) => (
                       <div
                         key={msg.id}
                         className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
@@ -534,15 +536,16 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
               {/* Message input */}
               <div className="flex-shrink-0 p-3 border-t border-slate-600">
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Napište zprávu..."
-                    className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                    disabled={sending}
-                  />
+                   <input
+                     ref={inputRef}
+                     type="text"
+                     value={newMessage}
+                     onChange={(e) => setNewMessage(e.target.value)}
+                     onKeyPress={handleKeyPress}
+                     placeholder="Napište zprávu..."
+                     className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                     disabled={sending}
+                   />
                   <button
                     onClick={sendMessage}
                     disabled={!newMessage.trim() || sending}
