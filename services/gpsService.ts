@@ -29,7 +29,7 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
                 latitude,
                 longitude,
                 timestamp,
-                vehicles!inner(id, name, status)
+                vehicles(id, name, status)
             `)
             .gte('timestamp', fiveMinutesAgo)
             .order('timestamp', { ascending: false });

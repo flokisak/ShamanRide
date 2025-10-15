@@ -78,14 +78,7 @@ const Dashboard: React.FC = () => {
         if (pendingError) {
           console.warn('Could not load pending rides:', pendingError);
         } else {
-          // Convert timestamp strings back to numbers for calculations
-          const processedPending = (pending || []).map(ride => {
-            if (typeof ride.estimatedCompletionTimestamp === 'string') {
-              ride.estimatedCompletionTimestamp = new Date(ride.estimatedCompletionTimestamp).getTime();
-            }
-            return ride;
-          });
-          setPendingRides(processedPending);
+          setPendingRides(pending || []);
         }
 
         // Get active ride for this vehicle (accepted or in progress)
@@ -93,12 +86,7 @@ const Dashboard: React.FC = () => {
         if (ridesError) {
           console.warn('Could not load active rides:', ridesError);
         } else if (rides && rides.length > 0) {
-          const ride = rides[0];
-          // Convert timestamp strings back to numbers for calculations
-          if (typeof ride.estimatedCompletionTimestamp === 'string') {
-            ride.estimatedCompletionTimestamp = new Date(ride.estimatedCompletionTimestamp).getTime();
-          }
-          setCurrentRide(ride);
+          setCurrentRide(rides[0]);
         }
 
         // Get all rides for this vehicle (completed, pending, accepted, etc.)
@@ -493,7 +481,7 @@ const Dashboard: React.FC = () => {
 
   const acceptRideSpecific = async (ride: RideLog) => {
     if (vehicleNumber) {
-      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: new Date().toISOString() }).eq('id', ride.id);
+      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', ride.id);
 
       // Update vehicle status to BUSY when ride is accepted
       await supabase.from('vehicles').update({
@@ -508,7 +496,7 @@ const Dashboard: React.FC = () => {
 
   const acceptRide = async () => {
     if (currentRide && vehicleNumber) {
-      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: new Date().toISOString() }).eq('id', currentRide.id);
+      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', currentRide.id);
 
       // Update vehicle status to BUSY when ride is accepted
       await supabase.from('vehicles').update({
@@ -521,14 +509,14 @@ const Dashboard: React.FC = () => {
 
   const startRide = async () => {
     if (currentRide) {
-      await supabase.from('ride_logs').update({ status: RideStatus.InProgress, started_at: new Date().toISOString() }).eq('id', currentRide.id);
+      await supabase.from('ride_logs').update({ status: RideStatus.InProgress, started_at: Date.now() }).eq('id', currentRide.id);
       setCurrentRide({ ...currentRide, status: RideStatus.InProgress });
     }
   };
 
   const endRide = async () => {
     if (currentRide && vehicleNumber) {
-      await supabase.from('ride_logs').update({ status: RideStatus.Completed, completed_at: new Date().toISOString() }).eq('id', currentRide.id);
+      await supabase.from('ride_logs').update({ status: RideStatus.Completed, completed_at: Date.now() }).eq('id', currentRide.id);
 
       // Check if there are pending rides in queue
       const nextRide = pendingRides.length > 0 ? pendingRides[0] : null;
@@ -586,7 +574,7 @@ const Dashboard: React.FC = () => {
       sender_id: `driver_${vehicleNumber}`,
       receiver_id: receiverId,
       message: newMessage,
-      timestamp: new Date().toISOString(),
+      timestamp: Date.now(),
       read: false
     });
     setNewMessage('');

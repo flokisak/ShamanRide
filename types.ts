@@ -122,7 +122,7 @@ export enum RideType {
 
 export interface RideLog {
   id: string;
-  timestamp: string;
+  timestamp: number;
   vehicleName: string | null;
   vehicleLicensePlate: string | null;
   driverName: string | null;
@@ -137,8 +137,8 @@ export interface RideLog {
   notes?: string;
   estimatedPrice?: number;
   // Timestamps for tracking and notifications
-  estimatedPickupTimestamp?: string;
-  estimatedCompletionTimestamp?: string;
+  estimatedPickupTimestamp?: number;
+  estimatedCompletionTimestamp?: number;
   fuelCost?: number;
   // Kniha jízd fields
   rideType: RideType; // BUSINESS or PRIVATE

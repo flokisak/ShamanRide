@@ -479,7 +479,9 @@
   },
   "rideStatus": {
     "SCHEDULED": "Naplánováno",
-    "ON_THE_WAY": "Na cestě",
+    "PENDING": "Čeká na přijetí",
+    "ACCEPTED": "Přijato",
+    "IN_PROGRESS": "Probíhá",
     "COMPLETED": "Dokončeno",
     "CANCELLED": "Zrušeno"
   },

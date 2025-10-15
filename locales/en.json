@@ -442,7 +442,9 @@
   },
   "rideStatus": {
     "SCHEDULED": "Scheduled",
-    "ON_THE_WAY": "On the Way",
+    "PENDING": "Pending",
+    "ACCEPTED": "Accepted",
+    "IN_PROGRESS": "In Progress",
     "COMPLETED": "Completed",
     "CANCELLED": "Cancelled"
   },
