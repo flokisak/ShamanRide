@@ -13,6 +13,7 @@ const Dashboard: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
+  const [licensePlate, setLicensePlate] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,16 +50,17 @@ const Dashboard: React.FC = () => {
         const vehicleNum = vehicleData.id;
         setVehicleNumber(vehicleNum);
 
-        // Get vehicle status directly from vehicles table
-        const { data: vehicle, error: vehicleError } = await supabase.from('vehicles').select('status').eq('id', vehicleNum).single();
+        // Get vehicle status and license plate from vehicles table
+        const { data: vehicle, error: vehicleError } = await supabase.from('vehicles').select('status, license_plate').eq('id', vehicleNum).single();
         if (vehicleError) {
           console.warn('Could not load vehicle status:', vehicleError);
           // Continue without vehicle status
         } else if (vehicle) {
           setDriverStatus(vehicle.status === 'AVAILABLE' ? 'available' :
-                         vehicle.status === 'BUSY' ? 'on_ride' :
-                         vehicle.status === 'BREAK' ? 'break' :
-                         vehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
+                          vehicle.status === 'BUSY' ? 'on_ride' :
+                          vehicle.status === 'BREAK' ? 'break' :
+                          vehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
+          setLicensePlate(vehicle.license_plate);
         }
 
         // Get active ride for this vehicle
@@ -409,7 +411,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white p-4">
       <div className="max-w-md mx-auto space-y-6">
-        <h1 className="text-2xl font-bold text-center text-white">{t('dashboard.title')} - Vehicle {vehicleNumber}</h1>
+        <h1 className="text-2xl font-bold text-center text-white">{t('dashboard.title')} - {licensePlate || `Vehicle ${vehicleNumber}`}</h1>
 
         {/* Status */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
