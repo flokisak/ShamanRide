@@ -2,6 +2,7 @@
 -- SHAMANRIDE DRIVER CHAT SYSTEM SETUP
 -- ===========================================
 -- Run this SQL script in your Supabase SQL editor to set up the driver chat system
+-- Uses existing 'people' table instead of creating new 'drivers' table
 
 -- 1. Create driver_messages table (if not exists)
 CREATE TABLE IF NOT EXISTS driver_messages (
@@ -27,30 +28,30 @@ CREATE POLICY IF NOT EXISTS "Authenticated users can send driver messages" ON dr
 CREATE INDEX IF NOT EXISTS idx_driver_messages_timestamp ON driver_messages(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_driver_messages_participants ON driver_messages(sender_id, receiver_id);
 
--- 5. Add vehicle_id column to drivers table (if not exists)
-ALTER TABLE drivers ADD COLUMN IF NOT EXISTS vehicle_id INTEGER REFERENCES vehicles(id);
+-- Note: People table is used only for dispatcher reference.
+-- Driver app authenticates directly with vehicle emails (vinnetaxi1@gmail.com, etc.)
+-- No linking between people and auth users needed for driver app functionality.
 
 -- ===========================================
 -- MANUAL STEPS (do these in Supabase dashboard):
 -- ===========================================
 
--- 1. Create driver auth accounts:
+-- 1. Create vehicle auth accounts:
 -- Go to Authentication > Users in Supabase dashboard
 -- Create users with emails: vinnetaxi1@gmail.com through vinnetaxi7@gmail.com
 -- Set passwords for each account
+-- These accounts are tied to vehicles, not individual drivers
+*/
 
--- 2. After creating auth users, run this SQL with actual UUIDs:
+-- 3. Update vehicles with phone numbers (car phones):
 /*
--- Replace 'driver-1-uuid' etc. with actual auth user IDs from Supabase
-INSERT INTO drivers (id, name, email, vehicle_id) VALUES
-  ('REPLACE_WITH_ACTUAL_UUID_1', 'Pavel Osička', 'vinnetaxi1@gmail.com', 1),
-  ('REPLACE_WITH_ACTUAL_UUID_2', 'Kuba', 'vinnetaxi2@gmail.com', 2),
-  ('REPLACE_WITH_ACTUAL_UUID_3', 'Kamil', 'vinnetaxi3@gmail.com', 3),
-  ('REPLACE_WITH_ACTUAL_UUID_4', 'Petr', 'vinnetaxi4@gmail.com', 4),
-  ('REPLACE_WITH_ACTUAL_UUID_5', 'Adam', 'vinnetaxi5@gmail.com', 5),
-  ('REPLACE_WITH_ACTUAL_UUID_6', 'Honza', 'vinnetaxi6@gmail.com', 6),
-  ('REPLACE_WITH_ACTUAL_UUID_7', 'Vlado', 'vinnetaxi7@gmail.com', 7)
-ON CONFLICT (email) DO NOTHING;
+UPDATE vehicles SET phone = '+420 736 168 796' WHERE id = 1; -- Pavel Osička
+UPDATE vehicles SET phone = '+420 739 355 521' WHERE id = 2; -- Kuba
+UPDATE vehicles SET phone = '+420 730 635 302' WHERE id = 3; -- Kamil
+UPDATE vehicles SET phone = '+420 720 581 296' WHERE id = 4; -- Petr
+UPDATE vehicles SET phone = '+420 777 807 874' WHERE id = 5; -- Adam
+UPDATE vehicles SET phone = '+420 720 758 823' WHERE id = 6; -- Honza
+UPDATE vehicles SET phone = '+420 792 892 655' WHERE id = 7; -- Vlado
 */
 
 -- 3. Update vehicles with car phone numbers:
@@ -69,13 +70,23 @@ UPDATE vehicles SET phone = '+420 792 892 655' WHERE id = 7; -- Vlado
 -- ===========================================
 
 -- Check if tables exist:
--- SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('drivers', 'vehicles', 'driver_messages');
+-- SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('people', 'vehicles', 'driver_messages');
 
--- Check driver accounts:
--- SELECT id, name, email, vehicle_id FROM drivers ORDER BY vehicle_id;
+-- Check vehicle auth accounts (created in Supabase Auth):
+-- SELECT id, email, created_at FROM auth.users WHERE email LIKE 'vinnetaxi%@gmail.com' ORDER BY email;
 
 -- Check vehicle phone numbers:
 -- SELECT id, name, phone FROM vehicles WHERE id <= 7 ORDER BY id;
 
 -- Check RLS policies:
 -- SELECT schemaname, tablename, policyname FROM pg_policies WHERE tablename = 'driver_messages';
+
+-- ===========================================
+-- SYSTEM OVERVIEW
+-- ===========================================
+-- • Uses existing 'people' table for dispatcher reference only
+-- • Driver app authenticates directly with vehicle emails (vinnetaxi1@gmail.com, etc.)
+-- • No linking between people and auth users - vehicles are independent
+-- • Vehicle phones: Each vehicle gets its own car phone number
+-- • Chat system: driver_messages table with vehicle-based identification
+-- • Authentication: Vehicles log in with their own emails

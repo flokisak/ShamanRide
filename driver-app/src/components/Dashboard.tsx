@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { supabaseService } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
+import { supabase } from '../supabaseClient';
 import { useTranslation } from '../contexts/LanguageContext';
 
 const Dashboard: React.FC = () => {
@@ -16,8 +17,8 @@ const Dashboard: React.FC = () => {
   const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
 
   useEffect(() => {
-    // Get current user and their driver info
-    const getDriverInfo = async () => {
+    // Get current user and their vehicle info
+    const getVehicleInfo = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // Extract vehicle number from email (vinnetaxi1@gmail.com -> 1)
@@ -25,25 +26,27 @@ const Dashboard: React.FC = () => {
         const vehicleNum = emailMatch ? parseInt(emailMatch[1]) : null;
         setVehicleNumber(vehicleNum);
 
-        // Assume driver_id is user.id for simplicity
-        const driverId = user.id;
+        if (vehicleNum) {
+          // Get vehicle status directly from vehicles table
+          const { data: vehicle } = await supabase.from('vehicles').select('status').eq('id', vehicleNum).single();
+          if (vehicle) {
+            setDriverStatus(vehicle.status === 'AVAILABLE' ? 'available' :
+                           vehicle.status === 'BUSY' ? 'on_ride' :
+                           vehicle.status === 'BREAK' ? 'break' :
+                           vehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
+          }
 
-        // Get current status from drivers table
-        const { data: driver } = await supabase.from('drivers').select('current_status').eq('id', driverId).single();
-        if (driver) {
-          setDriverStatus(driver.current_status || 'offline');
-        }
+          // Get active ride for this vehicle
+          const { data: rides } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', [RideStatus.Pending, RideStatus.Accepted, RideStatus.InProgress]);
+          if (rides && rides.length > 0) {
+            setCurrentRide(rides[0]);
+          }
 
-        // Get active ride
-        const { data: rides } = await supabase.from('ride_logs').select('*').eq('driver_id', driverId).in('status', ['pending', 'accepted', 'in_progress']);
-        if (rides && rides.length > 0) {
-          setCurrentRide(rides[0]);
-        }
-
-        // Get completed rides
-        const { data: history } = await supabase.from('ride_logs').select('*').eq('driver_id', driverId).eq('status', 'COMPLETED').order('timestamp', { ascending: false }).limit(10);
-        if (history) {
-          setRideHistory(history);
+          // Get completed rides for this vehicle
+          const { data: history } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Completed).order('timestamp', { ascending: false }).limit(10);
+          if (history) {
+            setRideHistory(history);
+          }
         }
       }
     };
@@ -56,7 +59,7 @@ const Dashboard: React.FC = () => {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('New ride assigned:', payload);
         // Check if it's for this driver
-        getDriverInfo();
+    getVehicleInfo();
       })
       .subscribe();
 
@@ -74,10 +77,9 @@ const Dashboard: React.FC = () => {
 
     // Load recent driver messages
     const loadMessages = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user && vehicleNumber) {
+      if (vehicleNumber) {
         const { data } = await supabase.from('driver_messages').select('*')
-          .or(`sender_id.eq.${user.id},receiver_id.eq.driver_${vehicleNumber}`)
+          .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
           .order('timestamp', { ascending: true });
         if (data) {
           setMessages(data);
@@ -110,28 +112,25 @@ const Dashboard: React.FC = () => {
 
       // Send location every 10-15 seconds if active
       locationInterval = setInterval(async () => {
-        if (currentPosition && driverStatus !== 'offline') {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            try {
-              await supabase.from('locations').insert({
-                driver_id: user.id,
-                latitude: currentPosition.lat,
-                longitude: currentPosition.lng,
-                timestamp: new Date().toISOString(),
-              });
-            } catch (err) {
-              console.warn('Failed to send location, queuing offline', err);
-              // For offline queuing, could store in localStorage
-              const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
-              queued.push({
-                driver_id: user.id,
-                latitude: currentPosition!.lat,
-                longitude: currentPosition!.lng,
-                timestamp: new Date().toISOString(),
-              });
-              localStorage.setItem('queued_locations', JSON.stringify(queued));
-            }
+        if (currentPosition && driverStatus !== 'offline' && vehicleNumber) {
+          try {
+            await supabase.from('locations').insert({
+              driver_id: vehicleNumber.toString(), // Use vehicle number as driver_id for locations
+              latitude: currentPosition.lat,
+              longitude: currentPosition.lng,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (err) {
+            console.warn('Failed to send location, queuing offline', err);
+            // For offline queuing, could store in localStorage
+            const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
+            queued.push({
+              driver_id: vehicleNumber.toString(),
+              latitude: currentPosition!.lat,
+              longitude: currentPosition!.lng,
+              timestamp: new Date().toISOString(),
+            });
+            localStorage.setItem('queued_locations', JSON.stringify(queued));
           }
         }
       }, 12000); // 12 seconds
@@ -147,34 +146,21 @@ const Dashboard: React.FC = () => {
         clearInterval(locationInterval);
       }
     };
-  }, [driverStatus]);
+  }, [driverStatus, vehicleNumber]);
 
   // Handle break timer
   useEffect(() => {
-    if (breakEndTime && driverStatus === 'break') {
+    if (breakEndTime && driverStatus === 'break' && vehicleNumber) {
       const checkBreakEnd = async () => {
         if (Date.now() >= breakEndTime) {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            // Update driver status to available
-            await supabase.from('drivers').update({
-              current_status: 'available',
-              break_end_time: null,
-              updated_at: new Date().toISOString()
-            }).eq('id', user.id);
+          // Update vehicle status to available
+          await supabase.from('vehicles').update({
+            status: 'AVAILABLE',
+            updated_at: new Date().toISOString()
+          }).eq('id', vehicleNumber);
 
-            // Update associated vehicle status to available
-            const { data: driver } = await supabase.from('drivers').select('vehicle_id').eq('id', user.id).single();
-            if (driver?.vehicle_id) {
-              await supabase.from('vehicles').update({
-                status: 'AVAILABLE',
-                updated_at: new Date().toISOString()
-              }).eq('id', driver.vehicle_id);
-            }
-
-            setDriverStatus('available');
-            setBreakEndTime(null);
-          }
+          setDriverStatus('available');
+          setBreakEndTime(null);
         }
       };
 
@@ -186,67 +172,76 @@ const Dashboard: React.FC = () => {
 
       return () => clearInterval(breakInterval);
     }
-  }, [breakEndTime, driverStatus]);
+  }, [breakEndTime, driverStatus, vehicleNumber]);
 
-  const updateDriverStatus = async (status: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      let breakEndTimeValue = null;
-      let vehicleStatus = status;
+  const updateVehicleStatus = async (status: string) => {
+    if (!vehicleNumber) return;
 
-      // Handle break times
-      if (status.startsWith('break_')) {
-        const breakMinutes = parseInt(status.split('_')[1]);
-        breakEndTimeValue = Date.now() + (breakMinutes * 60 * 1000);
-        setBreakEndTime(breakEndTimeValue);
-        vehicleStatus = 'BREAK'; // Vehicle status should be BREAK
-        status = 'break'; // Driver status stored as 'break'
-      } else {
-        setBreakEndTime(null);
-        // Map driver status to vehicle status
-        if (status === 'available') vehicleStatus = 'AVAILABLE';
-        else if (status === 'on_ride') vehicleStatus = 'BUSY';
-        else if (status === 'offline') vehicleStatus = 'OUT_OF_SERVICE';
-        else vehicleStatus = status.toUpperCase();
-      }
+    let breakEndTimeValue = null;
+    let vehicleStatus = status;
 
-      // Update driver status
-      await supabase.from('drivers').update({
-        current_status: status,
-        break_end_time: breakEndTimeValue,
-        updated_at: new Date().toISOString()
-      }).eq('id', user.id);
-
-      // Also update associated vehicle status
-      const { data: driver } = await supabase.from('drivers').select('vehicle_id').eq('id', user.id).single();
-      if (driver?.vehicle_id) {
-        await supabase.from('vehicles').update({
-          status: vehicleStatus,
-          updated_at: new Date().toISOString()
-        }).eq('id', driver.vehicle_id);
-      }
-
-      setDriverStatus(status);
+    // Handle break times
+    if (status.startsWith('break_')) {
+      const breakMinutes = parseInt(status.split('_')[1]);
+      breakEndTimeValue = Date.now() + (breakMinutes * 60 * 1000);
+      setBreakEndTime(breakEndTimeValue);
+      vehicleStatus = 'BREAK'; // Vehicle status should be BREAK
+      status = 'break'; // Driver status stored as 'break'
+    } else {
+      setBreakEndTime(null);
+      // Map driver status to vehicle status
+      if (status === 'available') vehicleStatus = 'AVAILABLE';
+      else if (status === 'on_ride') vehicleStatus = 'BUSY';
+      else if (status === 'offline') vehicleStatus = 'OUT_OF_SERVICE';
+      else vehicleStatus = status.toUpperCase();
     }
+
+    // Update vehicle status directly
+    await supabase.from('vehicles').update({
+      status: vehicleStatus,
+      updated_at: new Date().toISOString()
+    }).eq('id', vehicleNumber);
+
+    setDriverStatus(status);
   };
 
   const acceptRide = async () => {
-    if (currentRide) {
-      await supabase.from('ride_logs').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', currentRide.id);
-      setCurrentRide({ ...currentRide, status: 'accepted' });
+    if (currentRide && vehicleNumber) {
+      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: new Date().toISOString() }).eq('id', currentRide.id);
+
+      // Update vehicle status to BUSY when ride is accepted
+      await supabase.from('vehicles').update({
+        status: 'BUSY',
+        updated_at: new Date().toISOString()
+      }).eq('id', vehicleNumber);
+
+      setCurrentRide({ ...currentRide, status: RideStatus.Accepted });
     }
   };
 
   const startRide = async () => {
     if (currentRide) {
-      await supabase.from('ride_logs').update({ status: 'in_progress', started_at: new Date().toISOString() }).eq('id', currentRide.id);
-      setCurrentRide({ ...currentRide, status: 'in_progress' });
+      await supabase.from('ride_logs').update({ status: RideStatus.InProgress, started_at: new Date().toISOString() }).eq('id', currentRide.id);
+      setCurrentRide({ ...currentRide, status: RideStatus.InProgress });
     }
   };
 
   const endRide = async () => {
-    if (currentRide) {
-      await supabase.from('ride_logs').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', currentRide.id);
+    if (currentRide && vehicleNumber) {
+      await supabase.from('ride_logs').update({ status: RideStatus.Completed, completed_at: new Date().toISOString() }).eq('id', currentRide.id);
+
+      // Update vehicle status to AVAILABLE and set current location
+      const locationUpdate: any = {
+        status: 'AVAILABLE',
+        updated_at: new Date().toISOString()
+      };
+
+      if (location) {
+        locationUpdate.location = `${location.lat}, ${location.lng}`;
+      }
+
+      await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
+
       setCurrentRide(null);
     }
   };
@@ -261,18 +256,15 @@ const Dashboard: React.FC = () => {
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !vehicleNumber) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      // For now, send to a generic dispatcher ID. In production, this should be the actual dispatcher ID
-      const dispatcherId = 'dispatcher'; // TODO: Get actual dispatcher ID
-      await supabase.from('driver_messages').insert({
-        sender_id: `driver_${vehicleNumber}`,
-        receiver_id: dispatcherId,
-        message: newMessage,
-        read: false
-      });
-      setNewMessage('');
-    }
+    // For now, send to a generic dispatcher ID. In production, this should be the actual dispatcher ID
+    const dispatcherId = 'dispatcher'; // TODO: Get actual dispatcher ID
+    await supabase.from('driver_messages').insert({
+      sender_id: `driver_${vehicleNumber}`,
+      receiver_id: dispatcherId,
+      message: newMessage,
+      read: false
+    });
+    setNewMessage('');
   };
 
   return (
@@ -283,11 +275,11 @@ const Dashboard: React.FC = () => {
         {/* Status */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
           <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.status')}</label>
-          <select
-            value={driverStatus}
-            onChange={(e) => updateDriverStatus(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
-          >
+           <select
+             value={driverStatus}
+             onChange={(e) => updateVehicleStatus(e.target.value)}
+             className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+           >
             <option value="available">{t('dashboard.available')}</option>
             <option value="on_ride">{t('dashboard.onRide')}</option>
             <option value="break_10">Pauza 10 min</option>
@@ -316,28 +308,28 @@ const Dashboard: React.FC = () => {
               <p><span className="font-medium">{t('dashboard.status')}:</span> {currentRide.status}</p>
             </div>
 
-            <div className="mt-4 space-y-2">
-              {currentRide.status === 'pending' && (
-                <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
-                  {t('dashboard.acceptRide')}
-                </button>
-              )}
-              {currentRide.status === 'accepted' && (
-                <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
-                  {t('dashboard.startRide')}
-                </button>
-              )}
-              {currentRide.status === 'in_progress' && (
-                <div className="space-y-2">
-                  <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
-                    {t('dashboard.completeRide')}
-                  </button>
-                  <button onClick={navigateToDestination} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                    {t('dashboard.navigate')}
-                  </button>
-                </div>
-              )}
-            </div>
+             <div className="mt-4 space-y-2">
+               {currentRide.status === RideStatus.Pending && (
+                 <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
+                   {t('dashboard.acceptRide')}
+                 </button>
+               )}
+               {currentRide.status === RideStatus.Accepted && (
+                 <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
+                   {t('dashboard.startRide')}
+                 </button>
+               )}
+               {currentRide.status === RideStatus.InProgress && (
+                 <div className="space-y-2">
+                   <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
+                     {t('dashboard.completeRide')}
+                   </button>
+                   <button onClick={navigateToDestination} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                     {t('dashboard.navigate')}
+                   </button>
+                 </div>
+               )}
+             </div>
           </div>
         )}
 

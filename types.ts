@@ -13,7 +13,9 @@ export enum VehicleStatus {
 
 export enum RideStatus {
   Scheduled = 'SCHEDULED',
-  OnTheWay = 'ON_THE_WAY',
+  Pending = 'PENDING',
+  Accepted = 'ACCEPTED',
+  InProgress = 'IN_PROGRESS',
   Completed = 'COMPLETED',
   Cancelled = 'CANCELLED',
 }
@@ -46,6 +48,10 @@ export interface Person {
   phone: string;
   role: PersonRole;
   navigationApp?: NavigationApp;
+  authUserId?: string; // Links to Supabase auth.users.id
+  vehicleId?: number; // Links to assigned vehicle
+  currentStatus?: string; // Driver status (available, on_ride, break, offline)
+  breakEndTime?: string; // When break ends
 }
 
 export interface Vehicle {

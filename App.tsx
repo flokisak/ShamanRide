@@ -512,59 +512,77 @@ const AppContent: React.FC = () => {
   }, [user]); // Only depend on user to restart when auth changes
 
    // Notification System Effect
-  useEffect(() => {
-    const checkNotifications = () => {
-        const now = Date.now();
-        const newNotifications: Notification[] = [];
+   useEffect(() => {
+     const checkNotifications = () => {
+         const now = Date.now();
+         const newNotifications: Notification[] = [];
 
-        rideLog.forEach(log => {
-            // Reminder for scheduled rides
-            if (log.status === RideStatus.Scheduled) {
-                 try {
-                    const pickupTimestamp = new Date(log.pickupTime).getTime();
-                    const minutesToPickup = (pickupTimestamp - now) / (1000 * 60);
+         rideLog.forEach(log => {
+             // Reminder for scheduled rides
+             if (log.status === RideStatus.Scheduled) {
+                  try {
+                     const pickupTimestamp = new Date(log.pickupTime).getTime();
+                     const minutesToPickup = (pickupTimestamp - now) / (1000 * 60);
 
-                    const reminder15Id = `reminder-15-${log.id}`;
-                    if (minutesToPickup <= 15 && minutesToPickup > 14 && !notifications.some(n => n.id === reminder15Id)) {
-                        newNotifications.push({ id: reminder15Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message15', messageParams: { customerName: log.customerName, pickupAddress: log.stops[0] || '' }, timestamp: now, rideLogId: log.id });
-                    }
-                    const reminder5Id = `reminder-5-${log.id}`;
-                    if (minutesToPickup <= 5 && minutesToPickup > 4 && !notifications.some(n => n.id === reminder5Id)) {
-                         newNotifications.push({ id: reminder5Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message5', messageParams: { customerName: log.customerName, pickupAddress: log.stops[0] || '' }, timestamp: now, rideLogId: log.id });
-                    }
-                } catch(e) {
-                  console.error("Could not parse schedule time for notification", e)
-                }
-            }
-            
-            // Reminder for unsent SMS
-            if (log.status === RideStatus.OnTheWay && !log.smsSent) {
-                const minutesSinceDispatch = (now - log.timestamp) / (1000 * 60);
-                const notificationId = `sms-reminder-${log.id}`;
+                     const reminder15Id = `reminder-15-${log.id}`;
+                     if (minutesToPickup <= 15 && minutesToPickup > 14 && !notifications.some(n => n.id === reminder15Id)) {
+                         newNotifications.push({ id: reminder15Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message15', messageParams: { customerName: log.customerName, pickupAddress: log.stops[0] || '' }, timestamp: now, rideLogId: log.id });
+                     }
+                     const reminder5Id = `reminder-5-${log.id}`;
+                     if (minutesToPickup <= 5 && minutesToPickup > 4 && !notifications.some(n => n.id === reminder5Id)) {
+                          newNotifications.push({ id: reminder5Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message5', messageParams: { customerName: log.customerName, pickupAddress: log.stops[0] || '' }, timestamp: now, rideLogId: log.id });
+                     }
+                 } catch(e) {
+                   console.error("Could not parse schedule time for notification", e)
+                 }
+             }
 
-                // Check if 5 minutes have passed and notification doesn't exist yet
-                if (minutesSinceDispatch >= 5 && !notifications.some(n => n.id === notificationId)) {
-                    newNotifications.push({
-                        id: notificationId,
-                        type: 'delay', // Using 'delay' for a more urgent (red) look
-                        titleKey: 'notifications.smsReminder.title',
-                        messageKey: 'notifications.smsReminder.message',
-                        messageParams: { customerName: log.customerName, driverName: log.driverName || 'N/A' },
-                        timestamp: now,
-                        rideLogId: log.id
-                    });
-                }
-            }
-        });
-        
-        if (newNotifications.length > 0) {
-            setNotifications(prev => [...prev, ...newNotifications.filter(nn => !prev.some(p => p.id === nn.id))]);
-        }
-    };
-    
-    const interval = setInterval(checkNotifications, 10000);
-    return () => clearInterval(interval);
-  }, [rideLog, notifications]);
+             // Reminder for unsent SMS
+             if (log.status === RideStatus.OnTheWay && !log.smsSent) {
+                 const minutesSinceDispatch = (now - log.timestamp) / (1000 * 60);
+                 const notificationId = `sms-reminder-${log.id}`;
+
+                 // Check if 5 minutes have passed and notification doesn't exist yet
+                 if (minutesSinceDispatch >= 5 && !notifications.some(n => n.id === notificationId)) {
+                     newNotifications.push({
+                         id: notificationId,
+                         type: 'delay', // Using 'delay' for a more urgent (red) look
+                         titleKey: 'notifications.smsReminder.title',
+                         messageKey: 'notifications.smsReminder.message',
+                         messageParams: { customerName: log.customerName, driverName: log.driverName || 'N/A' },
+                         timestamp: now,
+                         rideLogId: log.id
+                     });
+                 }
+             }
+
+             // Timeout for unaccepted pending rides
+             if (log.status === RideStatus.Pending) {
+                 const minutesSinceAssignment = (now - log.timestamp) / (1000 * 60);
+                 if (minutesSinceAssignment >= 5) {
+                     // Auto-cancel the ride
+                     handleUpdateRideLog({ ...log, status: RideStatus.Cancelled });
+                     newNotifications.push({
+                         id: `timeout-${log.id}`,
+                         type: 'delay',
+                         titleKey: 'notifications.rideTimeout.title',
+                         messageKey: 'notifications.rideTimeout.message',
+                         messageParams: { customerName: log.customerName, driverName: log.driverName || 'N/A' },
+                         timestamp: now,
+                         rideLogId: log.id
+                     });
+                 }
+             }
+         });
+
+         if (newNotifications.length > 0) {
+             setNotifications(prev => [...prev, ...newNotifications.filter(nn => !prev.some(p => p.id === nn.id))]);
+         }
+     };
+
+     const interval = setInterval(checkNotifications, 10000);
+     return () => clearInterval(interval);
+   }, [rideLog, notifications]);
 
   // --- Handlers ---
   const handleScheduleRide = useCallback((rideRequest: RideRequest) => {
@@ -628,6 +646,51 @@ const AppContent: React.FC = () => {
     return undefined;
   }, [fuelPrices]);
 
+  const sendRideToDriver = async (rideLog: RideLog, vehicle: any) => {
+    try {
+      // Find the driver (person) associated with this vehicle
+      const driver = people.find(p => p.id === vehicle.driverId);
+      if (!driver) {
+        console.warn('No driver found for vehicle', vehicle.id);
+        return;
+      }
+
+      // Generate navigation URL
+      const vehicleCoords = await geocodeAddress(vehicle.location, language);
+      const stopCoords = await Promise.all(rideLog.stops.map(s => geocodeAddress(s, language)));
+      const navigationUrl = generateNavigationUrl(vehicleCoords, stopCoords, 'google');
+
+      // Create message for driver
+      const driverMessage = `🚗 Nová jízda přiřazena!\n\n` +
+        `Zákazník: ${rideLog.customerName}\n` +
+        `Odkud: ${rideLog.stops[0]}\n` +
+        `Kam: ${rideLog.stops[rideLog.stops.length - 1]}\n` +
+        `Počet cestujících: ${rideLog.passengers}\n` +
+        `Odhadovaná cena: ${rideLog.estimatedPrice} Kč\n\n` +
+        `📍 Navigace: ${navigationUrl}\n\n` +
+        `Potvrďte přijetí jízdy v aplikaci řidiče.`;
+
+      // Send message to driver via driver_messages table
+      const { error } = await supabase
+        .from('driver_messages')
+        .insert({
+          sender_id: 'dispatcher', // From dispatcher
+          receiver_id: `driver_${vehicle.id}`, // To specific driver by vehicle number
+          message: driverMessage,
+          timestamp: Date.now(),
+          read: false
+        });
+
+      if (error) {
+        console.error('Error sending ride to driver:', error);
+      } else {
+        console.log('Ride sent to driver successfully');
+      }
+    } catch (error) {
+      console.error('Error in sendRideToDriver:', error);
+    }
+  };
+
   const handleConfirmAssignment = useCallback(async (option: AssignmentAlternative) => {
       const { rideRequest, rideDuration, optimizedStops } = assignmentResult!;
       const chosenVehicle = option.vehicle;
@@ -655,11 +718,7 @@ const AppContent: React.FC = () => {
       }
       const fuelCost = totalDistance ? calculateFuelCost(chosenVehicle, totalDistance) : undefined;
 
-      const updatedVehicles = vehicles.map(v => v.id === chosenVehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v);
-      setVehicles(updatedVehicles);
-
-      // Ensure vehicle update is saved to database immediately
-      supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
+        // Don't change vehicle status yet - wait for driver to accept
 
      if (!isAiEnabled) {
          try {
@@ -682,40 +741,43 @@ const AppContent: React.FC = () => {
          return;
      }
 
-     const newLog: RideLog = {
-       id: `ride-${Date.now()}`,
-       timestamp: Date.now(),
-       vehicleName: chosenVehicle.name,
-       vehicleLicensePlate: chosenVehicle.licensePlate,
-       driverName: getDriverName(chosenVehicle.driverId),
-       vehicleType: chosenVehicle.type,
-       customerName: rideRequest.customerName,
-       rideType: RideType.BUSINESS, // Default to business ride
-       customerPhone: rideRequest.customerPhone,
-       stops: finalStops,
-       passengers: rideRequest.passengers,
-       pickupTime: rideRequest.pickupTime,
-       status: RideStatus.OnTheWay,
-       vehicleId: chosenVehicle.id,
-       smsSent: false,
-       notes: rideRequest.notes,
-       estimatedPrice: alternative.estimatedPrice,
-        estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
-        estimatedCompletionTimestamp: Date.now() + durationInMinutes * 60 * 1000,
-        fuelCost: fuelCost,
-        distance: totalDistance,
-     };
+       const newLog: RideLog = {
+         id: `ride-${Date.now()}`,
+         timestamp: Date.now(),
+         vehicleName: chosenVehicle.name,
+         vehicleLicensePlate: chosenVehicle.licensePlate,
+         driverName: getDriverName(chosenVehicle.driverId),
+         vehicleType: chosenVehicle.type,
+         customerName: rideRequest.customerName,
+         rideType: RideType.BUSINESS, // Default to business ride
+         customerPhone: rideRequest.customerPhone,
+         stops: finalStops,
+         passengers: rideRequest.passengers,
+         pickupTime: rideRequest.pickupTime,
+         status: RideStatus.Pending, // Start as pending until driver accepts
+         vehicleId: chosenVehicle.id,
+         smsSent: false,
+         notes: rideRequest.notes,
+         estimatedPrice: alternative.estimatedPrice,
+         estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
+         estimatedCompletionTimestamp: Date.now() + durationInMinutes * 60 * 1000,
+         fuelCost: fuelCost,
+         distance: totalDistance,
+       };
 
       // Generate customer SMS for the assigned vehicle
       const driverName = people.find(p => p.id === chosenVehicle.driverId)?.name || 'Neznámý';
       const generatedCustomerSms = generateCustomerSms(chosenVehicle, alternative.eta, driverName);
       setCustomerSms(generatedCustomerSms);
 
-      setRideLog(prev => [newLog, ...prev]);
-      setAssignmentResult(null);
+       setRideLog(prev => [newLog, ...prev]);
+       setAssignmentResult(null);
 
-      // Automatically open SMS modal for the new ride
-      handleSendSms(newLog.id);
+       // Automatically send ride to driver app
+       await sendRideToDriver(newLog, chosenVehicle);
+
+       // Automatically open SMS modal for the customer
+       handleSendSms(newLog.id);
    }, [assignmentResult, isAiEnabled, people, t, language, calculateFuelCost]);
   
   const handleManualAssignmentConfirm = async (durationInMinutes: number) => {
