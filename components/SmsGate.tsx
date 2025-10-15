@@ -135,65 +135,7 @@ export const SmsGate: React.FC<SmsGateProps> = ({ people, vehicles, rideLog, onS
       <div className="grid grid-cols-2 gap-4 h-full">
         {/* Left Column: SMS Forms */}
         <div className="flex flex-col space-y-4 h-full overflow-y-auto">
-          {/* Send SMS to Driver Section */}
-          {latestRideSms && (
-            <div className="p-3 bg-slate-800/40 rounded-md">
-              <h5 className="text-sm text-white mb-2">{t('smsGate.latestRide')}</h5>
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-xs text-gray-300 mb-1">{t('smsGate.phone')}</label>
-                  <div className="flex space-x-2">
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="flex-1 bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
-                    />
-                    <select
-                      value={selectedVehicleId || ''}
-                      onChange={(e) => handleVehicleChange(Number(e.target.value))}
-                      className="bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
-                    >
-                      <option value="">{t('smsGate.changeVehicle')}</option>
-                      {vehicles.map(v => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs text-gray-300">{t('smsGate.smsText')}</label>
-                     <button
-                       onClick={() => setIsEditingSms(!isEditingSms)}
-                       className="text-xs text-[#81A1C1] hover:text-[#88C0D0]"
-                     >
-                      {isEditingSms ? t('general.cancel') : t('smsGate.editSms')}
-                    </button>
-                  </div>
-                  {isEditingSms ? (
-                    <textarea
-                      value={latestRideSms}
-                      onChange={(e) => setLatestRideSms(e.target.value)}
-                      rows={4}
-                      className="w-full bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm"
-                    />
-                  ) : (
-                    <div className="bg-slate-700 border-0 rounded px-2 py-1 text-white text-sm whitespace-pre-wrap max-h-20 overflow-y-auto">
-                      {latestRideSms}
-                    </div>
-                  )}
-                </div>
-                 <button
-                   onClick={handleSendToDriver}
-                   disabled={sending || !phone.trim() || !latestRideSms.trim()}
-                   className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-600 text-white text-sm rounded"
-                 >
-                   {sending ? t('smsGate.sending') : t('smsGate.sendSms')}
-                 </button>
-              </div>
-            </div>
-          )}
+
 
           {/* New SMS Section */}
           <div className="p-3 bg-slate-800/40 rounded-md">

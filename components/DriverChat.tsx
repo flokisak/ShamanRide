@@ -81,7 +81,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
         const { data, error } = await supabase
           .from('driver_messages')
           .select('*')
-          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedDriverId}),and(sender_id.eq.driver_${selectedDriverId},receiver_id.eq.${currentUserId})`)
+          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedDriverId}),and(sender_id.eq.driver_${selectedDriverId},or(receiver_id.eq.${currentUserId},receiver_id.eq.dispatcher))`)
           .order('timestamp', { ascending: true });
 
         if (error) {
@@ -95,7 +95,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
         const allMessages = getDriverMessages();
         const filteredMessages = allMessages.filter(msg =>
           (msg.sender_id === currentUserId && msg.receiver_id === `driver_${selectedDriverId}`) ||
-          (msg.sender_id === `driver_${selectedDriverId}` && msg.receiver_id === currentUserId)
+          (msg.sender_id === `driver_${selectedDriverId}` && (msg.receiver_id === currentUserId || msg.receiver_id === 'dispatcher'))
         ).sort((a, b) => a.timestamp - b.timestamp);
         setMessages(filteredMessages);
       }
@@ -114,7 +114,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
         event: 'INSERT',
         schema: 'public',
         table: 'driver_messages',
-        filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedDriverId}),and(sender_id.eq.driver_${selectedDriverId},receiver_id.eq.${currentUserId}))`
+        filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedDriverId}),and(sender_id.eq.driver_${selectedDriverId},or(receiver_id.eq.${currentUserId},receiver_id.eq.dispatcher)))`
       }, (payload) => {
         const newMessage = payload.new as ChatMessage;
         setMessages(prev => [...prev, newMessage]);
@@ -154,11 +154,21 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
       };
 
       if (SUPABASE_ENABLED) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('driver_messages')
-          .insert(messageData);
+          .insert({
+            sender_id: messageData.sender_id,
+            receiver_id: messageData.receiver_id,
+            message: messageData.message,
+            read: messageData.read
+          })
+          .select()
+          .single();
 
         if (error) throw error;
+        // Use the returned data which includes the database timestamp
+        addDriverMessage(data);
+        setMessages(prev => [...prev, data]);
       } else {
         // Local storage fallback
         addDriverMessage(messageData);

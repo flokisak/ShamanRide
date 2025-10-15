@@ -13,12 +13,18 @@ const Dashboard: React.FC = () => {
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
 
   useEffect(() => {
     // Get current user and their driver info
     const getDriverInfo = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        // Extract vehicle number from email (vinnetaxi1@gmail.com -> 1)
+        const emailMatch = user.email?.match(/vinnetaxi(\d+)@gmail\.com/);
+        const vehicleNum = emailMatch ? parseInt(emailMatch[1]) : null;
+        setVehicleNumber(vehicleNum);
+
         // Assume driver_id is user.id for simplicity
         const driverId = user.id;
 
@@ -54,22 +60,27 @@ const Dashboard: React.FC = () => {
       })
       .subscribe();
 
-    // Subscribe to messages
+    // Subscribe to driver messages
     const messageChannel = supabase
-      .channel('messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        console.log('New message:', payload);
-        setMessages(prev => [...prev, payload.new]);
+      .channel('driver_messages')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
+        console.log('New driver message:', payload);
+        // Check if the message is for this driver
+        if (vehicleNumber && (payload.new.sender_id === vehicleNumber.toString() || payload.new.receiver_id === `driver_${vehicleNumber}`)) {
+          setMessages(prev => [...prev, payload.new]);
+        }
       })
       .subscribe();
 
-    // Load recent messages
+    // Load recent driver messages
     const loadMessages = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data } = await supabase.from('messages').select('*').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('timestamp', { ascending: false }).limit(20);
+      if (user && vehicleNumber) {
+        const { data } = await supabase.from('driver_messages').select('*')
+          .or(`sender_id.eq.${user.id},receiver_id.eq.driver_${vehicleNumber}`)
+          .order('timestamp', { ascending: true });
         if (data) {
-          setMessages(data.reverse());
+          setMessages(data);
         }
       }
     };
@@ -249,14 +260,16 @@ const Dashboard: React.FC = () => {
   };
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !vehicleNumber) return;
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      await supabase.from('messages').insert({
-        sender_id: user.id,
-        receiver_id: 'dispatcher', // Assume dispatcher ID or role
+      // For now, send to a generic dispatcher ID. In production, this should be the actual dispatcher ID
+      const dispatcherId = 'dispatcher'; // TODO: Get actual dispatcher ID
+      await supabase.from('driver_messages').insert({
+        sender_id: `driver_${vehicleNumber}`,
+        receiver_id: dispatcherId,
         message: newMessage,
-        timestamp: new Date().toISOString(),
+        read: false
       });
       setNewMessage('');
     }
@@ -349,22 +362,22 @@ const Dashboard: React.FC = () => {
               <p className="text-sm text-slate-400 italic">Žádné zprávy zatím</p>
             )}
           </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
-              placeholder={t('dashboard.typeMessage')}
-            />
-            <button
-              onClick={sendMessage}
-              disabled={!newMessage.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-white font-medium whitespace-nowrap"
-            >
-              {t('dashboard.send')}
-            </button>
-          </div>
+           <div className="space-y-2">
+             <input
+               type="text"
+               value={newMessage}
+               onChange={(e) => setNewMessage(e.target.value)}
+               className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+               placeholder={t('dashboard.typeMessage')}
+             />
+             <button
+               onClick={sendMessage}
+               disabled={!newMessage.trim()}
+               className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-white font-medium"
+             >
+               {t('dashboard.send')}
+             </button>
+           </div>
         </div>
 
         {/* Ride History */}
