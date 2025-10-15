@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/* Nord-themed base styles */
+:root {
+  --nord-polar-1: 46, 52, 64;
+  --nord-polar-2: 59, 66, 82;
+  --nord-polar-3: 67, 76, 94;
+  --nord-polar-4: 76, 86, 106;
+  --nord-snow-1: 216, 222, 233;
+  --nord-snow-2: 229, 233, 240;
+  --nord-snow-3: 236, 239, 244;
+  --nord-frost-1: 143, 188, 187;
+  --nord-frost-2: 136, 192, 208;
+  --nord-frost-3: 129, 161, 193;
+  --nord-frost-4: 94, 129, 172;
+  --nord-aurora-1: 191, 97, 106;
+  --nord-aurora-2: 208, 135, 112;
+  --nord-aurora-3: 235, 203, 139;
+  --nord-aurora-4: 163, 190, 140;
+  --nord-aurora-5: 180, 142, 173;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--nord-polar-4)) rgb(var(--nord-polar-3));
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgb(var(--nord-polar-3));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--nord-polar-4));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--nord-frost-3));
+}
+
+/* Glass effect utility */
+.glass {
+  background: rgba(var(--nord-polar-1), 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(var(--nord-polar-4), 0.3);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Modern card hover effect */
+.card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 64px rgba(15, 23, 42, 0.6);
+  border-color: rgba(var(--nord-frost-3), 0.4);
+}
+
+/* Button with modern micro-interactions */
+.btn-modern {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-modern:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(var(--nord-frost-3), 0.3);
+}
+
+.btn-modern:active {
+  transform: translateY(0);
+}
+
+/* Icon pop animation */
+.icon-pop {
+  transition: transform 0.2s ease;
+}
+
+.icon-pop:hover {
+  transform: scale(1.1);
+}

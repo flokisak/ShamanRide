@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { useTranslation } from '../contexts/LanguageContext';
 
 const Login: React.FC = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,12 +18,12 @@ const Login: React.FC = () => {
 
     if (isRegister) {
       if (password !== confirmPassword) {
-        setError('Passwords do not match');
+        setError(t('login.passwordMismatch'));
         setLoading(false);
         return;
       }
       if (password.length < 6) {
-        setError('Password must be at least 6 characters');
+        setError(t('login.passwordTooShort'));
         setLoading(false);
         return;
       }
@@ -31,7 +33,7 @@ const Login: React.FC = () => {
           password,
         });
         if (error) throw error;
-        alert('Registration successful! You can now log in.');
+        alert(t('login.registrationSuccess'));
         setIsRegister(false);
       } catch (err: any) {
         setError(err.message);
@@ -57,9 +59,9 @@ const Login: React.FC = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-900">
-      <div className="bg-slate-800 p-8 rounded-lg shadow-lg w-full max-w-md">
+      <div className="glass card-hover p-8 rounded-2xl shadow-frost w-full max-w-md border border-slate-700/50">
         <h1 className="text-2xl font-bold text-center mb-6">
-          {isRegister ? 'Driver Registration' : 'Driver Login'}
+          {t('login.title')}
         </h1>
 
         <div className="flex justify-center mb-4">
@@ -67,19 +69,19 @@ const Login: React.FC = () => {
             onClick={() => setIsRegister(false)}
             className={`px-4 py-2 rounded-l-md ${!isRegister ? 'bg-blue-600' : 'bg-slate-700'} text-white`}
           >
-            Login
+            {t('login.loginTab')}
           </button>
           <button
             onClick={() => setIsRegister(true)}
             className={`px-4 py-2 rounded-r-md ${isRegister ? 'bg-blue-600' : 'bg-slate-700'} text-white`}
           >
-            Register
+            {t('login.registerTab')}
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
+            <label className="block text-sm font-medium mb-1">{t('login.email')}</label>
             <input
               type="email"
               value={email}
@@ -90,7 +92,7 @@ const Login: React.FC = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
+            <label className="block text-sm font-medium mb-1">{t('login.password')}</label>
             <input
               type="password"
               value={password}
@@ -102,7 +104,7 @@ const Login: React.FC = () => {
 
           {isRegister && (
             <div>
-              <label className="block text-sm font-medium mb-1">Confirm Password</label>
+              <label className="block text-sm font-medium mb-1">{t('login.confirmPassword')}</label>
               <input
                 type="password"
                 value={confirmPassword}
@@ -120,7 +122,7 @@ const Login: React.FC = () => {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 py-2 rounded-md font-medium"
           >
-            {loading ? (isRegister ? 'Registering...' : 'Signing in...') : (isRegister ? 'Register' : 'Sign In')}
+            {loading ? (isRegister ? t('login.registering') : t('login.signingIn')) : (isRegister ? t('login.register') : t('login.signIn'))}
           </button>
         </form>
       </div>

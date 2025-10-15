@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { supabaseService } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
+import { useTranslation } from '../contexts/LanguageContext';
 
 const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const [driverStatus, setDriverStatus] = useState('offline');
   const [currentRide, setCurrentRide] = useState<RideLog | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -189,109 +191,117 @@ const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900 text-white p-4">
       <div className="max-w-md mx-auto space-y-6">
-        <h1 className="text-2xl font-bold text-center">Driver Dashboard</h1>
+        <h1 className="text-2xl font-bold text-center text-white">{t('dashboard.title')}</h1>
 
         {/* Status */}
-        <div className="bg-slate-800 p-4 rounded-lg">
-          <label className="block text-sm font-medium mb-2">Status</label>
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.status')}</label>
           <select
             value={driverStatus}
             onChange={(e) => updateDriverStatus(e.target.value)}
-            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white"
+            className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
           >
-            <option value="available">Available</option>
-            <option value="on_ride">On Ride</option>
-            <option value="pause">Pause</option>
-            <option value="refueling">Refueling</option>
-            <option value="offline">Offline</option>
+            <option value="available">{t('dashboard.available')}</option>
+            <option value="on_ride">{t('dashboard.onRide')}</option>
+            <option value="pause">{t('dashboard.pause')}</option>
+            <option value="refueling">{t('dashboard.refueling')}</option>
+            <option value="offline">{t('dashboard.offline')}</option>
           </select>
         </div>
 
         {/* Current Ride */}
         {currentRide && (
-          <div className="bg-slate-800 p-4 rounded-lg">
-            <h2 className="text-lg font-semibold mb-2">Current Ride</h2>
-            <p>Customer: {currentRide.customerName}</p>
-            <p>From: {currentRide.stops[0]}</p>
-            <p>To: {currentRide.stops[currentRide.stops.length - 1]}</p>
-            <p>Status: {currentRide.status}</p>
+          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+            <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.currentRide')}</h2>
+            <div className="space-y-2 text-slate-300">
+              <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
+              <p><span className="font-medium">{t('dashboard.pickup')}:</span> {currentRide.stops[0]}</p>
+              <p><span className="font-medium">{t('dashboard.destination')}:</span> {currentRide.stops[currentRide.stops.length - 1]}</p>
+              <p><span className="font-medium">{t('dashboard.status')}:</span> {currentRide.status}</p>
+            </div>
 
             <div className="mt-4 space-y-2">
               {currentRide.status === 'pending' && (
-                <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-md">
-                  Accept Ride
+                <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
+                  {t('dashboard.acceptRide')}
                 </button>
               )}
               {currentRide.status === 'accepted' && (
-                <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-md">
-                  Start Ride
+                <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
+                  {t('dashboard.startRide')}
                 </button>
               )}
               {currentRide.status === 'in_progress' && (
-                <>
-                  <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-md">
-                    Complete Ride
+                <div className="space-y-2">
+                  <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
+                    {t('dashboard.completeRide')}
                   </button>
-                  <button onClick={navigateToDestination} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-md">
-                    Navigate
+                  <button onClick={navigateToDestination} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                    {t('dashboard.navigate')}
                   </button>
-                </>
+                </div>
               )}
             </div>
           </div>
         )}
 
         {/* Location */}
-        <div className="bg-slate-800 p-4 rounded-lg">
-          <p>Current Location: {location ? `${location.lat}, ${location.lng}` : 'Not available'}</p>
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <p className="text-slate-300">
+            <span className="font-medium text-white">{t('dashboard.currentLocation')}:</span> {location ? `${location.lat}, ${location.lng}` : t('dashboard.locationNotAvailable')}
+          </p>
         </div>
 
         {/* Messaging */}
-        <div className="bg-slate-800 p-4 rounded-lg">
-          <h2 className="text-lg font-semibold mb-2">Messages</h2>
-          <div className="h-32 overflow-y-auto mb-2">
-            {messages.map((msg, idx) => (
-              <div key={idx} className="text-sm">
-                <strong>{msg.sender_id === 'dispatcher' ? 'Dispatcher' : 'You'}:</strong> {msg.message}
-              </div>
-            ))}
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.messages')}</h2>
+          <div className="h-32 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
+            {messages.length > 0 ? (
+              messages.map((msg, idx) => (
+                <div key={idx} className="text-sm text-slate-300 mb-1">
+                  <strong className="text-primary">{msg.sender_id === 'dispatcher' ? 'Dispatcher' : 'You'}:</strong> {msg.message}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-400 italic">No messages yet</p>
+            )}
           </div>
           <div className="flex">
             <input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              className="flex-1 px-2 py-1 bg-slate-700 border border-slate-600 rounded-l-md text-white"
-              placeholder="Type message..."
+              className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-l-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+              placeholder={t('dashboard.typeMessage')}
             />
-            <button onClick={sendMessage} className="px-4 py-1 bg-blue-600 hover:bg-blue-700 rounded-r-md">
-              Send
+            <button onClick={sendMessage} className="px-4 py-2 bg-primary hover:bg-nord-frost4 rounded-r-lg btn-modern text-slate-900 font-medium">
+              {t('dashboard.send')}
             </button>
           </div>
         </div>
 
         {/* Ride History */}
-        <div className="bg-slate-800 p-4 rounded-lg">
-          <h2 className="text-lg font-semibold mb-2">Recent Rides</h2>
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.recentRides')}</h2>
           {rideHistory.length > 0 ? (
             <ul className="space-y-2">
               {rideHistory.map((ride) => (
-                <li key={ride.id} className="text-sm">
-                  {ride.customerName} - {new Date(ride.timestamp).toLocaleDateString()}
+                <li key={ride.id} className="text-sm text-slate-300 bg-slate-800/30 rounded-lg p-2">
+                  <span className="font-medium text-white">{ride.customerName}</span> - {new Date(ride.timestamp).toLocaleDateString()}
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-slate-400">No completed rides yet</p>
+            <p className="text-sm text-slate-400 italic">{t('dashboard.noCompletedRides')}</p>
           )}
         </div>
 
         {/* Logout */}
         <button
           onClick={() => supabase.auth.signOut()}
-          className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-md"
+          className="w-full bg-danger hover:bg-red-700 py-3 rounded-2xl btn-modern text-white font-medium shadow-frost"
         >
-          Logout
+          {t('dashboard.logout')}
         </button>
       </div>
     </div>
