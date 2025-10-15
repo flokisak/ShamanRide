@@ -182,9 +182,9 @@ const Dashboard: React.FC = () => {
         }
       );
 
-      // Send location every 10-15 seconds if active
+      // Send location every 10-15 seconds if vehicle is loaded
       locationInterval = setInterval(async () => {
-        if (currentPosition && driverStatus !== 'offline' && vehicleNumber) {
+        if (currentPosition && vehicleNumber) {
           try {
             await supabase.from('locations').insert({
               driver_id: vehicleNumber.toString(), // Use vehicle number as driver_id for locations
