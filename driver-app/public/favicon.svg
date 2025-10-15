@@ -1,3 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <text y=".9em" font-size="90">🚗</text>
+  <!-- Background circle with Nord polar gradient -->
+  <defs>
+    <linearGradient id="nordBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:rgb(46, 52, 64);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgb(59, 66, 82);stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="carBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:rgb(129, 161, 193);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgb(94, 129, 172);stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <circle cx="50" cy="50" r="48" fill="url(#nordBg)" stroke="rgb(67, 76, 94)" stroke-width="2"/>
+
+  <!-- Car body -->
+  <rect x="20" y="35" width="60" height="25" rx="8" fill="url(#carBody)" stroke="rgb(136, 192, 208)" stroke-width="1"/>
+
+  <!-- Car roof -->
+  <rect x="25" y="25" width="40" height="15" rx="6" fill="url(#carBody)" stroke="rgb(136, 192, 208)" stroke-width="1"/>
+
+  <!-- Windows -->
+  <rect x="28" y="28" width="34" height="10" rx="4" fill="rgb(216, 222, 233)" opacity="0.8" stroke="rgb(229, 233, 240)" stroke-width="0.5"/>
+
+  <!-- Wheels -->
+  <circle cx="30" cy="65" r="6" fill="rgb(59, 66, 82)" stroke="rgb(67, 76, 94)" stroke-width="1"/>
+  <circle cx="70" cy="65" r="6" fill="rgb(59, 66, 82)" stroke="rgb(67, 76, 94)" stroke-width="1"/>
+  <circle cx="30" cy="65" r="3" fill="rgb(76, 86, 106)"/>
+  <circle cx="70" cy="65" r="3" fill="rgb(76, 86, 106)"/>
+
+  <!-- Headlights -->
+  <circle cx="75" cy="45" r="2" fill="rgb(235, 203, 139)" opacity="0.9"/>
+  <circle cx="25" cy="45" r="2" fill="rgb(235, 203, 139)" opacity="0.9"/>
+
+  <!-- Grill -->
+  <rect x="18" y="42" width="4" height="6" fill="rgb(59, 66, 82)"/>
+  <rect x="78" y="42" width="4" height="6" fill="rgb(59, 66, 82)"/>
 </svg>

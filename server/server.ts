@@ -132,7 +132,7 @@ app.post('/api/send-sms', async (req, res) => {
       });
 
       console.log('GPS API status:', response.status);
-      console.log('GPS API headers:', response.headers.raw());
+      console.log('GPS API headers:', Object.fromEntries(response.headers.entries()));
 
       const text = await response.text();
       console.log('GPS API response:', text.substring(0, 500));

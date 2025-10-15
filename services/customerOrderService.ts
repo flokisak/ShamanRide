@@ -112,7 +112,7 @@ export async function processCustomerOrder(rideRequest: RideRequest): Promise<Or
             stops: result.optimizedStops || rideRequest.stops,
             passengers: rideRequest.passengers,
             pickupTime: rideRequest.pickupTime,
-            status: RideStatus.OnTheWay,
+            status: RideStatus.Accepted,
             vehicleId: assignedVehicle.id,
             notes: "Objednáno online zákazníkem",
             estimatedPrice: result.estimatedPrice,

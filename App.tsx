@@ -1170,7 +1170,7 @@ const AppContent: React.FC = () => {
                     );
                 }
             }
-        } else if (updatedLog.status === RideStatus.OnTheWay) {
+        } else if (updatedLog.status === RideStatus.Accepted) {
             setVehicles(prev => prev.map(v => v.id === updatedLog.vehicleId ? { ...v, status: VehicleStatus.Busy, freeAt: updatedLog.estimatedCompletionTimestamp } : v));
         }
     }

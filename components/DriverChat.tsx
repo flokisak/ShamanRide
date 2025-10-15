@@ -40,7 +40,7 @@ const addDriverMessage = (message: ChatMessage) => {
 
 // Chat history item interface
 interface ChatHistoryItem {
-  vehicleId: number;
+  vehicleId: number | 'general';
   vehicleName: string;
   lastMessage: string;
   timestamp: string;
@@ -52,7 +52,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]); // Store messages from all chats
   const [newMessage, setNewMessage] = useState('');
-  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | 'general' | null>(null);
   const [sending, setSending] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -122,7 +122,36 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   useEffect(() => {
     if (!currentUserId) return;
 
-    const historyMap = new Map<number, ChatHistoryItem>();
+    const historyMap = new Map<number | 'general', ChatHistoryItem>();
+
+    // Add general chat
+    const generalMessages = allMessages.filter(msg => msg.receiver_id === 'general');
+    if (generalMessages.length > 0) {
+      const unreadCount = generalMessages.filter(msg =>
+        msg.sender_id !== 'dispatcher' && !msg.read
+      ).length;
+
+      const lastMessage = generalMessages.sort((a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0];
+
+      historyMap.set('general', {
+        vehicleId: 'general' as any,
+        vehicleName: 'Všeobecný chat (celá směna)',
+        lastMessage: lastMessage.message,
+        timestamp: lastMessage.timestamp,
+        unreadCount
+      });
+    } else {
+      // Include general chat even if no messages yet
+      historyMap.set('general', {
+        vehicleId: 'general' as any,
+        vehicleName: 'Všeobecný chat (celá směna)',
+        lastMessage: '',
+        timestamp: '',
+        unreadCount: 0
+      });
+    }
 
     vehicles.forEach(vehicle => {
       const vehicleMessages = allMessages.filter(msg =>
@@ -165,32 +194,52 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     setChatHistory(history);
   }, [vehicles, allMessages, currentUserId]);
 
-  // Load messages for selected vehicle - improved with better error handling
+  // Load messages for selected vehicle or general chat - improved with better error handling
   useEffect(() => {
     if (!selectedVehicleId) return;
 
     const loadMessages = async () => {
       try {
-        console.log(`Loading messages for vehicle: ${selectedVehicleId}`);
+        console.log(`Loading messages for: ${selectedVehicleId}`);
 
         if (SUPABASE_ENABLED) {
-          // Load messages from Supabase using OR query
-          const { data, error } = await supabase
-            .from('driver_messages')
-            .select('*')
-            .or(`and(sender_id.eq.dispatcher,receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},receiver_id.eq.dispatcher)`)
-            .order('timestamp', { ascending: false });
+          let query;
+
+          if (selectedVehicleId === 'general') {
+            // Load general messages
+            query = supabase
+              .from('driver_messages')
+              .select('*')
+              .eq('receiver_id', 'general')
+              .order('timestamp', { ascending: false });
+          } else {
+            // Load messages from Supabase using OR query for specific vehicle
+            query = supabase
+              .from('driver_messages')
+              .select('*')
+              .or(`and(sender_id.eq.dispatcher,receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},receiver_id.eq.dispatcher)`)
+              .order('timestamp', { ascending: false });
+          }
+
+          const { data, error } = await query;
 
           if (error) {
             console.warn('Could not load messages from Supabase:', error);
             // Fallback to localStorage
             const localMessages = getDriverMessages();
-            const vehicleMessages = localMessages.filter(msg =>
-              (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
-              (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
-            );
-            console.log(`Loaded ${vehicleMessages.length} messages from localStorage for vehicle ${selectedVehicleId}`);
-            setMessages(vehicleMessages);
+            let filteredMessages;
+
+            if (selectedVehicleId === 'general') {
+              filteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
+            } else {
+              filteredMessages = localMessages.filter(msg =>
+                (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
+                (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
+              );
+            }
+
+            console.log(`Loaded ${filteredMessages.length} messages from localStorage for ${selectedVehicleId}`);
+            setMessages(filteredMessages);
             return;
           }
 
@@ -204,22 +253,35 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         } else {
           // Load from localStorage
           const localMessages = getDriverMessages();
-          const vehicleMessages = localMessages.filter(msg =>
+          let filteredMessages;
+
+          if (selectedVehicleId === 'general') {
+            filteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
+          } else {
+            filteredMessages = localMessages.filter(msg =>
+              (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
+              (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
+            );
+          }
+
+          console.log(`Loaded ${filteredMessages.length} messages from localStorage for ${selectedVehicleId}`);
+          setMessages(filteredMessages);
+        }
+      } catch (err) {
+        console.warn('Error loading messages for:', selectedVehicleId, err);
+        // Fallback to localStorage
+        const localMessages = getDriverMessages();
+        let filteredMessages;
+
+        if (selectedVehicleId === 'general') {
+          filteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
+        } else {
+          filteredMessages = localMessages.filter(msg =>
             (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
             (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
           );
-          console.log(`Loaded ${vehicleMessages.length} messages from localStorage for vehicle ${selectedVehicleId}`);
-          setMessages(vehicleMessages);
         }
-      } catch (err) {
-        console.warn('Error loading messages for vehicle:', selectedVehicleId, err);
-        // Fallback to localStorage
-        const localMessages = getDriverMessages();
-        const vehicleMessages = localMessages.filter(msg =>
-          (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
-          (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
-        );
-        setMessages(vehicleMessages);
+        setMessages(filteredMessages);
       }
     };
 
@@ -256,10 +318,16 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           return prev;
         });
 
-        // Check if the message is relevant to the currently selected vehicle
+        // Check if the message is relevant to the currently selected vehicle or general chat
         if (selectedVehicleId) {
-          const isRelevant = (incomingMessage.sender_id === 'dispatcher' && incomingMessage.receiver_id === 'driver_' + selectedVehicleId) ||
-                             (incomingMessage.sender_id === 'driver_' + selectedVehicleId && incomingMessage.receiver_id === 'dispatcher');
+          let isRelevant = false;
+
+          if (selectedVehicleId === 'general') {
+            isRelevant = incomingMessage.receiver_id === 'general';
+          } else {
+            isRelevant = (incomingMessage.sender_id === 'dispatcher' && incomingMessage.receiver_id === 'driver_' + selectedVehicleId) ||
+                         (incomingMessage.sender_id === 'driver_' + selectedVehicleId && incomingMessage.receiver_id === 'dispatcher');
+          }
 
           if (isRelevant) {
             console.log('Message is relevant to selected vehicle, updating messages state');
@@ -301,7 +369,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     try {
       const messageData = {
         sender_id: 'dispatcher',
-        receiver_id: `driver_${selectedVehicleId}`,
+        receiver_id: selectedVehicleId === 'general' ? 'general' : `driver_${selectedVehicleId}`,
         message: newMessage.trim(),
         timestamp: new Date().toISOString(),
         read: false
@@ -487,7 +555,10 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                   </svg>
                 </div>
                 <h4 className="text-sm font-medium text-white">
-                  Chat s {vehicles.find(v => v.id === selectedVehicleId)?.name || 'vozidlem'}
+                  {selectedVehicleId === 'general'
+                    ? 'Všeobecný chat (celá směna)'
+                    : `Chat s ${vehicles.find(v => v.id === selectedVehicleId)?.name || 'vozidlem'}`
+                  }
                 </h4>
               </div>
             ) : (
@@ -501,10 +572,13 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
             <>
               {/* Messages */}
               <div className="flex-1 overflow-y-auto p-3 min-h-0">
-                {messages.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic text-center">
-                    Žádné zprávy s tímto vozidlem
-                  </p>
+                 {messages.length === 0 ? (
+                   <p className="text-sm text-slate-400 italic text-center">
+                     {selectedVehicleId === 'general'
+                       ? 'Žádné zprávy ve všeobecném chatu'
+                       : 'Žádné zprávy s tímto vozidlem'
+                     }
+                   </p>
                 ) : (
                   <div className="space-y-2">
                      {messages

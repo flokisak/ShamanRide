@@ -138,21 +138,26 @@ const Dashboard: React.FC = () => {
     // Subscribe to driver messages
      const messageChannel = supabase
        .channel('driver_messages')
-       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
          console.log('New driver message:', payload);
-          // Check if the message is for this vehicle
+          // Check if the message is for this vehicle or general
           if (vehicleNumber && (
             payload.new.sender_id === `driver_${vehicleNumber}` ||
-            payload.new.receiver_id === `driver_${vehicleNumber}`
+            payload.new.receiver_id === `driver_${vehicleNumber}` ||
+            payload.new.receiver_id === 'general'
           )) {
             setMessages(prev => [...prev, payload.new]);
-            // Notify if message from dispatcher
-            if (payload.new.sender_id === 'dispatcher') {
-              // Notify user with sound and vibration for dispatcher message
+            // Notify for dispatcher or general messages
+            if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
+              // Notify user with sound and vibration for dispatcher or general message
               notifyUser();
-              alert(`Nová zpráva od dispečera: ${payload.new.message}`);
-              // Refresh ride data when receiving message from dispatcher
-              getVehicleInfo();
+              if (payload.new.sender_id === 'dispatcher') {
+                alert(`Nová zpráva od dispečera: ${payload.new.message}`);
+                // Refresh ride data when receiving message from dispatcher
+                getVehicleInfo();
+              } else if (payload.new.receiver_id === 'general') {
+                alert(`Nová zpráva ve všeobecném chatu: ${payload.new.message}`);
+              }
             }
           }
        })
@@ -206,7 +211,7 @@ const Dashboard: React.FC = () => {
       if (vehicleNumber) {
         try {
           const { data, error } = await supabase.from('driver_messages').select('*')
-            .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
+            .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
             .order('timestamp', { ascending: false });
           if (error) {
             console.warn('Could not load messages:', error);
@@ -368,7 +373,7 @@ const Dashboard: React.FC = () => {
     const refreshInterval = setInterval(async () => {
       try {
         const { data, error } = await supabase.from('driver_messages').select('*')
-          .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
+          .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
           .order('timestamp', { ascending: false });
 
         if (error) {
@@ -420,7 +425,7 @@ const Dashboard: React.FC = () => {
     if (!vehicleNumber) return;
 
     try {
-      let breakEndTimeValue = null;
+      let breakEndTimeValue: number | null = null;
       let vehicleStatus = status;
 
       // Handle break times
@@ -513,7 +518,9 @@ const Dashboard: React.FC = () => {
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !vehicleNumber) return;
-    const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' : `driver_${selectedRecipient}`;
+    const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' :
+                      selectedRecipient === 'general' ? 'general' :
+                      `driver_${selectedRecipient}`;
     await supabase.from('driver_messages').insert({
       sender_id: `driver_${vehicleNumber}`,
       receiver_id: receiverId,
@@ -740,17 +747,24 @@ const Dashboard: React.FC = () => {
                 .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                 .map((msg, idx) => (
                   <div key={msg.id || idx} className="text-sm text-slate-300 mb-2 p-2 bg-slate-800/30 rounded">
-                    <div className="flex justify-between items-start mb-1">
-                      <strong className="text-primary text-xs">
-                        {getSenderName(msg.sender_id)}
-                      </strong>
-                      <span className="text-xs text-slate-400">
-                        {formatMessageTime(msg.timestamp)}
-                      </span>
-                    </div>
-                    <div className="text-slate-200 text-sm leading-relaxed">
-                      {msg.message}
-                    </div>
+                     <div className="flex justify-between items-start mb-1">
+                       <div className="flex items-center gap-2">
+                         <strong className="text-primary text-xs">
+                           {getSenderName(msg.sender_id)}
+                         </strong>
+                         {msg.receiver_id === 'general' && (
+                           <span className="text-xs bg-aurora-4 text-slate-900 px-1.5 py-0.5 rounded-full font-medium">
+                             VŠEOBECNÝ
+                           </span>
+                         )}
+                       </div>
+                       <span className="text-xs text-slate-400">
+                         {formatMessageTime(msg.timestamp)}
+                       </span>
+                     </div>
+                     <div className="text-slate-200 text-sm leading-relaxed">
+                       {msg.message}
+                     </div>
                   </div>
                 ))
             ) : (
@@ -758,16 +772,17 @@ const Dashboard: React.FC = () => {
             )}
           </div>
             <div className="space-y-2">
-              <select
-                value={selectedRecipient}
-                onChange={(e) => setSelectedRecipient(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
-              >
-                <option value="dispatcher">Dispečer</option>
-                {otherDrivers.map(driver => (
-                  <option key={driver.id} value={driver.id}>{driver.name}</option>
-                ))}
-              </select>
+               <select
+                 value={selectedRecipient}
+                 onChange={(e) => setSelectedRecipient(e.target.value)}
+                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+               >
+                 <option value="general">Všeobecný chat (celá směna)</option>
+                 <option value="dispatcher">Dispečer</option>
+                 {otherDrivers.map(driver => (
+                   <option key={driver.id} value={driver.id}>{driver.name}</option>
+                 ))}
+               </select>
               <input
                 type="text"
                 value={newMessage}

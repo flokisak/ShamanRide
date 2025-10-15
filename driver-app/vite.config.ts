@@ -13,22 +13,22 @@ export default defineConfig({
         name: 'ShamanRide Driver',
         short_name: 'DriverApp',
         description: 'Driver application for ShamanRide',
-        theme_color: '#000000',
-        background_color: '#ffffff',
+        theme_color: '#2e3440', // Nord polar-1
+        background_color: '#2e3440', // Nord polar-1
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
         icons: [
           {
-            src: 'pwa-192x192.png',
+            src: 'pwa-192x192.svg',
             sizes: '192x192',
-            type: 'image/png'
+            type: 'image/svg+xml'
           },
           {
-            src: 'pwa-512x512.png',
+            src: 'pwa-512x512.svg',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/svg+xml'
           }
         ]
       }
