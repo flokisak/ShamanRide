@@ -369,6 +369,7 @@ const Dashboard: React.FC = () => {
       sender_id: `driver_${vehicleNumber}`,
       receiver_id: dispatcherId,
       message: newMessage,
+      timestamp: new Date().toISOString(),
       read: false
     });
     setNewMessage('');

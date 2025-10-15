@@ -133,11 +133,10 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     setSending(true);
     try {
       const messageData = {
-        id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         sender_id: 'dispatcher',
         receiver_id: `driver_${selectedVehicleId}`,
         message: newMessage.trim(),
-        timestamp: Date.now(),
+        timestamp: new Date().toISOString(),
         read: false
       };
 
