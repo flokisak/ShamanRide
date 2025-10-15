@@ -342,11 +342,11 @@ const Dashboard: React.FC = () => {
             {messages.length > 0 ? (
               messages.map((msg, idx) => (
                 <div key={idx} className="text-sm text-slate-300 mb-1">
-                  <strong className="text-primary">{msg.sender_id === 'dispatcher' ? 'Dispatcher' : 'You'}:</strong> {msg.message}
+                  <strong className="text-primary">{msg.sender_id === 'dispatcher' ? 'Dispečer' : 'Vy'}:</strong> {msg.message}
                 </div>
               ))
             ) : (
-              <p className="text-sm text-slate-400 italic">No messages yet</p>
+              <p className="text-sm text-slate-400 italic">Žádné zprávy zatím</p>
             )}
           </div>
           <div className="flex gap-2">
@@ -360,7 +360,7 @@ const Dashboard: React.FC = () => {
             <button
               onClick={sendMessage}
               disabled={!newMessage.trim()}
-              className="px-4 py-2 bg-primary hover:bg-nord-frost4 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium whitespace-nowrap"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-white font-medium whitespace-nowrap"
             >
               {t('dashboard.send')}
             </button>

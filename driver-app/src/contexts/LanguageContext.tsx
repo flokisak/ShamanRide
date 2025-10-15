@@ -11,7 +11,7 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 // Define available languages
-const availableLanguages = ['cs', 'en'];
+const availableLanguages = ['cs'];
 
 // Static translations object
 const staticTranslations = {
@@ -31,72 +31,6 @@ const staticTranslations = {
       "passwordTooShort": "Heslo musí mít alespoň 6 znaků",
       "registrationSuccess": "Registrace úspěšná! Nyní se můžete přihlásit.",
       "error": "Chyba"
-    },
-    "dashboard": {
-      "title": "Driver Dashboard",
-      "welcome": "Welcome",
-      "noRides": "No active rides",
-      "currentRide": "Current Ride",
-      "rideDetails": "Ride Details",
-      "customer": "Customer",
-      "pickup": "Pickup",
-      "destination": "Destination",
-      "status": "Status",
-      "actions": "Actions",
-      "startRide": "Start Ride",
-      "completeRide": "Complete Ride",
-      "cancelRide": "Cancel Ride",
-      "navigation": "Navigation",
-      "callCustomer": "Call Customer",
-      "sendSms": "Send SMS",
-      "logout": "Logout",
-      "available": "Available",
-      "onRide": "On Ride",
-      "break": "Break",
-      "break10": "Break 10 min",
-      "break20": "Break 20 min",
-      "break30": "Break 30 min",
-      "break60": "Break 1 hour",
-      "pause": "Pause",
-      "refueling": "Refueling",
-      "offline": "Offline",
-      "breakEndsIn": "Break ends in",
-      "acceptRide": "Accept Ride",
-      "navigate": "Navigate",
-      "messages": "Messages",
-      "typeMessage": "Type message...",
-      "send": "Send",
-      "recentRides": "Recent Rides",
-      "noCompletedRides": "No completed rides yet",
-      "currentLocation": "Current Location",
-      "locationNotAvailable": "Not available"
-    },
-    "general": {
-      "loading": "Načítání...",
-      "error": "Chyba",
-      "success": "Úspěch",
-      "cancel": "Zrušit",
-      "confirm": "Potvrdit",
-      "yes": "Ano",
-      "no": "Ne"
-    }
-  },
-  en: {
-    "login": {
-      "title": "Driver Login",
-      "email": "Email",
-      "password": "Password",
-      "confirmPassword": "Confirm Password",
-      "signIn": "Sign In",
-      "signingIn": "Signing in...",
-      "register": "Register",
-      "registering": "Registering...",
-      "loginTab": "Login",
-      "registerTab": "Register",
-      "passwordMismatch": "Passwords do not match",
-      "passwordTooShort": "Password must be at least 6 characters",
-      "registrationSuccess": "Registration successful! You can now log in.",
-      "error": "Error"
     },
     "dashboard": {
       "title": "Řídicí panel řidiče",
@@ -126,7 +60,6 @@ const staticTranslations = {
       "pause": "Pauza",
       "refueling": "Tankování",
       "offline": "Offline",
-      "breakEndsIn": "Pauza končí za",
       "acceptRide": "Přijmout jízdu",
       "navigate": "Navigovat",
       "messages": "Zprávy",
@@ -135,46 +68,36 @@ const staticTranslations = {
       "recentRides": "Nedávné jízdy",
       "noCompletedRides": "Žádné dokončené jízdy",
       "currentLocation": "Aktuální poloha",
-      "locationNotAvailable": "Poloha není k dispozici"
+      "locationNotAvailable": "Poloha není k dispozici",
+      "breakEndsIn": "Pauza končí za"
     },
     "general": {
-      "loading": "Loading...",
-      "error": "Error",
-      "success": "Success",
-      "cancel": "Cancel",
-      "confirm": "Confirm",
-      "yes": "Yes",
-      "no": "No"
+      "loading": "Načítání...",
+      "error": "Chyba",
+      "success": "Úspěch",
+      "cancel": "Zrušit",
+      "confirm": "Potvrdit",
+      "yes": "Ano",
+      "no": "Ne"
     }
   }
 };
 
 // Provider component that wraps the app
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguage] = useState<string>(() => {
-    const savedLang = localStorage.getItem('driver-app-language');
-    return savedLang && availableLanguages.includes(savedLang) ? savedLang : 'cs';
-  });
+  const [language, setLanguage] = useState<string>('cs'); // Always Czech for drivers
 
   const [translations, setTranslations] = useState<Record<string, any>>({});
 
-  // Fix: Define the changeLanguage function that was missing.
+  // Language is always Czech for drivers
   const changeLanguage = useCallback((lang: string) => {
-    if (availableLanguages.includes(lang)) {
-      setLanguage(lang);
-      localStorage.setItem('driver-app-language', lang);
-    }
+    // Do nothing - always Czech
   }, []);
 
   useEffect(() => {
-    try {
-      const translations = staticTranslations[language as keyof typeof staticTranslations] || staticTranslations.cs;
-      setTranslations(translations);
-    } catch (error) {
-      console.error('Failed to load translations:', error);
-      setTranslations(staticTranslations.cs); // Fallback to Czech
-    }
-  }, [language]);
+    // Always use Czech translations for drivers
+    setTranslations(staticTranslations.cs);
+  }, []);
 
   const t = useCallback((key: string, params?: Record<string, string | number>): string => {
     const keys = key.split('.');
