@@ -537,24 +537,7 @@ const AppContent: React.FC = () => {
                  }
              }
 
-             // Reminder for unsent SMS
-             if (log.status === RideStatus.OnTheWay && !log.smsSent) {
-                 const minutesSinceDispatch = (now - log.timestamp) / (1000 * 60);
-                 const notificationId = `sms-reminder-${log.id}`;
 
-                 // Check if 5 minutes have passed and notification doesn't exist yet
-                 if (minutesSinceDispatch >= 5 && !notifications.some(n => n.id === notificationId)) {
-                     newNotifications.push({
-                         id: notificationId,
-                         type: 'delay', // Using 'delay' for a more urgent (red) look
-                         titleKey: 'notifications.smsReminder.title',
-                         messageKey: 'notifications.smsReminder.message',
-                         messageParams: { customerName: log.customerName, driverName: log.driverName || 'N/A' },
-                         timestamp: now,
-                         rideLogId: log.id
-                     });
-                 }
-             }
 
              // Timeout for unaccepted pending rides
              if (log.status === RideStatus.Pending) {
@@ -599,10 +582,9 @@ const AppContent: React.FC = () => {
         stops: rideRequest.stops,
         passengers: rideRequest.passengers,
         pickupTime: rideRequest.pickupTime,
-        status: RideStatus.Scheduled,
-        vehicleId: null,
-        smsSent: false,
-        notes: rideRequest.notes,
+         status: RideStatus.Scheduled,
+         vehicleId: null,
+         notes: rideRequest.notes,
         estimatedPrice: undefined,
         estimatedPickupTimestamp: new Date(rideRequest.pickupTime).getTime(),
         estimatedCompletionTimestamp: undefined,
@@ -756,7 +738,6 @@ const AppContent: React.FC = () => {
          pickupTime: rideRequest.pickupTime,
          status: RideStatus.Pending, // Start as pending until driver accepts
          vehicleId: chosenVehicle.id,
-         smsSent: false,
          notes: rideRequest.notes,
          estimatedPrice: alternative.estimatedPrice,
          estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
@@ -844,10 +825,9 @@ const AppContent: React.FC = () => {
         stops: finalStops,
         passengers: rideRequest.passengers,
         pickupTime: rideRequest.pickupTime,
-        status: RideStatus.OnTheWay,
-        vehicleId: vehicle.id,
-        smsSent: false,
-        notes: rideRequest.notes,
+         status: RideStatus.OnTheWay,
+         vehicleId: vehicle.id,
+         notes: rideRequest.notes,
         estimatedPrice: estimatedPrice,
          estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
          estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
@@ -1015,10 +995,9 @@ const AppContent: React.FC = () => {
     customerPhone: '',
     stops: [''],
     pickupTime: new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' }),
-    status: RideStatus.Scheduled,
-    vehicleId: null,
-    smsSent: false,
-    passengers: 1,
+     status: RideStatus.Scheduled,
+     vehicleId: null,
+     passengers: 1,
     notes: '',
     rideType: RideType.PRIVATE,
   });
@@ -1248,10 +1227,9 @@ const AppContent: React.FC = () => {
         return;
       }
 
-      const res = await sendSms([cleanPhone], smsText || '');
-      if (res.success) {
-        setRideLog(prev => prev.map(l => l.id === id ? { ...l, smsSent: true } : l));
-        alert(t('smsPreview.sentSuccess'));
+       const res = await sendSms([cleanPhone], smsText || '');
+       if (res.success) {
+         alert(t('smsPreview.sentSuccess'));
         try {
           const { smsService } = await import('./services/smsService');
           const rec: SmsMessageRecord = {
@@ -1285,9 +1263,7 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleToggleSmsSent = (logId: string) => {
-    setRideLog(prev => prev.map(log => log.id === logId ? { ...log, smsSent: !log.smsSent } : log));
-  };
+
   
   const handleSort = (key: SortKey) => {
     setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc' }));
@@ -1338,7 +1314,7 @@ const AppContent: React.FC = () => {
       const headers = [
         'ID', t('csv.timestamp'), t('csv.vehicle'), t('csv.licensePlate'), t('csv.vehicleType'), t('csv.driverName'),
         t('csv.customerName'), t('csv.customerPhone'), t('csv.pickupAddress'), t('csv.destinationAddress'),
-        t('csv.pickupTime'), t('csv.status'), t('csv.smsSent'), t('csv.estimatedPrice'), t('csv.notes')
+        t('csv.pickupTime'), t('csv.status'), t('csv.estimatedPrice'), t('csv.notes')
       ];
 
       const rows = rideLog.map(log => [
@@ -1357,7 +1333,6 @@ const AppContent: React.FC = () => {
         log.status === 'OnTheWay' ? t('rideStatus.ON_THE_WAY') :
         log.status === 'Completed' ? t('rideStatus.COMPLETED') :
         log.status === 'Cancelled' ? t('rideStatus.CANCELLED') : log.status,
-        log.smsSent ? t('general.yes') : t('general.no'),
         log.estimatedPrice ?? '',
         log.notes ?? ''
       ].map(escapeCsvCell));

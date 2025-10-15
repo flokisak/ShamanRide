@@ -114,7 +114,6 @@ export async function processCustomerOrder(rideRequest: RideRequest): Promise<Or
             pickupTime: rideRequest.pickupTime,
             status: RideStatus.OnTheWay,
             vehicleId: assignedVehicle.id,
-            smsSent: true, // We assume it's sent automatically
             notes: "Objednáno online zákazníkem",
             estimatedPrice: result.estimatedPrice,
             estimatedPickupTimestamp: Date.now() + result.eta * 60 * 1000,

@@ -132,7 +132,6 @@ export interface RideLog {
   pickupTime: string;
   status: RideStatus;
   vehicleId: number | null;
-  smsSent: boolean;
   passengers: number;
   notes?: string;
   estimatedPrice?: number;

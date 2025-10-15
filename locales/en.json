@@ -118,7 +118,7 @@
     "replyTo": "Reply to",
     "replyMessage": "Reply message",
     "sendReply": "Send Reply",
-    "smsSent": "SMS sent",
+
     "replySent": "Reply sent"
   },
   "vehicles": {
@@ -409,7 +409,7 @@
     "destinationAddress": "Destination Address",
     "pickupTime": "Pickup Time",
     "status": "Status",
-    "smsSent": "SMS Sent",
+
     "estimatedPrice": "Estimated Price (CZK)",
     "notes": "Notes"
   },

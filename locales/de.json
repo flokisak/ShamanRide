@@ -125,7 +125,7 @@
     "replyTo": "Antworten an",
     "replyMessage": "Antwortnachricht",
     "sendReply": "Antwort senden",
-    "smsSent": "SMS erfolgreich gesendet",
+
     "replySent": "Antwort erfolgreich gesendet"
   },
   "vehicles": {
@@ -407,7 +407,7 @@
     "destinationAddress": "Zieladresse",
     "pickupTime": "Abholzeit",
     "status": "Status",
-    "smsSent": "SMS gesendet",
+
     "estimatedPrice": "Geschätzter Preis (CZK)",
     "notes": "Notizen"
   },

@@ -355,9 +355,8 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                    <SortableHeader label={t('rideLog.table.customer')} sortKey="customerName" onSort={onSort} sortConfig={sortConfig} className="px-3" />
                   <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.passengers')}</th>
                   <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.route')}</th>
-                 <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.status')}</th>
-                 <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.sms')}</th>
-                 <th scope="col" className="relative py-1 pl-3 pr-4 sm:pr-0 text-right text-sm font-semibold text-gray-300">{t('rideLog.table.actions')}</th>
+                  <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.status')}</th>
+                  <th scope="col" className="relative py-1 pl-3 pr-4 sm:pr-0 text-right text-sm font-semibold text-gray-300">{t('rideLog.table.actions')}</th>
                </tr>
             </thead>
              <tbody>
@@ -407,17 +406,8 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                             </option>
                         ))}
                     </select>
-                  </td>
-                   <td className="whitespace-nowrap px-3 py-2 text-sm">
-                     <input
-                       type="checkbox"
-                       checked={log.smsSent}
-                       onChange={() => onToggleSmsSent(log.id)}
-                       className="h-5 w-5 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-600 focus:ring-offset-slate-800 cursor-pointer"
-                       aria-label={t('rideLog.table.markSmsSentFor', { customerName: log.customerName })}
-                     />
                    </td>
-                    <td className="relative whitespace-nowrap py-2 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
+                     <td className="relative whitespace-nowrap py-2 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
                       <div className="flex items-center justify-end space-x-1">
                         <button
                           onClick={() => onEdit(log.id)}

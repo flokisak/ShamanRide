@@ -131,8 +131,8 @@ export class GamificationService {
   private static calculatePerfectRidesScore(rides: any[]): number {
     if (rides.length === 0) return 0;
 
-    // Perfektní jízda = má smsSent = true a nebyla zrušena
-    const perfectRides = rides.filter(ride => ride.smsSent === true);
+    // Perfektní jízda = dokončená jízda (nyní všechny dokončené jízdy jsou perfektní díky driver app komunikaci)
+    const perfectRides = rides.filter(ride => ride.status === 'COMPLETED');
     const perfectRatio = perfectRides.length / rides.length;
 
     return Math.round(perfectRatio * 100);
@@ -202,7 +202,7 @@ export class GamificationService {
       total_rides: rides.length,
       total_customers: rides.reduce((sum, ride) => sum + (ride.passengers || 1), 0),
       total_revenue: rides.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0),
-      perfect_rides_count: rides.filter(ride => ride.smsSent === true).length,
+      perfect_rides_count: rides.filter(ride => ride.status === 'COMPLETED').length,
       deer_collisions: deerCollisions + incidentMentions,
       longest_streak: this.calculateLongestStreak(rides),
       night_rides_count: rides.filter(ride => this.isNightRide(ride.timestamp)).length,

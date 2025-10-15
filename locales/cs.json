@@ -120,7 +120,7 @@
       "replyTo": "Odpověď na",
       "replyMessage": "Zpráva odpovědi",
       "sendReply": "Odeslat odpověď",
-      "smsSent": "SMS odeslána",
+
       "replySent": "Odpověď odeslána"
     },
   "vehicles": {
@@ -438,7 +438,7 @@
     "destinationAddress": "Cílová adresa",
     "pickupTime": "Čas vyzvednutí",
     "status": "Status",
-    "smsSent": "SMS odeslána",
+
     "estimatedPrice": "Odhadovaná cena (Kč)",
     "notes": "Poznámky"
   },
