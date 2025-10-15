@@ -304,7 +304,7 @@ const AppContent: React.FC = () => {
         setCompanyInfo(ci || DEFAULT_COMPANY_INFO);
         setMessagingApp((ms as any) || MessagingApp.SMS);
         const latestLocs = (loc as any[]).reduce((acc, l) => {
-          const key = l.driver_id;
+          const key = l.vehicle_id;
           if (!acc[key] || new Date(l.timestamp) > new Date(acc[key].timestamp)) {
             acc[key] = l;
           }
@@ -411,7 +411,7 @@ const AppContent: React.FC = () => {
         const newLocation = payload.new;
         setLocations(prev => ({
           ...prev,
-          [newLocation.driver_id]: newLocation
+          [newLocation.vehicle_id]: newLocation
         }));
       })
       .subscribe();
@@ -885,7 +885,7 @@ const AppContent: React.FC = () => {
         stops: finalStops,
         passengers: rideRequest.passengers,
         pickupTime: rideRequest.pickupTime,
-         status: RideStatus.OnTheWay,
+         status: RideStatus.InProgress,
          vehicleId: vehicle.id,
          notes: rideRequest.notes,
         estimatedPrice: estimatedPrice,

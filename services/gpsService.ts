@@ -25,7 +25,7 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
         const { data: locations, error } = await supabase
             .from('locations')
             .select(`
-                driver_id,
+                vehicle_id,
                 latitude,
                 longitude,
                 timestamp,
@@ -48,11 +48,11 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
         const vehiclePositions = new Map<string, GpsVehicle>();
 
         locations.forEach((location: any) => {
-            const driverId = location.driver_id;
+            const vehicleId = location.vehicle_id;
             const vehicle = location.vehicles;
 
-            if (!vehiclePositions.has(driverId) || new Date(location.timestamp) > new Date(vehiclePositions.get(driverId)!.lastUpdate)) {
-                vehiclePositions.set(driverId, {
+            if (!vehiclePositions.has(vehicleId) || new Date(location.timestamp) > new Date(vehiclePositions.get(vehicleId)!.lastUpdate)) {
+                vehiclePositions.set(vehicleId, {
                     id: vehicle.id.toString(),
                     name: vehicle.name,
                     lat: location.latitude,

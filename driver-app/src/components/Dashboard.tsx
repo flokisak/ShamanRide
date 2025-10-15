@@ -17,9 +17,7 @@ const Dashboard: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [locationSending, setLocationSending] = useState(false);
 
   useEffect(() => {
     // Get current user and their vehicle info
@@ -200,11 +198,9 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      addDebugInfo('Network: Online');
     };
     const handleOffline = () => {
       setIsOnline(false);
-      addDebugInfo('Network: Offline');
     };
 
     window.addEventListener('online', handleOnline);
@@ -216,24 +212,15 @@ const Dashboard: React.FC = () => {
     };
   }, []);
 
-  // Debug info helper for mobile
-  const addDebugInfo = (info: string) => {
-    setDebugInfo(prev => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${info}`]);
-  };
-
   // GPS Location tracking and sending
   useEffect(() => {
     if (!vehicleNumber) {
-      addDebugInfo('Vehicle not loaded yet, skipping GPS setup');
       return;
     }
 
     if (!navigator.geolocation) {
-      addDebugInfo('Geolocation not available');
       return;
     }
-
-    addDebugInfo(`Setting up GPS tracking for vehicle: ${vehicleNumber}`);
 
     let watchId: number | null = null;
     let locationInterval: NodeJS.Timeout | null = null;
@@ -692,25 +679,7 @@ const Dashboard: React.FC = () => {
 
         {/* Location */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-          <div className="flex justify-between items-center mb-2">
-            <label className="block text-sm font-medium text-slate-300">{t('dashboard.currentLocation')}</label>
-            <div className="flex gap-2">
-              <button
-                onClick={testLocationsTable}
-                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
-                title="Test locations table"
-              >
-                Test DB
-              </button>
-              <button
-                onClick={() => setDebugInfo([])}
-                className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded-lg transition-colors"
-                title="Clear debug info"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
+          <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.currentLocation')}</label>
           <p className="text-slate-300">
             {location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : t('dashboard.locationNotAvailable')}
           </p>
@@ -729,32 +698,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Debug Info Panel for Mobile */}
-        {debugInfo.length > 0 && (
-          <div className="glass card-hover p-3 rounded-2xl border border-slate-700/50">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-medium text-white">Debug Info</h3>
-              <button
-                onClick={() => {
-                  const debugText = debugInfo.join('\n');
-                  navigator.clipboard?.writeText(debugText);
-                  alert('Debug info copied to clipboard!');
-                }}
-                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
-                title="Copy debug info"
-              >
-                Copy
-              </button>
-            </div>
-            <div className="bg-slate-800/50 rounded-lg p-2 max-h-32 overflow-y-auto">
-              {debugInfo.map((info, idx) => (
-                <div key={idx} className="text-xs text-slate-300 font-mono mb-1">
-                  {info}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+
 
         {/* Messaging */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
