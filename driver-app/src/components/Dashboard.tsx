@@ -14,6 +14,7 @@ const Dashboard: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
   const [licensePlate, setLicensePlate] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +35,8 @@ const Dashboard: React.FC = () => {
           setError('No user logged in');
           return;
         }
+
+        setUserId(user.id);
 
         // Find vehicle by driver's email
         const { data: vehicleData, error: vehicleQueryError } = await supabase
@@ -195,7 +198,7 @@ const Dashboard: React.FC = () => {
           });
           try {
             const result = await supabase.from('locations').insert({
-              driver_id: vehicleNumber.toString(), // Use vehicle number as driver_id for locations
+              driver_id: userId, // Use user id as driver_id for locations
               latitude: currentPosition.lat,
               longitude: currentPosition.lng,
               timestamp: new Date().toISOString(),
@@ -206,7 +209,7 @@ const Dashboard: React.FC = () => {
             // For offline queuing, could store in localStorage
             const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
             queued.push({
-              driver_id: vehicleNumber.toString(),
+              driver_id: userId,
               latitude: currentPosition!.lat,
               longitude: currentPosition!.lng,
               timestamp: new Date().toISOString(),
