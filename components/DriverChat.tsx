@@ -125,13 +125,13 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
     vehicles.forEach(vehicle => {
       const vehicleMessages = allMessages.filter(msg =>
-        (msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === currentUserId) ||
-        (msg.sender_id === currentUserId && msg.receiver_id === `driver_${vehicle.id}`)
+        (msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === 'dispatcher') ||
+        (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${vehicle.id}`)
       );
 
       if (vehicleMessages.length > 0) {
         const unreadCount = vehicleMessages.filter(msg =>
-          msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === currentUserId && !msg.read
+          msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === 'dispatcher' && !msg.read
         ).length;
 
         const lastMessage = vehicleMessages.sort((a, b) =>
@@ -166,38 +166,38 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
   // Load messages for selected vehicle - improved with better error handling
   useEffect(() => {
-    if (!selectedVehicleId || !currentUserId) return;
+    if (!selectedVehicleId) return;
 
     const loadMessages = async () => {
       try {
         console.log(`Loading messages for vehicle: ${selectedVehicleId}`);
 
         if (SUPABASE_ENABLED) {
-          // Load messages from Supabase
-          const { data1, error1 } = await supabase.from('driver_messages').select('*')
-            .eq('sender_id', 'dispatcher')
-            .eq('receiver_id', `driver_${selectedVehicleId}`)
+          // Load messages from Supabase using OR query
+          const { data, error } = await supabase
+            .from('driver_messages')
+            .select('*')
+            .or(`and(sender_id.eq.dispatcher,receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},receiver_id.eq.dispatcher)`)
             .order('timestamp', { ascending: false });
 
-          const { data2, error2 } = await supabase.from('driver_messages').select('*')
-            .eq('sender_id', `driver_${selectedVehicleId}`)
-            .eq('receiver_id', 'dispatcher')
-            .order('timestamp', { ascending: false });
-
-          if (error1) {
-            console.warn('Could not load dispatcher->driver messages:', error1);
+          if (error) {
+            console.warn('Could not load messages from Supabase:', error);
+            // Fallback to localStorage
+            const localMessages = getDriverMessages();
+            const vehicleMessages = localMessages.filter(msg =>
+              (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
+              (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
+            );
+            console.log(`Loaded ${vehicleMessages.length} messages from localStorage for vehicle ${selectedVehicleId}`);
+            setMessages(vehicleMessages);
+            return;
           }
-          if (error2) {
-            console.warn('Could not load driver->dispatcher messages:', error2);
-          }
 
-          const data = [...(data1 || []), ...(data2 || [])];
-
-          if (data.length > 0) {
-            console.log(`Loaded ${data.length} messages for vehicle ${selectedVehicleId}`);
+          if (data && data.length > 0) {
+            console.log(`Loaded ${data.length} messages for vehicle ${selectedVehicleId} from Supabase`);
             setMessages(data);
           } else {
-            console.log(`No messages found for vehicle ${selectedVehicleId}`);
+            console.log(`No messages found for vehicle ${selectedVehicleId} in Supabase`);
             setMessages([]);
           }
         } else {
@@ -223,7 +223,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     };
 
     loadMessages();
-  }, [selectedVehicleId, currentUserId]);
+  }, [selectedVehicleId]);
 
   // Subscribe to new messages globally (for all vehicles) - improved
   useEffect(() => {
@@ -395,7 +395,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   }, [selectedVehicleId, messages]);
 
   const getSenderName = (senderId: string) => {
-    if (senderId === currentUserId) return 'Vy';
+    if (senderId === 'dispatcher' || senderId === currentUserId) return 'Vy';
     if (senderId.startsWith('driver_')) {
       const vehicleId = parseInt(senderId.replace('driver_', ''));
       const vehicle = vehicles.find(v => v.id === vehicleId);
