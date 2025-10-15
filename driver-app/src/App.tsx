@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { AuthContext } from './AuthContext';
+import { LanguageProvider } from './contexts/LanguageContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 
@@ -31,11 +32,13 @@ function App() {
   }
 
   return (
-    <AuthContext.Provider value={{ user, signOut: () => supabase.auth.signOut() }}>
-      <div className="min-h-screen bg-slate-900 text-white">
-        {user ? <Dashboard /> : <Login />}
-      </div>
-    </AuthContext.Provider>
+    <LanguageProvider>
+      <AuthContext.Provider value={{ user, signOut: () => supabase.auth.signOut() }}>
+        <div className="min-h-screen bg-slate-900 text-white">
+          {user ? <Dashboard /> : <Login />}
+        </div>
+      </AuthContext.Provider>
+    </LanguageProvider>
   );
 }
 

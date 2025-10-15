@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { supabaseService } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
-import { supabase } from '../supabaseClient';
 import { useTranslation } from '../contexts/LanguageContext';
 
 const Dashboard: React.FC = () => {
@@ -15,51 +13,83 @@ const Dashboard: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Get current user and their vehicle info
     const getVehicleInfo = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError) {
+          setError('Authentication error: ' + authError.message);
+          return;
+        }
+
+        if (!user) {
+          setError('No user logged in');
+          return;
+        }
+
         // Extract vehicle number from email (vinnetaxi1@gmail.com -> 1)
         const emailMatch = user.email?.match(/vinnetaxi(\d+)@gmail\.com/);
         const vehicleNum = emailMatch ? parseInt(emailMatch[1]) : null;
+
+        if (!vehicleNum) {
+          setError('Invalid vehicle email format');
+          return;
+        }
+
         setVehicleNumber(vehicleNum);
 
-        if (vehicleNum) {
-          // Get vehicle status directly from vehicles table
-          const { data: vehicle } = await supabase.from('vehicles').select('status').eq('id', vehicleNum).single();
-          if (vehicle) {
-            setDriverStatus(vehicle.status === 'AVAILABLE' ? 'available' :
-                           vehicle.status === 'BUSY' ? 'on_ride' :
-                           vehicle.status === 'BREAK' ? 'break' :
-                           vehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
-          }
-
-          // Get active ride for this vehicle
-          const { data: rides } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', [RideStatus.Pending, RideStatus.Accepted, RideStatus.InProgress]);
-          if (rides && rides.length > 0) {
-            setCurrentRide(rides[0]);
-          }
-
-          // Get completed rides for this vehicle
-          const { data: history } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Completed).order('timestamp', { ascending: false }).limit(10);
-          if (history) {
-            setRideHistory(history);
-          }
+        // Get vehicle status directly from vehicles table
+        const { data: vehicle, error: vehicleError } = await supabase.from('vehicles').select('status').eq('id', vehicleNum).single();
+        if (vehicleError) {
+          console.warn('Could not load vehicle status:', vehicleError);
+          // Continue without vehicle status
+        } else if (vehicle) {
+          setDriverStatus(vehicle.status === 'AVAILABLE' ? 'available' :
+                         vehicle.status === 'BUSY' ? 'on_ride' :
+                         vehicle.status === 'BREAK' ? 'break' :
+                         vehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
         }
+
+        // Get active ride for this vehicle
+        const { data: rides, error: ridesError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).in('status', [RideStatus.Pending, RideStatus.Accepted, RideStatus.InProgress]);
+        if (ridesError) {
+          console.warn('Could not load active rides:', ridesError);
+        } else if (rides && rides.length > 0) {
+          setCurrentRide(rides[0]);
+        }
+
+        // Get completed rides for this vehicle
+        const { data: history, error: historyError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Completed).order('timestamp', { ascending: false }).limit(10);
+        if (historyError) {
+          console.warn('Could not load ride history:', historyError);
+        } else if (history) {
+          setRideHistory(history);
+        }
+
+      } catch (err: any) {
+        console.error('Error loading vehicle info:', err);
+        setError('Failed to load vehicle data: ' + err.message);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    getDriverInfo();
+    getVehicleInfo();
 
     // Subscribe to ride assignments
     const rideChannel = supabase
       .channel('ride_assignments')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('New ride assigned:', payload);
-        // Check if it's for this driver
-    getVehicleInfo();
+        // Check if it's for this vehicle
+        getVehicleInfo();
       })
       .subscribe();
 
@@ -68,8 +98,11 @@ const Dashboard: React.FC = () => {
       .channel('driver_messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
         console.log('New driver message:', payload);
-        // Check if the message is for this driver
-        if (vehicleNumber && (payload.new.sender_id === vehicleNumber.toString() || payload.new.receiver_id === `driver_${vehicleNumber}`)) {
+        // Check if the message is for this vehicle
+        if (vehicleNumber && (
+          payload.new.sender_id === `driver_${vehicleNumber}` ||
+          payload.new.receiver_id === `driver_${vehicleNumber}`
+        )) {
           setMessages(prev => [...prev, payload.new]);
         }
       })
@@ -86,8 +119,6 @@ const Dashboard: React.FC = () => {
         }
       }
     };
-    loadMessages();
-
     // GPS tracking
     let watchId: number | null = null;
     let locationInterval: NodeJS.Timeout | null = null;
@@ -147,6 +178,28 @@ const Dashboard: React.FC = () => {
       }
     };
   }, [driverStatus, vehicleNumber]);
+
+  // Load messages when vehicle number is available
+  useEffect(() => {
+    const loadMessages = async () => {
+      if (vehicleNumber) {
+        try {
+          const { data, error } = await supabase.from('driver_messages').select('*')
+            .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
+            .order('timestamp', { ascending: true });
+          if (error) {
+            console.warn('Could not load messages:', error);
+          } else if (data) {
+            setMessages(data);
+          }
+        } catch (err) {
+          console.warn('Error loading messages:', err);
+        }
+      }
+    };
+
+    loadMessages();
+  }, [vehicleNumber]);
 
   // Handle break timer
   useEffect(() => {
@@ -267,10 +320,41 @@ const Dashboard: React.FC = () => {
     setNewMessage('');
   };
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Loading vehicle data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white p-4 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="text-red-400 text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold mb-2">Connection Error</h2>
+          <p className="text-slate-300 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 text-white p-4">
       <div className="max-w-md mx-auto space-y-6">
-        <h1 className="text-2xl font-bold text-center text-white">{t('dashboard.title')}</h1>
+        <h1 className="text-2xl font-bold text-center text-white">{t('dashboard.title')} - Vehicle {vehicleNumber}</h1>
 
         {/* Status */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
