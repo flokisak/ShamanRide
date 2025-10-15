@@ -231,7 +231,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           : msg
       ));
     }
-  }, [selectedDriverId, currentUserId, messages]);
+  }, [selectedVehicleId, currentUserId, messages]);
 
   const getSenderName = (senderId: string) => {
     if (senderId === currentUserId) return 'Vy';
