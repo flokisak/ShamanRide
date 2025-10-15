@@ -266,15 +266,19 @@ const Dashboard: React.FC = () => {
               <p className="text-sm text-slate-400 italic">No messages yet</p>
             )}
           </div>
-          <div className="flex">
+          <div className="flex gap-2">
             <input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-l-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+              className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
               placeholder={t('dashboard.typeMessage')}
             />
-            <button onClick={sendMessage} className="px-4 py-2 bg-primary hover:bg-nord-frost4 rounded-r-lg btn-modern text-slate-900 font-medium">
+            <button
+              onClick={sendMessage}
+              disabled={!newMessage.trim()}
+              className="px-4 py-2 bg-primary hover:bg-nord-frost4 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium whitespace-nowrap"
+            >
               {t('dashboard.send')}
             </button>
           </div>
