@@ -248,8 +248,7 @@ const Dashboard: React.FC = () => {
         if (Date.now() >= breakEndTime) {
           // Update vehicle status to available
           await supabase.from('vehicles').update({
-            status: 'AVAILABLE',
-            updated_at: new Date().toISOString()
+            status: 'AVAILABLE'
           }).eq('id', vehicleNumber);
 
           setDriverStatus('available');
@@ -294,8 +293,7 @@ const Dashboard: React.FC = () => {
 
       // Update vehicle status directly
       const { error } = await supabase.from('vehicles').update({
-        status: vehicleStatus,
-        updated_at: new Date().toISOString()
+        status: vehicleStatus
       }).eq('id', vehicleNumber);
 
       if (error) {
@@ -322,8 +320,7 @@ const Dashboard: React.FC = () => {
 
       // Update vehicle status to BUSY when ride is accepted
       await supabase.from('vehicles').update({
-        status: 'BUSY',
-        updated_at: new Date().toISOString()
+        status: 'BUSY'
       }).eq('id', vehicleNumber);
 
       setCurrentRide({ ...currentRide, status: RideStatus.Accepted });
@@ -343,8 +340,7 @@ const Dashboard: React.FC = () => {
 
       // Update vehicle status to AVAILABLE and set current location
       const locationUpdate: any = {
-        status: 'AVAILABLE',
-        updated_at: new Date().toISOString()
+        status: 'AVAILABLE'
       };
 
       if (location) {
