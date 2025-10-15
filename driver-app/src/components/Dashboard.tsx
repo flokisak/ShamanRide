@@ -139,19 +139,15 @@ const Dashboard: React.FC = () => {
       .channel('ride_assignments')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('New ride assigned:', payload);
-        // Check if it's for this vehicle
-        if (vehicleNumber && payload.new.vehicle_id === vehicleNumber) {
-          // Notify user with sound and vibration for new ride assignment
-          notifyUser();
-        }
+        // Refresh data - getVehicleInfo will filter for current vehicle
         getVehicleInfo();
+        // Notify user with sound and vibration for new ride assignment
+        notifyUser();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('Ride updated:', payload);
-        // Check if it's for this vehicle
-        if (vehicleNumber && payload.new.vehicle_id === vehicleNumber) {
-          getVehicleInfo();
-        }
+        // Refresh data - getVehicleInfo will filter for current vehicle
+        getVehicleInfo();
       })
       .subscribe();
 
