@@ -358,9 +358,9 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   }, [selectedVehicleId, currentUserId, onNewMessage]);
 
   // Scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // useEffect(() => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // }, [messages]);
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedVehicleId || sending) return;
@@ -397,13 +397,13 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         newMessageData = { ...messageData, id: `local-${Date.now()}` };
       }
 
-      // Store message in local cache/history
-      addDriverMessage(newMessageData);
-       // Update local state immediately
-       setMessages(prev => [newMessageData, ...prev]);
+       // Store message in local cache/history
+       addDriverMessage(newMessageData);
+        // Update local state immediately
+        setMessages(prev => [newMessageData, ...prev]);
 
-       setNewMessage('');
-       inputRef.current?.focus();
+        setNewMessage('');
+        // inputRef.current?.focus();
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -475,7 +475,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   };
 
   return (
-    <div className="bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full">
+    <div className="bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full" tabIndex={-1}>
       <div className="flex-shrink-0 mb-4">
         <h3 className="text-sm font-semibold text-white flex items-center">
           <div className="w-6 h-6 bg-[#8FBCBB]/80 rounded-lg flex items-center justify-center mr-2">
@@ -610,16 +610,17 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
               {/* Message input */}
               <div className="flex-shrink-0 p-3 border-t border-slate-600">
                 <div className="flex gap-2">
-                   <input
-                     ref={inputRef}
-                     type="text"
-                     value={newMessage}
-                     onChange={(e) => setNewMessage(e.target.value)}
-                     onKeyPress={handleKeyPress}
-                     placeholder="Napište zprávu..."
-                     className="flex-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                     disabled={sending}
-                   />
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyPress={handleKeyPress}
+                      placeholder="Napište zprávu..."
+                      className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                      disabled={sending}
+                      tabIndex={-1}
+                    />
                   <button
                     onClick={sendMessage}
                     disabled={!newMessage.trim() || sending}

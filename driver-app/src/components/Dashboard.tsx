@@ -11,6 +11,7 @@ const Dashboard: React.FC = () => {
   const [currentRide, setCurrentRide] = useState<RideLog | null>(null);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
+  const [dailyCash, setDailyCash] = useState<number>(0);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [selectedRecipient, setSelectedRecipient] = useState<string>('dispatcher');
@@ -79,12 +80,22 @@ const Dashboard: React.FC = () => {
           setCurrentRide(rides[0]);
         }
 
-        // Get completed rides for this vehicle
-         const { data: history, error: historyError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Completed).order('timestamp', { ascending: false }).limit(10);
+        // Get all rides for this vehicle (completed, pending, accepted, etc.)
+         const { data: history, error: historyError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).order('timestamp', { ascending: false }).limit(20);
          if (historyError) {
            console.warn('Could not load ride history:', historyError);
          } else if (history) {
            setRideHistory(history);
+
+           // Calculate daily cash from completed rides today
+           const today = new Date();
+           today.setHours(0, 0, 0, 0);
+           const todayCompleted = history.filter(ride =>
+             ride.status === RideStatus.Completed &&
+             new Date(ride.timestamp) >= today
+           );
+           const totalCash = todayCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
+           setDailyCash(totalCash);
          }
 
         // Get other drivers for chat
@@ -802,12 +813,29 @@ const Dashboard: React.FC = () => {
 
         {/* Ride History */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-          <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.recentRides')}</h2>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
+            <div className="text-sm text-slate-300">
+              <span className="font-medium">Denní tržba:</span> {dailyCash} Kč
+            </div>
+          </div>
           {rideHistory.length > 0 ? (
             <ul className="space-y-2">
               {rideHistory.map((ride) => (
                 <li key={ride.id} className="text-sm text-slate-300 bg-slate-800/30 rounded-lg p-2">
-                  <span className="font-medium text-white">{ride.customerName}</span> - {new Date(ride.timestamp).toLocaleDateString()}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="font-medium text-white">{ride.customerName}</span>
+                      <div className="text-xs text-slate-400">
+                        {new Date(ride.timestamp).toLocaleDateString()} • {ride.status}
+                      </div>
+                    </div>
+                    {ride.estimatedPrice && (
+                      <div className="text-sm font-medium text-green-400">
+                        {ride.estimatedPrice} Kč
+                      </div>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
