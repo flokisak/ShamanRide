@@ -78,7 +78,14 @@ const Dashboard: React.FC = () => {
         if (pendingError) {
           console.warn('Could not load pending rides:', pendingError);
         } else {
-          setPendingRides(pending || []);
+          // Convert timestamp strings back to numbers for calculations
+          const processedPending = (pending || []).map(ride => {
+            if (typeof ride.estimatedCompletionTimestamp === 'string') {
+              ride.estimatedCompletionTimestamp = new Date(ride.estimatedCompletionTimestamp).getTime();
+            }
+            return ride;
+          });
+          setPendingRides(processedPending);
         }
 
         // Get active ride for this vehicle (accepted or in progress)
@@ -86,7 +93,12 @@ const Dashboard: React.FC = () => {
         if (ridesError) {
           console.warn('Could not load active rides:', ridesError);
         } else if (rides && rides.length > 0) {
-          setCurrentRide(rides[0]);
+          const ride = rides[0];
+          // Convert timestamp strings back to numbers for calculations
+          if (typeof ride.estimatedCompletionTimestamp === 'string') {
+            ride.estimatedCompletionTimestamp = new Date(ride.estimatedCompletionTimestamp).getTime();
+          }
+          setCurrentRide(ride);
         }
 
         // Get all rides for this vehicle (completed, pending, accepted, etc.)

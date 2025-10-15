@@ -101,7 +101,7 @@ export async function processCustomerOrder(rideRequest: RideRequest): Promise<Or
         // Create new ride log entry
         const newLog: RideLog = {
             id: `ride-${Date.now()}`,
-            timestamp: Date.now(),
+            timestamp: new Date().toISOString(),
             vehicleName: assignedVehicle.name,
             vehicleLicensePlate: assignedVehicle.licensePlate,
             driverName: driver?.name || null,
@@ -116,8 +116,8 @@ export async function processCustomerOrder(rideRequest: RideRequest): Promise<Or
             vehicleId: assignedVehicle.id,
             notes: "Objednáno online zákazníkem",
             estimatedPrice: result.estimatedPrice,
-            estimatedPickupTimestamp: Date.now() + result.eta * 60 * 1000,
-            estimatedCompletionTimestamp: freeAt,
+             estimatedPickupTimestamp: new Date(Date.now() + result.eta * 60 * 1000).toISOString(),
+             estimatedCompletionTimestamp: new Date(freeAt).toISOString(),
             fuelCost: fuelCost,
             startMileage: null,
             endMileage: null,

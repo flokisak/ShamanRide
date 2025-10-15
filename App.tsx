@@ -740,9 +740,9 @@ const AppContent: React.FC = () => {
          return;
      }
 
-       const newLog: RideLog = {
-         id: `ride-${Date.now()}`,
-         timestamp: Date.now(),
+        const newLog: RideLog = {
+          id: `ride-${Date.now()}`,
+          timestamp: new Date().toISOString(),
          vehicleName: chosenVehicle.name,
          vehicleLicensePlate: chosenVehicle.licensePlate,
          driverName: getDriverName(chosenVehicle.driverId),
@@ -757,8 +757,8 @@ const AppContent: React.FC = () => {
          vehicleId: chosenVehicle.id,
          notes: rideRequest.notes,
          estimatedPrice: alternative.estimatedPrice,
-         estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
-         estimatedCompletionTimestamp: Date.now() + durationInMinutes * 60 * 1000,
+          estimatedPickupTimestamp: new Date(Date.now() + alternative.eta * 60 * 1000).toISOString(),
+          estimatedCompletionTimestamp: new Date(Date.now() + durationInMinutes * 60 * 1000).toISOString(),
          fuelCost: fuelCost,
          distance: totalDistance,
        };
@@ -845,8 +845,8 @@ const AppContent: React.FC = () => {
          vehicleId: vehicle.id,
          notes: rideRequest.notes,
         estimatedPrice: estimatedPrice,
-         estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
-         estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
+          estimatedPickupTimestamp: new Date(Date.now() + (eta * 60 * 1000)).toISOString(),
+          estimatedCompletionTimestamp: new Date(Date.now() + totalBusyTime * 60 * 1000).toISOString(),
          fuelCost: fuelCost,
          distance: totalDistance,
       };
@@ -980,7 +980,7 @@ const AppContent: React.FC = () => {
 
     // Update vehicle status
     if (updatedLog.vehicleId) {
-        setVehicles(prev => prev.map(v => v.id === updatedLog.vehicleId ? { ...v, status: VehicleStatus.Busy, freeAt: updatedLog.estimatedCompletionTimestamp } : v));
+            setVehicles(prev => prev.map(v => v.id === updatedLog.vehicleId ? { ...v, status: VehicleStatus.Busy, freeAt: typeof updatedLog.estimatedCompletionTimestamp === 'string' ? new Date(updatedLog.estimatedCompletionTimestamp).getTime() : updatedLog.estimatedCompletionTimestamp } : v));
     }
     // Do NOT auto-send SMS; open preview and let dispatcher confirm send if desired
 
@@ -1047,7 +1047,7 @@ const AppContent: React.FC = () => {
             return dist + haversineDistance(prev.lat, prev.lon, coord.lat, coord.lon);
           }, 0);
           const duration = Math.max(30, Math.round(totalDistance * 2 + (stopCoords.length - 1) * 10)) + 5; // 2 min per km + 10 min per stop + 5 min buffer
-          updatedLog.estimatedCompletionTimestamp = Date.now() + duration * 60 * 1000;
+           updatedLog.estimatedCompletionTimestamp = new Date(Date.now() + duration * 60 * 1000).toISOString();
           const pricePerKm = vehicle.type === VehicleType.Van ? tariff.pricePerKmVan : tariff.pricePerKmCar;
           updatedLog.estimatedPrice = tariff.startingFee + Math.round(totalDistance * pricePerKm);
           updatedLog.distance = totalDistance;
@@ -1131,7 +1131,7 @@ const AppContent: React.FC = () => {
                 }
             }
         } else if (updatedLog.status === RideStatus.Accepted) {
-            setVehicles(prev => prev.map(v => v.id === updatedLog.vehicleId ? { ...v, status: VehicleStatus.Busy, freeAt: updatedLog.estimatedCompletionTimestamp } : v));
+        setVehicles(prev => prev.map(v => v.id === updatedLog.vehicleId ? { ...v, status: VehicleStatus.Busy, freeAt: typeof updatedLog.estimatedCompletionTimestamp === 'string' ? new Date(updatedLog.estimatedCompletionTimestamp).getTime() : updatedLog.estimatedCompletionTimestamp } : v));
         }
     }
 
