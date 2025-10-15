@@ -34,23 +34,19 @@ const Dashboard: React.FC = () => {
           return;
         }
 
-        // Map auth user UUID to vehicle number
-        const uuidToVehicleMap: { [key: string]: number } = {
-          'b69d3d53-6360-4408-a411-a83da97284ce': 1, // vinnetaxi1@gmail.com
-          'fc906dca-4b65-4439-9944-47eb31c3f87e': 2, // vinnetaxi2@gmail.com
-          '4d34449f-cbed-40f5-8766-bfd8f1f52385': 3, // vinnetaxi3@gmail.com
-          'bce8ba6c-ed9b-4f03-9ae8-6537c958f44c': 4, // vinnetaxi4@gmail.com
-          '9861ac0d-17a9-423d-aaeb-b36f1e48dd8c': 5, // vinnetaxi5@gmail.com
-          'a8bd73f8-d090-4858-b853-43b174c844ba': 6, // vinnetaxi6@gmail.com
-        };
+        // Find vehicle by driver's email
+        const { data: vehicleData, error: vehicleQueryError } = await supabase
+          .from('vehicles')
+          .select('id')
+          .eq('email', user.email)
+          .single();
 
-        const vehicleNum = uuidToVehicleMap[user.id];
-
-        if (!vehicleNum) {
-          setError('Vehicle not found for this user account');
+        if (vehicleQueryError || !vehicleData) {
+          setError('Vehicle not found for this email: ' + user.email);
           return;
         }
 
+        const vehicleNum = vehicleData.id;
         setVehicleNumber(vehicleNum);
 
         // Get vehicle status directly from vehicles table

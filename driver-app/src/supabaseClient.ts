@@ -147,48 +147,50 @@ async function runWithFallback<T>(
 export const supabaseService = SUPABASE_ENABLED
   ? {
       // --- Helpers to map between app's camelCase and DB snake_case ---
-      _toDbVehicle(v: any) {
-        return {
-          id: v.id,
-          name: v.name,
-          driver_id: v.driverId ?? null,
-          license_plate: v.licensePlate ?? null,
-          type: v.type,
-          status: v.status,
-          location: v.location ?? null,
-          capacity: v.capacity ?? null,
-          mileage: v.mileage ?? null,
-          free_at: v.freeAt ?? null,
-          service_interval: v.serviceInterval ?? null,
-          last_service_mileage: v.lastServiceMileage ?? null,
-          technical_inspection_expiry: v.technicalInspectionExpiry ?? null,
-          vignette_expiry: v.vignetteExpiry ?? null,
-           fuel_type: v.fuelType ? v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1).toLowerCase() : null,
-          fuel_consumption: v.fuelConsumption ?? null,
-          phone: v.phone ?? null,
-        };
-      },
-      _fromDbVehicle(db: any) {
-        return {
-          id: db.id,
-          name: db.name,
-          driverId: db.driver_id ?? null,
-          licensePlate: db.license_plate ?? null,
-          type: db.type,
-          status: db.status,
-          location: db.location ?? null,
-          capacity: db.capacity ?? null,
-          mileage: db.mileage ?? null,
-          freeAt: db.free_at ?? undefined,
-          serviceInterval: db.service_interval ?? null,
-          lastServiceMileage: db.last_service_mileage ?? null,
-          technicalInspectionExpiry: db.technical_inspection_expiry ?? null,
-          vignetteExpiry: db.vignette_expiry ?? null,
-           fuelType: db.fuel_type ? db.fuel_type.toUpperCase() : null,
-          fuelConsumption: db.fuel_consumption ?? null,
-          phone: db.phone ?? null,
-        };
-      },
+       _toDbVehicle(v: any) {
+         return {
+           id: v.id,
+           name: v.name,
+           driver_id: v.driverId ?? null,
+           license_plate: v.licensePlate ?? null,
+           type: v.type,
+           status: v.status,
+           location: v.location ?? null,
+           capacity: v.capacity ?? null,
+           mileage: v.mileage ?? null,
+           free_at: v.freeAt ?? null,
+           service_interval: v.serviceInterval ?? null,
+           last_service_mileage: v.lastServiceMileage ?? null,
+           technical_inspection_expiry: v.technicalInspectionExpiry ?? null,
+           vignette_expiry: v.vignetteExpiry ?? null,
+            fuel_type: v.fuelType ? v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1).toLowerCase() : null,
+           fuel_consumption: v.fuelConsumption ?? null,
+           phone: v.phone ?? null,
+           email: v.email ?? null,
+         };
+       },
+       _fromDbVehicle(db: any) {
+         return {
+           id: db.id,
+           name: db.name,
+           driverId: db.driver_id ?? null,
+           licensePlate: db.license_plate ?? null,
+           type: db.type,
+           status: db.status,
+           location: db.location ?? null,
+           capacity: db.capacity ?? null,
+           mileage: db.mileage ?? null,
+           freeAt: db.free_at ?? undefined,
+           serviceInterval: db.service_interval ?? null,
+           lastServiceMileage: db.last_service_mileage ?? null,
+           technicalInspectionExpiry: db.technical_inspection_expiry ?? null,
+           vignetteExpiry: db.vignette_expiry ?? null,
+            fuelType: db.fuel_type ? db.fuel_type.toUpperCase() : null,
+           fuelConsumption: db.fuel_consumption ?? null,
+           phone: db.phone ?? null,
+           email: db.email ?? null,
+         };
+       },
 
       _toDbTariff(t: any) {
         return {

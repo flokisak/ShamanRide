@@ -27,6 +27,7 @@ L.Icon.Default.mergeOptions({
 interface OpenStreetMapProps {
     vehicles: Vehicle[];
     people: Person[];
+    locations: any[];
     routeToPreview: string[] | null;
     confirmedAssignment: AssignmentResultData | null;
 }
@@ -357,13 +358,23 @@ const RouteDrawer: React.FC<{
 
 
 // --- Main Map Component ---
-export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, routeToPreview, confirmedAssignment }) => {
+export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, locations, routeToPreview, confirmedAssignment }) => {
     const { t } = useTranslation();
     const [routeSummary, setRouteSummary] = useState<RouteSummary | null>(null);
     const [isMaximized, setIsMaximized] = useState(false);
     const [gpsPositions, setGpsPositions] = useState<GpsVehicle[]>([]);
     const [flyToCoords, setFlyToCoords] = useState<Coords | null>(null);
     const center: Coords = useMemo(() => [48.85, 16.63], []); // Mikulov/Hustopeče area
+
+    const latestLocations = useMemo(() => {
+      return locations.reduce((acc, loc) => {
+        const key = loc.driver_id;
+        if (!acc[key] || new Date(loc.timestamp) > new Date(acc[key].timestamp)) {
+          acc[key] = loc;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+    }, [locations]);
 
     // Fetch GPS positions periodically
     // useEffect(() => {
@@ -407,9 +418,39 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
-                         {vehicles.map(v => {
-                             const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
-                             return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} />;
+                     {vehicles.map(v => {
+                          const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
+                          return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} />;
+                      })}
+                     {Object.entries(latestLocations).map(([driverId, loc]) => {
+                       const vehicle = vehicles.find(v => v.id.toString() === driverId);
+                       if (!vehicle) return null;
+                       return (
+                         <Marker key={`loc-${driverId}`} position={[loc.latitude, loc.longitude]}>
+                           <Popup>
+                             <div>
+                               <strong>{vehicle.name}</strong><br />
+                               Location: {loc.latitude}, {loc.longitude}<br />
+                               Time: {new Date(loc.timestamp).toLocaleString()}
+                             </div>
+                           </Popup>
+                         </Marker>
+                       );
+                     })}
+                         {Object.entries(latestLocations).map(([driverId, loc]) => {
+                           const vehicle = vehicles.find(v => v.id.toString() === driverId);
+                           if (!vehicle) return null;
+                           return (
+                             <Marker key={`loc-${driverId}`} position={[loc.latitude, loc.longitude]}>
+                               <Popup>
+                                 <div>
+                                   <strong>{vehicle.name}</strong><br />
+                                   Location: {loc.latitude}, {loc.longitude}<br />
+                                   Time: {new Date(loc.timestamp).toLocaleString()}
+                                 </div>
+                               </Popup>
+                             </Marker>
+                           );
                          })}
                         <RouteDrawer
                             routeToPreview={routeToPreview}

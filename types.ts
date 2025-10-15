@@ -73,9 +73,10 @@ export interface Vehicle {
   vignetteExpiry?: string; // YYYY-MM-DD
   vehicleNotes?: string;
   fuelType?: FuelType;
-  fuelConsumption?: number; // L/100km
-  phone?: string; // Phone number for the vehicle's built-in phone
-}
+   fuelConsumption?: number; // L/100km
+   phone?: string; // Phone number for the vehicle's built-in phone
+   email?: string; // Driver's email for authentication
+ }
 
 export interface RideRequest {
   stops: string[]; // First stop is pickup, the rest are destinations

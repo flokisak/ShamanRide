@@ -140,6 +140,7 @@ const AppContent: React.FC = () => {
   const [smsGateConfig, setSmsGateConfig] = useState({ server: '', username: '', password: '' });
 
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(DEFAULT_COMPANY_INFO);
+  const [locations, setLocations] = useState<any[]>([]);
 
   const [assignmentResult, setAssignmentResult] = useState<AssignmentResultData | null>(null);
   const [customerSms, setCustomerSms] = useState<string>('');
@@ -276,7 +277,7 @@ const AppContent: React.FC = () => {
     const loadData = async () => {
       try {
         console.log('📥 Loading data via supabaseService (cloud or local fallback)');
-        const [ppl, veh, rl, notif, tf, fp, ci, ms] = await Promise.all([
+        const [ppl, veh, rl, notif, tf, fp, ci, ms, us, loc] = await Promise.all([
           supabaseService.getPeople().catch(() => []),
           supabaseService.getVehicles().catch(() => []),
           supabaseService.getRideLogs().catch(() => []),
@@ -286,6 +287,7 @@ const AppContent: React.FC = () => {
           supabaseService.getCompanyInfo().catch(() => DEFAULT_COMPANY_INFO),
           supabaseService.getMessagingApp().catch(() => MessagingApp.SMS),
           supabaseService.getUserSettings((user as any)?.id || 'local').catch(() => ({ preferred_nav: 'google' })),
+          supabaseService.getLocations().catch(() => []),
         ]);
 
         const normalizeRole = (role: string | null | undefined): PersonRole => {
@@ -301,6 +303,7 @@ const AppContent: React.FC = () => {
         setFuelPrices(fp || DEFAULT_FUEL_PRICES);
         setCompanyInfo(ci || DEFAULT_COMPANY_INFO);
         setMessagingApp((ms as any) || MessagingApp.SMS);
+        setLocations(loc);
         const sgc = localStorage.getItem('sms-gate-config');
         if (sgc) {
           try {
@@ -1615,7 +1618,7 @@ const AppContent: React.FC = () => {
   const widgetMap: Record<WidgetId, React.ReactNode> = {
     dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
     vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} />,
-    map: <OpenStreetMap vehicles={vehicles} people={people} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
+    map: <OpenStreetMap vehicles={vehicles} people={people} locations={locations} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
       rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
