@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
+import { notifyUser } from '../utils/notifications';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -119,6 +120,10 @@ const Dashboard: React.FC = () => {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('New ride assigned:', payload);
         // Check if it's for this vehicle
+        if (vehicleNumber && payload.new.vehicle_id === vehicleNumber) {
+          // Notify user with sound and vibration for new ride assignment
+          notifyUser();
+        }
         getVehicleInfo();
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
@@ -131,24 +136,26 @@ const Dashboard: React.FC = () => {
       .subscribe();
 
     // Subscribe to driver messages
-    const messageChannel = supabase
-      .channel('driver_messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
-        console.log('New driver message:', payload);
-         // Check if the message is for this vehicle
-         if (vehicleNumber && (
-           payload.new.sender_id === `driver_${vehicleNumber}` ||
-           payload.new.receiver_id === `driver_${vehicleNumber}`
-         )) {
-           setMessages(prev => [...prev, payload.new]);
-           // Notify if message from dispatcher
-           if (payload.new.sender_id === 'dispatcher') {
-             alert(`Nová zpráva od dispečera: ${payload.new.message}`);
-             // Refresh ride data when receiving message from dispatcher
-             getVehicleInfo();
-           }
-         }
-      })
+     const messageChannel = supabase
+       .channel('driver_messages')
+       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
+         console.log('New driver message:', payload);
+          // Check if the message is for this vehicle
+          if (vehicleNumber && (
+            payload.new.sender_id === `driver_${vehicleNumber}` ||
+            payload.new.receiver_id === `driver_${vehicleNumber}`
+          )) {
+            setMessages(prev => [...prev, payload.new]);
+            // Notify if message from dispatcher
+            if (payload.new.sender_id === 'dispatcher') {
+              // Notify user with sound and vibration for dispatcher message
+              notifyUser();
+              alert(`Nová zpráva od dispečera: ${payload.new.message}`);
+              // Refresh ride data when receiving message from dispatcher
+              getVehicleInfo();
+            }
+          }
+       })
       .subscribe();
 
     // Subscribe to vehicle status changes (from dispatcher app)
