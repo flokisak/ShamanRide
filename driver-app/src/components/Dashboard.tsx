@@ -257,6 +257,36 @@ const Dashboard: React.FC = () => {
     loadMessages();
   }, [vehicleNumber]);
 
+  // Auto-refresh messages every 30 seconds
+  useEffect(() => {
+    if (!vehicleNumber) return;
+
+    const refreshInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.from('driver_messages').select('*')
+          .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
+          .order('timestamp', { ascending: false });
+
+        if (error) {
+          console.warn('Could not refresh messages:', error);
+        } else if (data) {
+          // Only update if we have new messages or different data
+          const currentMessageIds = messages.map(m => m.id).sort();
+          const newMessageIds = data.map(m => m.id).sort();
+
+          if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
+            setMessages(data);
+            console.log('Messages refreshed automatically');
+          }
+        }
+      } catch (err) {
+        console.warn('Error refreshing messages:', err);
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, [vehicleNumber, messages]);
+
   // Handle break timer
   useEffect(() => {
     if (breakEndTime && driverStatus === 'break' && vehicleNumber) {
@@ -395,6 +425,13 @@ const Dashboard: React.FC = () => {
     return senderId === 'dispatcher' ? 'Dispečer' : 'Vy';
   };
 
+  const formatMessageTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString('cs-CZ', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   // Show loading state
   if (isLoading) {
     return (
@@ -502,15 +539,27 @@ const Dashboard: React.FC = () => {
         {/* Messaging */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
           <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.messages')}</h2>
-          <div className="h-32 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
+          <div className="h-40 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
             {messages.length > 0 ? (
-              messages.map((msg, idx) => (
-                <div key={idx} className="text-sm text-slate-300 mb-1">
-                  <strong className="text-primary">{msg.sender_id === 'dispatcher' ? 'Dispečer' : 'Vy'}:</strong> {msg.message}
-                </div>
-              ))
+              messages
+                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                .map((msg, idx) => (
+                  <div key={msg.id || idx} className="text-sm text-slate-300 mb-2 p-2 bg-slate-800/30 rounded">
+                    <div className="flex justify-between items-start mb-1">
+                      <strong className="text-primary text-xs">
+                        {getSenderName(msg.sender_id)}
+                      </strong>
+                      <span className="text-xs text-slate-400">
+                        {formatMessageTime(msg.timestamp)}
+                      </span>
+                    </div>
+                    <div className="text-slate-200 text-sm leading-relaxed">
+                      {msg.message}
+                    </div>
+                  </div>
+                ))
             ) : (
-              <p className="text-sm text-slate-400 italic">Žádné zprávy zatím</p>
+              <p className="text-sm text-slate-400 italic text-center py-8">Žádné zprávy zatím</p>
             )}
           </div>
            <div className="space-y-2">
