@@ -17,6 +17,9 @@ const Dashboard: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [locationSending, setLocationSending] = useState(false);
 
   useEffect(() => {
     // Get current user and their vehicle info
@@ -193,12 +196,44 @@ const Dashboard: React.FC = () => {
     loadMessages();
   }, [vehicleNumber]);
 
+  // Network connectivity monitoring for mobile
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      addDebugInfo('Network: Online');
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      addDebugInfo('Network: Offline');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Debug info helper for mobile
+  const addDebugInfo = (info: string) => {
+    setDebugInfo(prev => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${info}`]);
+  };
+
   // GPS Location tracking and sending
   useEffect(() => {
-    if (!vehicleNumber || !navigator.geolocation) {
-      console.log('GPS not available or vehicle not loaded');
+    if (!vehicleNumber) {
+      addDebugInfo('Vehicle not loaded yet, skipping GPS setup');
       return;
     }
+
+    if (!navigator.geolocation) {
+      addDebugInfo('Geolocation not available');
+      return;
+    }
+
+    addDebugInfo(`Setting up GPS tracking for vehicle: ${vehicleNumber}`);
 
     let watchId: number | null = null;
     let locationInterval: NodeJS.Timeout | null = null;
@@ -239,7 +274,7 @@ const Dashboard: React.FC = () => {
     locationInterval = setInterval(async () => {
       if (currentPosition && vehicleNumber) {
         const locationData = {
-          driver_id: vehicleNumber.toString(),
+          vehicle_id: vehicleNumber,
           latitude: currentPosition.lat,
           longitude: currentPosition.lng,
           timestamp: new Date().toISOString(),
@@ -248,10 +283,39 @@ const Dashboard: React.FC = () => {
         console.log('Sending location to Supabase:', locationData);
 
         try {
+          // First check if locations table exists by trying to query it
+          const { error: tableCheckError } = await supabase
+            .from('locations')
+            .select('count', { count: 'exact', head: true });
+
+          if (tableCheckError) {
+            console.error('Locations table check failed:', tableCheckError);
+            console.error('Error code:', tableCheckError.code);
+            console.error('Error message:', tableCheckError.message);
+
+            if (tableCheckError.code === 'PGRST116' || tableCheckError.message.includes('relation "locations" does not exist')) {
+              console.error('LOCATIONS TABLE DOES NOT EXIST IN SUPABASE!');
+              console.error('Please create the locations table using the SQL script in create-locations-table.sql');
+              alert('Locations table missing! Please create it in Supabase using the SQL script.');
+            } else {
+              console.error('Locations table exists but has issues. Current error:', tableCheckError);
+              console.error('This might be a permissions issue or column mismatch.');
+            }
+            return;
+          }
+
+          console.log('Locations table exists, attempting to insert location data...');
+
           const { data, error } = await supabase.from('locations').insert(locationData);
 
           if (error) {
             console.error('Failed to send location to Supabase:', error);
+            console.error('Error details:', {
+              message: error.message,
+              details: error.details,
+              hint: error.hint,
+              code: error.code
+            });
             // Store in localStorage as fallback
             const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
             queued.push(locationData);
@@ -457,6 +521,78 @@ const Dashboard: React.FC = () => {
     });
   };
 
+  // Test function to check and create locations table
+  const testLocationsTable = async () => {
+    console.log('Testing locations table...');
+
+    try {
+      // Try to query the locations table
+      const { data, error } = await supabase.from('locations').select('*').limit(1);
+
+      if (error) {
+        console.error('Locations table test failed:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+
+        if (error.code === 'PGRST116' || error.message.includes('relation "locations" does not exist')) {
+          console.log('Locations table does not exist. You need to create it in Supabase.');
+          console.log('Go to: https://supabase.com/dashboard/project/dmxkqofoecqdjbigxoon/editor');
+          console.log('Run the SQL script from: create-locations-table.sql');
+          alert('Locations table missing! Please create it in Supabase using the SQL script from create-locations-table.sql');
+          return false;
+        } else {
+          console.error('Locations table exists but has issues. Current error:', error);
+          console.error('This might be a permissions issue or column mismatch.');
+          console.error('Please check the table structure in Supabase dashboard');
+        }
+        return false;
+      }
+
+      console.log('Locations table exists and is accessible');
+      console.log('Sample data:', data);
+      console.log('Table structure appears to be working');
+      return true;
+
+    } catch (err) {
+      console.error('Error testing locations table:', err);
+      return false;
+    }
+  };
+
+  // Function to check current table structure
+  const checkTableStructure = async () => {
+    console.log('Checking locations table structure...');
+
+    try {
+      // Try to get table info by describing it
+      const { data, error } = await supabase.rpc('describe_table', {
+        table_name: 'locations'
+      });
+
+      if (error) {
+        console.error('Could not get table structure:', error);
+        console.log('This is expected - describe_table function may not exist');
+        console.log('Please check the table manually in Supabase dashboard');
+        return;
+      }
+
+      console.log('Table structure:', data);
+
+    } catch (err) {
+      console.error('Error checking table structure:', err);
+    }
+  };
+
+  // Add a button to test the locations table (for debugging)
+  useEffect(() => {
+    if (vehicleNumber) {
+      // Test the locations table after vehicle is loaded
+      setTimeout(() => {
+        testLocationsTable();
+      }, 2000);
+    }
+  }, [vehicleNumber]);
+
   // Show loading state
   if (isLoading) {
     return (
@@ -556,10 +692,69 @@ const Dashboard: React.FC = () => {
 
         {/* Location */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <div className="flex justify-between items-center mb-2">
+            <label className="block text-sm font-medium text-slate-300">{t('dashboard.currentLocation')}</label>
+            <div className="flex gap-2">
+              <button
+                onClick={testLocationsTable}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+                title="Test locations table"
+              >
+                Test DB
+              </button>
+              <button
+                onClick={() => setDebugInfo([])}
+                className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded-lg transition-colors"
+                title="Clear debug info"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
           <p className="text-slate-300">
-            <span className="font-medium text-white">{t('dashboard.currentLocation')}:</span> {location ? `${location.lat}, ${location.lng}` : t('dashboard.locationNotAvailable')}
+            {location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : t('dashboard.locationNotAvailable')}
           </p>
+          {location && (
+            <p className="text-xs text-slate-400 mt-1">
+              Last updated: {new Date().toLocaleTimeString()}
+            </p>
+          )}
+
+          {/* Network Status Indicator */}
+          <div className="flex items-center gap-2 mt-2">
+            <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+            <span className="text-xs text-slate-400">
+              {isOnline ? 'Online' : 'Offline'}
+            </span>
+          </div>
         </div>
+
+        {/* Debug Info Panel for Mobile */}
+        {debugInfo.length > 0 && (
+          <div className="glass card-hover p-3 rounded-2xl border border-slate-700/50">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-medium text-white">Debug Info</h3>
+              <button
+                onClick={() => {
+                  const debugText = debugInfo.join('\n');
+                  navigator.clipboard?.writeText(debugText);
+                  alert('Debug info copied to clipboard!');
+                }}
+                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
+                title="Copy debug info"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-2 max-h-32 overflow-y-auto">
+              {debugInfo.map((info, idx) => (
+                <div key={idx} className="text-xs text-slate-300 font-mono mb-1">
+                  {info}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Messaging */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
@@ -567,7 +762,7 @@ const Dashboard: React.FC = () => {
           <div className="h-40 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
             {messages.length > 0 ? (
               messages
-                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                 .map((msg, idx) => (
                   <div key={msg.id || idx} className="text-sm text-slate-300 mb-2 p-2 bg-slate-800/30 rounded">
                     <div className="flex justify-between items-start mb-1">

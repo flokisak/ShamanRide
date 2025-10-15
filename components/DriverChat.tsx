@@ -71,37 +71,51 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     getCurrentUser();
   }, []);
 
-  // Load all messages for all vehicles (for chat history)
+  // Load all messages for all vehicles (for chat history) - runs on mount and when vehicles change
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!currentUserId || vehicles.length === 0) return;
 
     const loadAllMessages = async () => {
       try {
+        console.log('Loading all messages for chat history...');
+
         if (SUPABASE_ENABLED) {
+          // Load messages from Supabase
           const { data, error } = await supabase.from('driver_messages').select('*')
             .or(`receiver_id.eq.${currentUserId},sender_id.eq.${currentUserId}`)
-            .order('timestamp', { ascending: true });
+            .order('timestamp', { ascending: false });
 
           if (error) {
-            console.warn('Could not load all messages:', error);
+            console.warn('Could not load all messages from Supabase:', error);
+            // Fallback to localStorage
+            const localMessages = getDriverMessages();
+            setAllMessages(localMessages);
             return;
           }
 
           if (data) {
+            console.log(`Loaded ${data.length} messages from Supabase`);
             setAllMessages(data);
+
+            // Also save to localStorage as backup
+            saveDriverMessages(data);
           }
         } else {
-          // Load from localStorage
+          // Load from localStorage only
           const localMessages = getDriverMessages();
+          console.log(`Loaded ${localMessages.length} messages from localStorage`);
           setAllMessages(localMessages);
         }
       } catch (err) {
         console.warn('Error loading all messages:', err);
+        // Fallback to localStorage
+        const localMessages = getDriverMessages();
+        setAllMessages(localMessages);
       }
     };
 
     loadAllMessages();
-  }, [currentUserId]);
+  }, [currentUserId, vehicles.length]);
 
   // Calculate chat history and unread counts
   useEffect(() => {
@@ -150,34 +164,72 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     setChatHistory(history);
   }, [vehicles, allMessages, currentUserId]);
 
-  // Load messages for selected vehicle
+  // Load messages for selected vehicle - improved with better error handling
   useEffect(() => {
-    if (!selectedVehicleId) return;
+    if (!selectedVehicleId || !currentUserId) return;
 
     const loadMessages = async () => {
       try {
-        const { data1, error1 } = await supabase.from('driver_messages').select('*').eq('sender_id', 'dispatcher').eq('receiver_id', `driver_${selectedVehicleId}`).order('timestamp', { ascending: true });
-        const { data2, error2 } = await supabase.from('driver_messages').select('*').eq('sender_id', `driver_${selectedVehicleId}`).eq('receiver_id', 'dispatcher').order('timestamp', { ascending: true });
-        if (error1) {
-          console.warn('Could not load messages 1:', error1);
+        console.log(`Loading messages for vehicle: ${selectedVehicleId}`);
+
+        if (SUPABASE_ENABLED) {
+          // Load messages from Supabase
+          const { data1, error1 } = await supabase.from('driver_messages').select('*')
+            .eq('sender_id', 'dispatcher')
+            .eq('receiver_id', `driver_${selectedVehicleId}`)
+            .order('timestamp', { ascending: false });
+
+          const { data2, error2 } = await supabase.from('driver_messages').select('*')
+            .eq('sender_id', `driver_${selectedVehicleId}`)
+            .eq('receiver_id', 'dispatcher')
+            .order('timestamp', { ascending: false });
+
+          if (error1) {
+            console.warn('Could not load dispatcher->driver messages:', error1);
+          }
+          if (error2) {
+            console.warn('Could not load driver->dispatcher messages:', error2);
+          }
+
+          const data = [...(data1 || []), ...(data2 || [])];
+
+          if (data.length > 0) {
+            console.log(`Loaded ${data.length} messages for vehicle ${selectedVehicleId}`);
+            setMessages(data);
+          } else {
+            console.log(`No messages found for vehicle ${selectedVehicleId}`);
+            setMessages([]);
+          }
+        } else {
+          // Load from localStorage
+          const localMessages = getDriverMessages();
+          const vehicleMessages = localMessages.filter(msg =>
+            (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
+            (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
+          );
+          console.log(`Loaded ${vehicleMessages.length} messages from localStorage for vehicle ${selectedVehicleId}`);
+          setMessages(vehicleMessages);
         }
-        if (error2) {
-          console.warn('Could not load messages 2:', error2);
-        }
-        const data = [...(data1 || []), ...(data2 || [])];
-        data.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        setMessages(data);
       } catch (err) {
-        console.warn('Error loading messages:', err);
+        console.warn('Error loading messages for vehicle:', selectedVehicleId, err);
+        // Fallback to localStorage
+        const localMessages = getDriverMessages();
+        const vehicleMessages = localMessages.filter(msg =>
+          (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
+          (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
+        );
+        setMessages(vehicleMessages);
       }
     };
 
     loadMessages();
-  }, [selectedVehicleId]);
+  }, [selectedVehicleId, currentUserId]);
 
-  // Subscribe to new messages globally (for all vehicles)
+  // Subscribe to new messages globally (for all vehicles) - improved
   useEffect(() => {
     if (!currentUserId || !SUPABASE_ENABLED) return;
+
+    console.log('Setting up real-time message subscription');
 
     const channel = supabase
       .channel('driver_messages_global')
@@ -187,24 +239,36 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         table: 'driver_messages'
        }, (payload) => {
         const incomingMessage = payload.new as ChatMessage;
+        console.log('New message received:', incomingMessage);
 
-        // Update allMessages for chat history
+        // Update allMessages for chat history (avoid duplicates)
         setAllMessages(prev => {
           const exists = prev.some(m => m.id === incomingMessage.id);
           if (!exists) {
-            return [...prev, incomingMessage].sort((a, b) =>
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-            );
+            const updated = [...prev, incomingMessage];
+            console.log(`Updated allMessages count: ${updated.length}`);
+
+            // Also save to localStorage
+            saveDriverMessages(updated);
+            return updated;
           }
           return prev;
         });
 
-        // Check if the message is relevant (between dispatcher and selected vehicle)
+        // Check if the message is relevant to the currently selected vehicle
         if (selectedVehicleId) {
           const isRelevant = (incomingMessage.sender_id === 'dispatcher' && incomingMessage.receiver_id === 'driver_' + selectedVehicleId) ||
                              (incomingMessage.sender_id === 'driver_' + selectedVehicleId && incomingMessage.receiver_id === 'dispatcher');
+
           if (isRelevant) {
-            setMessages(prev => [...prev, incomingMessage]);
+            console.log('Message is relevant to selected vehicle, updating messages state');
+            setMessages(prev => {
+              const exists = prev.some(m => m.id === incomingMessage.id);
+              if (!exists) {
+                return [...prev, incomingMessage];
+              }
+              return prev;
+            });
 
             // Notify about new message if it's from a vehicle
             if (incomingMessage.sender_id.startsWith('driver_')) {
@@ -219,6 +283,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
       .subscribe();
 
     return () => {
+      console.log('Cleaning up message subscription');
       supabase.removeChannel(channel);
     };
   }, [selectedVehicleId, currentUserId, onNewMessage]);
@@ -440,7 +505,9 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {messages.map((msg) => (
+                    {messages
+                      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                      .map((msg) => (
                       <div
                         key={msg.id}
                         className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
