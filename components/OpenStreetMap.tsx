@@ -368,20 +368,21 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
     const latestLocations = locations;
 
     // Fetch GPS positions periodically
-    // useEffect(() => {
-    //     const fetchGps = async () => {
-    //         try {
-    //             const positions = await fetchVehiclePositions();
-    //             setGpsPositions(positions);
-    //         } catch (error) {
-    //             console.error('Failed to fetch GPS positions:', error);
-    //         }
-    //     };
+    useEffect(() => {
+        const fetchGps = async () => {
+            try {
+                const positions = await fetchVehiclePositions();
+                setGpsPositions(positions);
+                console.log('Updated GPS positions:', positions.length, 'vehicles');
+            } catch (error) {
+                console.error('Failed to fetch GPS positions:', error);
+            }
+        };
 
-    //     fetchGps(); // Initial fetch
-    //     const interval = setInterval(fetchGps, 30000); // Update every 30 seconds
-    //     return () => clearInterval(interval);
-    // }, []);
+        fetchGps(); // Initial fetch
+        const interval = setInterval(fetchGps, 15000); // Update every 15 seconds
+        return () => clearInterval(interval);
+    }, []);
 
     const toggleMaximize = () => {
         setIsMaximized(!isMaximized);

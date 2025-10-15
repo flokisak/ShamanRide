@@ -164,74 +164,10 @@ const Dashboard: React.FC = () => {
         }
       }
     };
-    // GPS tracking
-    let watchId: number | null = null;
-    let locationInterval: NodeJS.Timeout | null = null;
-    let currentPosition: { lat: number; lng: number } | null = null;
-
-    if (navigator.geolocation) {
-        watchId = navigator.geolocation.watchPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            currentPosition = { lat: latitude, lng: longitude };
-            setLocation(currentPosition);
-            console.log('GPS position updated:', currentPosition);
-          },
-        (error) => {
-          console.error('GPS error:', error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 5000,
-          maximumAge: 0,
-        }
-      );
-
-      // Send location every 10-15 seconds if vehicle is loaded
-      locationInterval = setInterval(async () => {
-        if (currentPosition && vehicleNumber) {
-          console.log('Attempting to send location to Supabase:', {
-            driver_id: vehicleNumber.toString(),
-            latitude: currentPosition.lat,
-            longitude: currentPosition.lng,
-            timestamp: new Date().toISOString(),
-          });
-          try {
-            const result = await supabase.from('locations').insert({
-              driver_id: vehicleNumber.toString(),
-              latitude: currentPosition.lat,
-              longitude: currentPosition.lng,
-              timestamp: new Date().toISOString(),
-            });
-            console.log('Location sent successfully:', result);
-          } catch (err) {
-            console.warn('Failed to send location, queuing offline', err);
-            // For offline queuing, could store in localStorage
-            const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
-            queued.push({
-              driver_id: vehicleNumber.toString(),
-              latitude: currentPosition!.lat,
-              longitude: currentPosition!.lng,
-              timestamp: new Date().toISOString(),
-            });
-            localStorage.setItem('queued_locations', JSON.stringify(queued));
-          }
-        } else {
-          console.log('Not sending location: currentPosition=', !!currentPosition, 'vehicleNumber=', vehicleNumber);
-        }
-      }, 12000); // 12 seconds
-    }
-
     return () => {
       supabase.removeChannel(rideChannel);
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(vehicleChannel);
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-      }
-      if (locationInterval) {
-        clearInterval(locationInterval);
-      }
     };
   }, [driverStatus, vehicleNumber]);
 
@@ -255,6 +191,95 @@ const Dashboard: React.FC = () => {
     };
 
     loadMessages();
+  }, [vehicleNumber]);
+
+  // GPS Location tracking and sending
+  useEffect(() => {
+    if (!vehicleNumber || !navigator.geolocation) {
+      console.log('GPS not available or vehicle not loaded');
+      return;
+    }
+
+    let watchId: number | null = null;
+    let locationInterval: NodeJS.Timeout | null = null;
+    let currentPosition: { lat: number; lng: number } | null = null;
+
+    console.log('Starting GPS tracking for vehicle:', vehicleNumber);
+
+    // Watch position continuously
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        currentPosition = { lat: latitude, lng: longitude };
+        setLocation(currentPosition);
+        console.log('GPS position updated:', currentPosition, 'Accuracy:', position.coords.accuracy);
+      },
+      (error) => {
+        console.error('GPS error:', error);
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            console.error('GPS permission denied by user');
+            break;
+          case error.POSITION_UNAVAILABLE:
+            console.error('GPS position unavailable');
+            break;
+          case error.TIMEOUT:
+            console.error('GPS timeout');
+            break;
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000, // Accept positions up to 30 seconds old
+      }
+    );
+
+    // Send location every 15 seconds
+    locationInterval = setInterval(async () => {
+      if (currentPosition && vehicleNumber) {
+        const locationData = {
+          driver_id: vehicleNumber.toString(),
+          latitude: currentPosition.lat,
+          longitude: currentPosition.lng,
+          timestamp: new Date().toISOString(),
+        };
+
+        console.log('Sending location to Supabase:', locationData);
+
+        try {
+          const { data, error } = await supabase.from('locations').insert(locationData);
+
+          if (error) {
+            console.error('Failed to send location to Supabase:', error);
+            // Store in localStorage as fallback
+            const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
+            queued.push(locationData);
+            localStorage.setItem('queued_locations', JSON.stringify(queued));
+          } else {
+            console.log('Location sent successfully:', data);
+          }
+        } catch (err) {
+          console.error('Exception sending location:', err);
+          // Store in localStorage as fallback
+          const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
+          queued.push(locationData);
+          localStorage.setItem('queued_locations', JSON.stringify(queued));
+        }
+      } else {
+        console.log('Not sending location - currentPosition:', !!currentPosition, 'vehicleNumber:', vehicleNumber);
+      }
+    }, 15000); // Send every 15 seconds
+
+    return () => {
+      console.log('Stopping GPS tracking');
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+      if (locationInterval) {
+        clearInterval(locationInterval);
+      }
+    };
   }, [vehicleNumber]);
 
   // Auto-refresh messages every 30 seconds

@@ -1,6 +1,8 @@
 /**
- * Service for fetching real-time GPS positions from Lokatory GPS API.
+ * Service for fetching real-time GPS positions from Supabase locations table.
  */
+
+import { supabase } from './supabaseClient';
 
 export interface GpsVehicle {
     id: string;
@@ -13,32 +15,58 @@ export interface GpsVehicle {
 }
 
 /**
- * Fetches current GPS positions of all vehicles via local server proxy.
+ * Fetches current GPS positions of all vehicles from Supabase locations table.
  */
 export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
     try {
-        const response = await fetch('/api/gps-vehicles', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+        // Get recent locations (last 5 minutes) with vehicle information
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-        if (!response.ok) {
-            throw new Error(`GPS API error: ${response.status}`);
+        const { data: locations, error } = await supabase
+            .from('locations')
+            .select(`
+                driver_id,
+                latitude,
+                longitude,
+                timestamp,
+                vehicles!inner(id, name, status)
+            `)
+            .gte('timestamp', fiveMinutesAgo)
+            .order('timestamp', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching locations from Supabase:', error);
+            return [];
         }
 
-        const data = await response.json();
-        // Assume the API returns an array of vehicles with id, name, lat, lon, etc.
-        return data.map((vehicle: any) => ({
-            id: vehicle.id || vehicle.vehicleId,
-            name: vehicle.name || vehicle.vehicleName,
-            lat: parseFloat(vehicle.lat),
-            lon: parseFloat(vehicle.lon),
-            lastUpdate: vehicle.lastUpdate || new Date().toISOString(),
-            speed: vehicle.speed ? parseFloat(vehicle.speed) : undefined,
-            status: vehicle.status,
-        }));
+        if (!locations || locations.length === 0) {
+            console.log('No recent locations found in Supabase');
+            return [];
+        }
+
+        // Group by driver_id and get the most recent location for each vehicle
+        const vehiclePositions = new Map<string, GpsVehicle>();
+
+        locations.forEach((location: any) => {
+            const driverId = location.driver_id;
+            const vehicle = location.vehicles;
+
+            if (!vehiclePositions.has(driverId) || new Date(location.timestamp) > new Date(vehiclePositions.get(driverId)!.lastUpdate)) {
+                vehiclePositions.set(driverId, {
+                    id: vehicle.id.toString(),
+                    name: vehicle.name,
+                    lat: location.latitude,
+                    lon: location.longitude,
+                    lastUpdate: location.timestamp,
+                    status: vehicle.status,
+                });
+            }
+        });
+
+        const result = Array.from(vehiclePositions.values());
+        console.log(`Fetched ${result.length} vehicle positions from Supabase`);
+        return result;
+
     } catch (error) {
         console.error('Error fetching vehicle positions:', error);
         return [];
@@ -46,7 +74,8 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
 }
 
 /**
- * Monitors API rate limits (based on provided example).
+ * Legacy code for external GPS API - kept for reference but not used.
+ * Current implementation uses Supabase locations table.
  */
 class RestClient {
     currentLimit: number = 0;
@@ -61,21 +90,8 @@ class RestClient {
     }
 
     async checkLimits() {
-        try {
-            const response = await fetch(`${GPS_API_BASE}/limits`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Basic ' + btoa('5186800:Hustopece2024'),
-                },
-            });
-            if (response.ok) {
-                const data = await response.json();
-                this.currentLimit = data.remaining || 0;
-                this.renewIn = data.resetIn || 0;
-            }
-        } catch (error) {
-            console.error('Error checking API limits:', error);
-        }
+        // Not used in current implementation
+        console.log('GPS API limits check not implemented for Supabase');
     }
 }
 
