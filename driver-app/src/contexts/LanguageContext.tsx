@@ -39,6 +39,7 @@ const staticTranslations = {
       "currentRide": "Aktuální jízda",
       "rideDetails": "Detaily jízdy",
       "customer": "Zákazník",
+      "phone": "Telefon",
       "pickup": "Vyzvednutí",
       "destination": "Cíl",
       "status": "Status",

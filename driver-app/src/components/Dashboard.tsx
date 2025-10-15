@@ -12,6 +12,8 @@ const Dashboard: React.FC = () => {
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [selectedRecipient, setSelectedRecipient] = useState<string>('dispatcher');
+  const [otherDrivers, setOtherDrivers] = useState<any[]>([]);
   const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
   const [licensePlate, setLicensePlate] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
@@ -77,12 +79,29 @@ const Dashboard: React.FC = () => {
         }
 
         // Get completed rides for this vehicle
-        const { data: history, error: historyError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Completed).order('timestamp', { ascending: false }).limit(10);
-        if (historyError) {
-          console.warn('Could not load ride history:', historyError);
-        } else if (history) {
-          setRideHistory(history);
-        }
+         const { data: history, error: historyError } = await supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleNum).eq('status', RideStatus.Completed).order('timestamp', { ascending: false }).limit(10);
+         if (historyError) {
+           console.warn('Could not load ride history:', historyError);
+         } else if (history) {
+           setRideHistory(history);
+         }
+
+        // Get other drivers for chat
+         const { data: allVehicles, error: vehiclesError } = await supabase.from('vehicles').select('id, name, driver_id').neq('id', vehicleNum);
+         if (vehiclesError) {
+           console.warn('Could not load other vehicles:', vehiclesError);
+         } else if (allVehicles) {
+           // Get driver names
+           const driverIds = allVehicles.map(v => v.driver_id).filter(id => id);
+           const { data: driversData } = await supabase.from('people').select('id, name').in('id', driverIds);
+           const driversMap = (driversData || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
+           const otherDriversList = allVehicles.map(v => ({
+             id: v.id,
+             name: driversMap[v.driver_id] || v.name,
+             vehicleId: v.id
+           })).filter(d => d.name);
+           setOtherDrivers(otherDriversList);
+         }
 
       } catch (err: any) {
         console.error('Error loading vehicle info:', err);
@@ -116,17 +135,19 @@ const Dashboard: React.FC = () => {
       .channel('driver_messages')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
         console.log('New driver message:', payload);
-        // Check if the message is for this vehicle
-        if (vehicleNumber && (
-          payload.new.sender_id === `driver_${vehicleNumber}` ||
-          payload.new.receiver_id === `driver_${vehicleNumber}`
-        )) {
-          setMessages(prev => [...prev, payload.new]);
-          // Notify if message from dispatcher
-          if (payload.new.sender_id === 'dispatcher') {
-            alert(`Nová zpráva od dispečera: ${payload.new.message}`);
-          }
-        }
+         // Check if the message is for this vehicle
+         if (vehicleNumber && (
+           payload.new.sender_id === `driver_${vehicleNumber}` ||
+           payload.new.receiver_id === `driver_${vehicleNumber}`
+         )) {
+           setMessages(prev => [...prev, payload.new]);
+           // Notify if message from dispatcher
+           if (payload.new.sender_id === 'dispatcher') {
+             alert(`Nová zpráva od dispečera: ${payload.new.message}`);
+             // Refresh ride data when receiving message from dispatcher
+             getVehicleInfo();
+           }
+         }
       })
       .subscribe();
 
@@ -485,11 +506,10 @@ const Dashboard: React.FC = () => {
 
   const sendMessage = async () => {
     if (!newMessage.trim() || !vehicleNumber) return;
-    // For now, send to a generic dispatcher ID. In production, this should be the actual dispatcher ID
-    const dispatcherId = 'dispatcher'; // TODO: Get actual dispatcher ID
+    const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' : `driver_${selectedRecipient}`;
     await supabase.from('driver_messages').insert({
       sender_id: `driver_${vehicleNumber}`,
-      receiver_id: dispatcherId,
+      receiver_id: receiverId,
       message: newMessage,
       timestamp: new Date().toISOString(),
       read: false
@@ -498,7 +518,10 @@ const Dashboard: React.FC = () => {
   };
 
   const getSenderName = (senderId: string) => {
-    return senderId === 'dispatcher' ? 'Dispečer' : 'Vy';
+    if (senderId === 'dispatcher') return 'Dispečer';
+    if (senderId === `driver_${vehicleNumber}`) return 'Vy';
+    const driver = otherDrivers.find(d => `driver_${d.id}` === senderId);
+    return driver ? driver.name : 'Neznámý řidič';
   };
 
   const formatMessageTime = (timestamp: string) => {
@@ -645,12 +668,13 @@ const Dashboard: React.FC = () => {
         {currentRide && (
           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
             <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.currentRide')}</h2>
-            <div className="space-y-2 text-slate-300">
-              <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
-              <p><span className="font-medium">{t('dashboard.pickup')}:</span> {currentRide.stops[0]}</p>
-              <p><span className="font-medium">{t('dashboard.destination')}:</span> {currentRide.stops[currentRide.stops.length - 1]}</p>
-              <p><span className="font-medium">{t('dashboard.status')}:</span> {currentRide.status}</p>
-            </div>
+             <div className="space-y-2 text-slate-300">
+               <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
+               <p><span className="font-medium">{t('dashboard.phone')}:</span> <a href={`tel:${currentRide.customerPhone}`} className="text-blue-600 underline">{currentRide.customerPhone}</a></p>
+               <p><span className="font-medium">{t('dashboard.pickup')}:</span> {currentRide.stops[0]}</p>
+               <p><span className="font-medium">{t('dashboard.destination')}:</span> {currentRide.stops[currentRide.stops.length - 1]}</p>
+               <p><span className="font-medium">{t('dashboard.status')}:</span> {currentRide.status}</p>
+             </div>
 
              <div className="mt-4 space-y-2">
                {currentRide.status === RideStatus.Pending && (
@@ -726,22 +750,32 @@ const Dashboard: React.FC = () => {
               <p className="text-sm text-slate-400 italic text-center py-8">Žádné zprávy zatím</p>
             )}
           </div>
-           <div className="space-y-2">
-             <input
-               type="text"
-               value={newMessage}
-               onChange={(e) => setNewMessage(e.target.value)}
-               className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
-               placeholder={t('dashboard.typeMessage')}
-             />
-             <button
-               onClick={sendMessage}
-               disabled={!newMessage.trim()}
-               className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-white font-medium"
-             >
-               {t('dashboard.send')}
-             </button>
-           </div>
+            <div className="space-y-2">
+              <select
+                value={selectedRecipient}
+                onChange={(e) => setSelectedRecipient(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+              >
+                <option value="dispatcher">Dispečer</option>
+                {otherDrivers.map(driver => (
+                  <option key={driver.id} value={driver.id}>{driver.name}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                placeholder={t('dashboard.typeMessage')}
+              />
+              <button
+                onClick={sendMessage}
+                disabled={!newMessage.trim()}
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-white font-medium"
+              >
+                {t('dashboard.send')}
+              </button>
+            </div>
         </div>
 
         {/* Ride History */}
