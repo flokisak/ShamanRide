@@ -276,8 +276,16 @@ export const supabaseService = SUPABASE_ENABLED
         if (error) throw error;
         return (data || []).map((d: any) => this._fromDbVehicle(d));
       },
-      async updateVehicles(vehicles: any[]) {
-        const dbRows = vehicles.map(v => this._toDbVehicle(v));
+      async updateVehicles(vehicles: any[], options?: { excludeStatus?: boolean }) {
+        const dbRows = vehicles.map(v => {
+          const dbVehicle = this._toDbVehicle(v);
+          if (options?.excludeStatus) {
+            // Remove status and updated_at from the update to preserve driver app changes
+            const { status, updated_at, ...vehicleWithoutStatus } = dbVehicle;
+            return vehicleWithoutStatus;
+          }
+          return dbVehicle;
+        });
         const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
         if (error) throw error;
       },

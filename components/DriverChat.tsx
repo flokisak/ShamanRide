@@ -4,9 +4,8 @@ import { useTranslation } from '../contexts/LanguageContext';
 import { supabase, SUPABASE_ENABLED } from '../services/supabaseClient';
 
 interface DriverChatProps {
-  people: Person[];
   vehicles: Vehicle[];
-  onNewMessage?: (driverId: number, message: string) => void;
+  onNewMessage?: (vehicleId: number, message: string) => void;
 }
 
 interface ChatMessage {
@@ -39,23 +38,20 @@ const addDriverMessage = (message: ChatMessage) => {
   saveDriverMessages(messages);
 };
 
-export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewMessage }) => {
+export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }) => {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Get drivers (people with driver role)
-  const drivers = people.filter(p => p.role === 'Driver' || p.role === 'DRIVER');
-
-  // Calculate unread message counts for each driver
-  const unreadCounts = drivers.reduce((acc, driver) => {
-    const driverMessages = messages.filter(msg =>
-      (msg.sender_id === `driver_${driver.id}` && msg.receiver_id === currentUserId && !msg.read)
+  // Calculate unread message counts for each vehicle
+  const unreadCounts = vehicles.reduce((acc, vehicle) => {
+    const vehicleMessages = messages.filter(msg =>
+      (msg.sender_id === `driver_${vehicle.id}` && msg.receiver_id === currentUserId && !msg.read)
     );
-    acc[driver.id] = driverMessages.length;
+    acc[vehicle.id] = vehicleMessages.length;
     return acc;
   }, {} as Record<number, number>);
 
@@ -72,20 +68,20 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
     getCurrentUser();
   }, []);
 
-  // Load messages for selected driver
+  // Load messages for selected vehicle
   useEffect(() => {
-    if (!selectedDriverId || !currentUserId) return;
+    if (!selectedVehicleId || !currentUserId) return;
 
     const loadMessages = async () => {
       if (SUPABASE_ENABLED) {
         const { data, error } = await supabase
           .from('driver_messages')
           .select('*')
-          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedDriverId}),and(sender_id.eq.driver_${selectedDriverId},or(receiver_id.eq.${currentUserId},receiver_id.eq.dispatcher))`)
+          .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},or(receiver_id.eq.${currentUserId},receiver_id.eq.dispatcher))`)
           .order('timestamp', { ascending: true });
 
         if (error) {
-          console.error('Error loading driver messages:', error);
+          console.error('Error loading vehicle messages:', error);
           return;
         }
 
@@ -94,19 +90,19 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
         // Local storage fallback
         const allMessages = getDriverMessages();
         const filteredMessages = allMessages.filter(msg =>
-          (msg.sender_id === currentUserId && msg.receiver_id === `driver_${selectedDriverId}`) ||
-          (msg.sender_id === `driver_${selectedDriverId}` && (msg.receiver_id === currentUserId || msg.receiver_id === 'dispatcher'))
+          (msg.sender_id === currentUserId && msg.receiver_id === `driver_${selectedVehicleId}`) ||
+          (msg.sender_id === `driver_${selectedVehicleId}` && (msg.receiver_id === currentUserId || msg.receiver_id === 'dispatcher'))
         ).sort((a, b) => a.timestamp - b.timestamp);
         setMessages(filteredMessages);
       }
     };
 
     loadMessages();
-  }, [selectedDriverId, currentUserId]);
+  }, [selectedVehicleId, currentUserId]);
 
   // Subscribe to new messages (only when Supabase is enabled)
   useEffect(() => {
-    if (!selectedDriverId || !currentUserId || !SUPABASE_ENABLED) return;
+    if (!selectedVehicleId || !currentUserId || !SUPABASE_ENABLED) return;
 
     const channel = supabase
       .channel('driver_messages')
@@ -114,16 +110,16 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
         event: 'INSERT',
         schema: 'public',
         table: 'driver_messages',
-        filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedDriverId}),and(sender_id.eq.driver_${selectedDriverId},or(receiver_id.eq.${currentUserId},receiver_id.eq.dispatcher)))`
+        filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.driver_${selectedVehicleId}),and(sender_id.eq.driver_${selectedVehicleId},or(receiver_id.eq.${currentUserId},receiver_id.eq.dispatcher)))`
       }, (payload) => {
         const newMessage = payload.new as ChatMessage;
         setMessages(prev => [...prev, newMessage]);
 
-        // Notify about new message if it's from a driver and not currently selected
-        if (newMessage.sender_id.startsWith('driver_') && newMessage.receiver_id !== `driver_${selectedDriverId}`) {
-          const driverId = parseInt(newMessage.sender_id.replace('driver_', ''));
+        // Notify about new message if it's from a vehicle and not currently selected
+        if (newMessage.sender_id.startsWith('driver_') && newMessage.receiver_id !== `driver_${selectedVehicleId}`) {
+          const vehicleId = parseInt(newMessage.sender_id.replace('driver_', ''));
           if (onNewMessage) {
-            onNewMessage(driverId, newMessage.message);
+            onNewMessage(vehicleId, newMessage.message);
           }
         }
       })
@@ -132,7 +128,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedDriverId, currentUserId]);
+  }, [selectedVehicleId, currentUserId]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -140,14 +136,14 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
   }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedDriverId || !currentUserId || sending) return;
+    if (!newMessage.trim() || !selectedVehicleId || !currentUserId || sending) return;
 
     setSending(true);
     try {
       const messageData = {
         id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         sender_id: currentUserId,
-        receiver_id: `driver_${selectedDriverId}`,
+        receiver_id: `driver_${selectedVehicleId}`,
         message: newMessage.trim(),
         timestamp: Date.now(),
         read: false
@@ -198,12 +194,12 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
     });
   };
 
-  // Mark messages as read when driver is selected
+  // Mark messages as read when vehicle is selected
   useEffect(() => {
-    if (!selectedDriverId || !currentUserId || messages.length === 0) return;
+    if (!selectedVehicleId || !currentUserId || messages.length === 0) return;
 
     const unreadMessages = messages.filter(msg =>
-      msg.sender_id === `driver_${selectedDriverId}` &&
+      msg.sender_id === `driver_${selectedVehicleId}` &&
       msg.receiver_id === currentUserId &&
       !msg.read
     );
@@ -240,9 +236,9 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
   const getSenderName = (senderId: string) => {
     if (senderId === currentUserId) return 'Vy';
     if (senderId.startsWith('driver_')) {
-      const driverId = parseInt(senderId.replace('driver_', ''));
-      const driver = drivers.find(d => d.id === driverId);
-      return driver ? driver.name : 'Řidič';
+      const vehicleId = parseInt(senderId.replace('driver_', ''));
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      return vehicle ? vehicle.name : 'Vozidlo';
     }
     return 'Neznámý';
   };
@@ -256,32 +252,32 @@ export const DriverChat: React.FC<DriverChatProps> = ({ people, vehicles, onNewM
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
           </div>
-          Chat s řidiči
+          Chat s vozidly
         </h3>
       </div>
 
       <div className="flex-shrink-0 mb-3">
         <select
-          value={selectedDriverId || ''}
-          onChange={(e) => setSelectedDriverId(e.target.value ? parseInt(e.target.value) : null)}
+          value={selectedVehicleId || ''}
+          onChange={(e) => setSelectedVehicleId(e.target.value ? parseInt(e.target.value) : null)}
           className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
         >
-          <option value="">Vyberte řidiče...</option>
-           {drivers.map(driver => (
-             <option key={driver.id} value={driver.id}>
-               {driver.name} {unreadCounts[driver.id] > 0 && `(${unreadCounts[driver.id]})`}
-             </option>
-           ))}
+          <option value="">Vyberte vozidlo...</option>
+           {vehicles.map(vehicle => (
+            <option key={vehicle.id} value={vehicle.id}>
+              {vehicle.name} {unreadCounts[vehicle.id] > 0 && `(${unreadCounts[vehicle.id]})`}
+            </option>
+          ))}
         </select>
       </div>
 
-      {selectedDriverId && (
+      {selectedVehicleId && (
         <>
           <div className="flex-1 overflow-y-auto mb-3 bg-slate-900/50 rounded-lg p-3 min-h-0">
-            {messages.length === 0 ? (
-              <p className="text-sm text-slate-400 italic text-center">
-                Žádné zprávy s tímto řidičem
-              </p>
+             {messages.length === 0 ? (
+               <p className="text-sm text-slate-400 italic text-center">
+                 Žádné zprávy s tímto vozidlem
+               </p>
             ) : (
               <div className="space-y-2">
                 {messages.map((msg) => (

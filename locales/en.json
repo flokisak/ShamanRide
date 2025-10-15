@@ -278,6 +278,10 @@
       "title": "New message from driver",
       "message": "{driverName}: {message}"
     },
+    "vehicleMessage": {
+      "title": "New message from vehicle",
+      "message": "{vehicleName}: {message}"
+    },
     "rideScheduled": "The ride has been scheduled and added to the list.",
     "noRidesToExport": "Ride history is empty, nothing to export.",
     "dataLoadedSuccess": "Data was loaded successfully.",

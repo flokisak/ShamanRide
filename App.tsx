@@ -361,6 +361,40 @@ const AppContent: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Real-time subscription for vehicle status changes (from driver app)
+  useEffect(() => {
+    if (!SUPABASE_ENABLED) return;
+
+    const vehicleChannel = supabase
+      .channel('vehicle_status_changes')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'vehicles'
+      }, (payload) => {
+        const updatedVehicle = payload.new;
+        console.log('Vehicle status changed:', updatedVehicle);
+
+        setVehicles(prevVehicles =>
+          prevVehicles.map(v =>
+            v.id === updatedVehicle.id
+              ? {
+                  ...v,
+                  status: updatedVehicle.status,
+                  location: updatedVehicle.location || v.location,
+                  updated_at: updatedVehicle.updated_at
+                }
+              : v
+          )
+        );
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(vehicleChannel);
+    };
+  }, []);
+
       // --- Sync state changes to Supabase when enabled, otherwise keep localStorage ---
 
 
@@ -481,10 +515,9 @@ const AppContent: React.FC = () => {
       try {
         console.log('🔄 Starting continuous sync (save only) with Supabase...');
 
-        // Save current local data to Supabase
         await Promise.all([
           supabaseService.updatePeople(people).catch(err => console.warn('Failed to sync people:', err)),
-          supabaseService.updateVehicles(vehicles).catch(err => console.warn('Failed to sync vehicles:', err)),
+          supabaseService.updateVehicles(vehicles, { excludeStatus: true }).catch(err => console.warn('Failed to sync vehicles (without status):', err)),
           supabaseService.updateRideLogs(rideLog).catch(err => console.warn('Failed to sync ride logs:', err)),
           supabaseService.updateNotifications(notifications).catch(err => console.warn('Failed to sync notifications:', err)),
           supabaseService.updateTariff(tariff).catch(err => console.warn('Failed to sync tariff:', err)),
@@ -1587,17 +1620,17 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-     driverChat: <DriverChat people={people} vehicles={vehicles} onNewMessage={(driverId, message) => {
-       const driver = people.find(p => p.id === driverId);
-       if (driver) {
-         setNotifications(prev => [...prev, {
-           id: `driver-msg-${Date.now()}`,
-           type: 'info',
-           titleKey: 'notifications.driverMessage.title',
-           messageKey: 'notifications.driverMessage.message',
-           messageParams: { driverName: driver.name, message: message.length > 50 ? message.substring(0, 50) + '...' : message },
-           timestamp: Date.now(),
-         }]);
+      driverChat: <DriverChat vehicles={vehicles} onNewMessage={(vehicleId, message) => {
+        const vehicle = vehicles.find(v => v.id === vehicleId);
+        if (vehicle) {
+          setNotifications(prev => [...prev, {
+            id: `vehicle-msg-${Date.now()}`,
+            type: 'info',
+            titleKey: 'notifications.vehicleMessage.title',
+            messageKey: 'notifications.vehicleMessage.message',
+            messageParams: { vehicleName: vehicle.name, message: message.length > 50 ? message.substring(0, 50) + '...' : message },
+            timestamp: Date.now(),
+          }]);
        }
      }} />,
   };

@@ -91,13 +91,20 @@ const Dashboard: React.FC = () => {
 
     getVehicleInfo();
 
-    // Subscribe to ride assignments
+    // Subscribe to ride assignments and updates
     const rideChannel = supabase
       .channel('ride_assignments')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('New ride assigned:', payload);
         // Check if it's for this vehicle
         getVehicleInfo();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+        console.log('Ride updated:', payload);
+        // Check if it's for this vehicle
+        if (vehicleNumber && payload.new.vehicle_id === vehicleNumber) {
+          getVehicleInfo();
+        }
       })
       .subscribe();
 
@@ -112,6 +119,30 @@ const Dashboard: React.FC = () => {
           payload.new.receiver_id === `driver_${vehicleNumber}`
         )) {
           setMessages(prev => [...prev, payload.new]);
+        }
+      })
+      .subscribe();
+
+    // Subscribe to vehicle status changes (from dispatcher app)
+    const vehicleChannel = supabase
+      .channel('vehicle_status_changes_driver')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'vehicles'
+      }, (payload) => {
+        const updatedVehicle = payload.new;
+        console.log('Vehicle status changed (driver app):', updatedVehicle);
+
+        // Only update if this is our vehicle
+        if (vehicleNumber && updatedVehicle.id === vehicleNumber) {
+          const newStatus = updatedVehicle.status === 'AVAILABLE' ? 'available' :
+                           updatedVehicle.status === 'BUSY' ? 'on_ride' :
+                           updatedVehicle.status === 'BREAK' ? 'break' :
+                           updatedVehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline';
+
+          console.log(`Updating local status to ${newStatus} from database change`);
+          setDriverStatus(newStatus);
         }
       })
       .subscribe();
@@ -178,6 +209,7 @@ const Dashboard: React.FC = () => {
     return () => {
       supabase.removeChannel(rideChannel);
       supabase.removeChannel(messageChannel);
+      supabase.removeChannel(vehicleChannel);
       if (watchId) {
         navigator.geolocation.clearWatch(watchId);
       }
@@ -238,32 +270,50 @@ const Dashboard: React.FC = () => {
   const updateVehicleStatus = async (status: string) => {
     if (!vehicleNumber) return;
 
-    let breakEndTimeValue = null;
-    let vehicleStatus = status;
+    try {
+      let breakEndTimeValue = null;
+      let vehicleStatus = status;
 
-    // Handle break times
-    if (status.startsWith('break_')) {
-      const breakMinutes = parseInt(status.split('_')[1]);
-      breakEndTimeValue = Date.now() + (breakMinutes * 60 * 1000);
-      setBreakEndTime(breakEndTimeValue);
-      vehicleStatus = 'BREAK'; // Vehicle status should be BREAK
-      status = 'break'; // Driver status stored as 'break'
-    } else {
-      setBreakEndTime(null);
-      // Map driver status to vehicle status
-      if (status === 'available') vehicleStatus = 'AVAILABLE';
-      else if (status === 'on_ride') vehicleStatus = 'BUSY';
-      else if (status === 'offline') vehicleStatus = 'OUT_OF_SERVICE';
-      else vehicleStatus = status.toUpperCase();
+      // Handle break times
+      if (status.startsWith('break_')) {
+        const breakMinutes = parseInt(status.split('_')[1]);
+        breakEndTimeValue = Date.now() + (breakMinutes * 60 * 1000);
+        setBreakEndTime(breakEndTimeValue);
+        vehicleStatus = 'BREAK'; // Vehicle status should be BREAK
+        status = 'break'; // Driver status stored as 'break'
+      } else {
+        setBreakEndTime(null);
+        // Map driver status to vehicle status
+        if (status === 'available') vehicleStatus = 'AVAILABLE';
+        else if (status === 'on_ride') vehicleStatus = 'BUSY';
+        else if (status === 'offline') vehicleStatus = 'OUT_OF_SERVICE';
+        else vehicleStatus = status.toUpperCase();
+      }
+
+      console.log(`Updating vehicle ${vehicleNumber} status to ${vehicleStatus}`);
+
+      // Update vehicle status directly
+      const { error } = await supabase.from('vehicles').update({
+        status: vehicleStatus,
+        updated_at: new Date().toISOString()
+      }).eq('id', vehicleNumber);
+
+      if (error) {
+        console.error('Failed to update vehicle status:', error);
+        alert('Failed to update vehicle status: ' + error.message);
+        return;
+      }
+
+       console.log(`Vehicle ${vehicleNumber} status updated successfully to ${vehicleStatus}`);
+       setDriverStatus(status);
+
+       // Show success feedback
+       console.log(`Status updated to ${status}`);
+
+    } catch (err: any) {
+      console.error('Error updating vehicle status:', err);
+      alert('Error updating vehicle status: ' + err.message);
     }
-
-    // Update vehicle status directly
-    await supabase.from('vehicles').update({
-      status: vehicleStatus,
-      updated_at: new Date().toISOString()
-    }).eq('id', vehicleNumber);
-
-    setDriverStatus(status);
   };
 
   const acceptRide = async () => {

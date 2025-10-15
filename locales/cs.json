@@ -300,6 +300,10 @@
       "title": "Nová zpráva od řidiče",
       "message": "{driverName}: {message}"
     },
+    "vehicleMessage": {
+      "title": "Nová zpráva od vozidla",
+      "message": "{vehicleName}: {message}"
+    },
     "rideScheduled": "Jízda byla naplánována a přidána do seznamu.",
     "noRidesToExport": "Historie jízd je prázdná, není co exportovat.",
     "dataLoadedSuccess": "Data byla úspěšně načtena.",
