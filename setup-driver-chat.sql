@@ -62,13 +62,28 @@ UPDATE vehicles SET phone = '+420 792 892 655' WHERE id = 7; -- Vlado
 */
 
 -- 3. Update vehicles with car phone numbers:
--- Note: Update these with your actual vehicle phone numbers
+-- Option A: If phone column is TEXT/VARCHAR (recommended)
 UPDATE vehicles SET phone = '+420 736 168 796' WHERE id = 1; -- vinnetaxi1@gmail.com
 UPDATE vehicles SET phone = '+420 739 355 521' WHERE id = 2; -- vinnetaxi2@gmail.com
 UPDATE vehicles SET phone = '+420 730 635 302' WHERE id = 3; -- vinnetaxi3@gmail.com
 UPDATE vehicles SET phone = '+420 720 581 296' WHERE id = 4; -- vinnetaxi4@gmail.com
 UPDATE vehicles SET phone = '+420 777 807 874' WHERE id = 5; -- vinnetaxi5@gmail.com
 UPDATE vehicles SET phone = '+420 720 758 823' WHERE id = 6; -- vinnetaxi6@gmail.com
+
+-- Option B: If phone column is NUMERIC (current issue)
+-- First change column type: ALTER TABLE vehicles ALTER COLUMN phone TYPE TEXT;
+-- Then run the updates above
+
+-- Option C: Store as numeric (remove formatting)
+-- UPDATE vehicles SET phone = '420736168796' WHERE id = 1;
+-- UPDATE vehicles SET phone = '420739355521' WHERE id = 2;
+-- etc.
+
+-- To check current column type:
+-- SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'vehicles' AND column_name = 'phone';
+
+-- To change column type to TEXT (recommended):
+-- ALTER TABLE vehicles ALTER COLUMN phone TYPE TEXT;
 */
 
 -- ===========================================
