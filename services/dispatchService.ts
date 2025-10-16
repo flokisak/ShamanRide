@@ -239,15 +239,7 @@ const EXPANDED_SEARCH_BOUNDS = { lonMin: 12.0, latMin: 46.0, lonMax: 24.0, latMa
 /**
  * Checks if coordinates are within South Moravia bounds.
  */
-function isInSouthMoravia(lat: number, lon: number): boolean {
-    return lon >= SOUTH_MORAVIA_BOUNDS.lonMin && lon <= SOUTH_MORAVIA_BOUNDS.lonMax &&
-           lat >= SOUTH_MORAVIA_BOUNDS.latMin && lat <= SOUTH_MORAVIA_BOUNDS.latMax;
-}
 
-function isInCzechRepublic(lat: number, lon: number): boolean {
-    // Approximate bounds for Czech Republic
-    return lon >= 12.0 && lon <= 18.9 && lat >= 48.5 && lat <= 51.1;
-}
 
 /**
  * Converts an address to geographic coordinates using Google Maps Geocoding API.
@@ -305,41 +297,51 @@ export async function geocodeAddress(address: string, language: string): Promise
 /**
  * Fallback geocoding using Nominatim (OpenStreetMap)
  */
+function isInSouthMoravia(lat: number, lon: number): boolean {
+  return lon >= SOUTH_MORAVIA_BOUNDS.lonMin && lon <= SOUTH_MORAVIA_BOUNDS.lonMax &&
+         lat >= SOUTH_MORAVIA_BOUNDS.latMin && lat <= SOUTH_MORAVIA_BOUNDS.latMax;
+}
+
+function isInCzechRepublic(lat: number, lon: number): boolean {
+  // Approximate bounds for Czech Republic
+  return lon >= 12.0 && lon <= 18.9 && lat >= 48.5 && lat <= 51.1;
+}
+
 async function geocodeWithNominatim(address: string): Promise<{ lat: number; lon: number }> {
-    try {
-        const proxyUrl = 'https://corsproxy.io/?';
-        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+  try {
+    const proxyUrl = 'https://corsproxy.io/?';
+    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
 
-        const response = await fetch(nominatimUrl);
-        if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
-        const data = await response.json();
+    const response = await fetch(nominatimUrl);
+    if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
+    const data = await response.json();
 
-        if (data && Array.isArray(data) && data.length > 0) {
-            // First priority: results within South Moravia bounds
-            for (const result of data) {
-                const lat = parseFloat(result.lat);
-                const lon = parseFloat(result.lon);
-                if (isInSouthMoravia(lat, lon)) {
-                    return { lat, lon };
-                }
-            }
-            // Second priority: results within Czech Republic
-            for (const result of data) {
-                const lat = parseFloat(result.lat);
-                const lon = parseFloat(result.lon);
-                if (isInCzechRepublic(lat, lon)) {
-                    return { lat, lon };
-                }
-            }
-            // Third priority: any result
-            const result = data[0];
-            return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
+    if (data && Array.isArray(data) && data.length > 0) {
+      // First priority: results within South Moravia bounds
+      for (const result of data) {
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
+        if (isInSouthMoravia(lat, lon)) {
+          return { lat, lon };
         }
-        throw new Error(`Address not found: ${cleanAddress}`);
-    } catch (error) {
-        console.error("Nominatim geocoding error:", error);
-        throw new Error(`Could not find coordinates for address: ${address}.`);
+      }
+      // Second priority: results within Czech Republic
+      for (const result of data) {
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
+        if (isInCzechRepublic(lat, lon)) {
+          return { lat, lon };
+        }
+      }
+      // Third priority: any result
+      const result = data[0];
+      return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
     }
+    throw new Error(`Address not found: ${address}.`);
+  } catch (error) {
+    console.error("Nominatim geocoding error:", error);
+    throw new Error(`Could not find coordinates for address: ${address}.`);
+  }
 }
 
 // In-memory cache for suggestions to avoid repeated API calls for the same query

@@ -663,50 +663,63 @@ const Dashboard: React.FC = () => {
 
     const endRide = async () => {
       if (currentRide && vehicleNumber) {
-        const updatedRide = { ...currentRide, status: RideStatus.Completed, completedAt: Date.now() };
-        await supabaseService.addRideLog(updatedRide);
+        try {
+          console.log('Ending ride:', currentRide.id);
+          const updatedRide = { ...currentRide, status: RideStatus.Completed, completedAt: Date.now() };
+          await supabaseService.addRideLog(updatedRide);
+          console.log('Ride completed in database');
 
-      // Check if there are pending rides in queue
-      const nextRide = pendingRides.length > 0 ? pendingRides[0] : null;
+         // Check if there are pending rides in queue
+         const nextRide = pendingRides.length > 0 ? pendingRides[0] : null;
 
-      if (nextRide) {
-        // Automatically accept the next ride in queue
-        const updatedNextRide = { ...nextRide, status: RideStatus.Accepted };
-        await supabaseService.addRideLog(updatedNextRide);
+         if (nextRide) {
+           console.log('Accepting next ride in queue:', nextRide.id);
+           // Automatically accept the next ride in queue
+           const updatedNextRide = { ...nextRide, status: RideStatus.Accepted };
+           await supabaseService.addRideLog(updatedNextRide);
 
-        // Update vehicle status to BUSY, set freeAt to estimated completion time
-        const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
-        const locationUpdate: any = {
-          status: 'BUSY',
-          free_at: freeAt
-        };
+           // Update vehicle status to BUSY, set freeAt to estimated completion time
+           const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+           const locationUpdate: any = {
+             status: 'BUSY',
+             free_at: freeAt
+           };
 
-        if (location) {
-          locationUpdate.location = `${location.lat}, ${location.lng}`;
-        }
+           if (location) {
+             locationUpdate.location = `${location.lat}, ${location.lng}`;
+           }
 
-        await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
+           await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
 
-        // Update state: remove from pending, set as current
-        setPendingRides(prev => prev.filter(r => r.id !== nextRide.id));
-        setCurrentRide({ ...nextRide, status: RideStatus.Accepted });
-      } else {
-        // No more rides, set to AVAILABLE and clear freeAt
-        const locationUpdate: any = {
-          status: 'AVAILABLE',
-          free_at: null
-        };
+           // Update state: remove from pending, set as current
+           setPendingRides(prev => prev.filter(r => r.id !== nextRide.id));
+           setCurrentRide({ ...nextRide, status: RideStatus.Accepted });
+           console.log('Next ride accepted and set as current');
+         } else {
+           console.log('No more rides, setting vehicle to available');
+           // No more rides, set to AVAILABLE and clear freeAt
+           const locationUpdate: any = {
+             status: 'AVAILABLE',
+             free_at: null
+           };
 
-        if (location) {
-          locationUpdate.location = `${location.lat}, ${location.lng}`;
-        }
+           if (location) {
+             locationUpdate.location = `${location.lat}, ${location.lng}`;
+           }
 
-        await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
+           await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
 
-        setCurrentRide(null);
-      }
-    }
-  };
+           setCurrentRide(null);
+           console.log('Vehicle set to available, no current ride');
+         }
+       } catch (error) {
+         console.error('Error ending ride:', error);
+         alert('Error ending ride: ' + error.message);
+       }
+     } else {
+       console.log('Cannot end ride: currentRide =', !!currentRide, 'vehicleNumber =', vehicleNumber);
+     }
+   };
 
   const navigateToDestination = async (ride?: RideLog, navApp?: 'google' | 'mapy') => {
     const targetRide = ride || currentRide;
