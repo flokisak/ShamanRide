@@ -4,12 +4,15 @@ import { DEFAULT_FUEL_PRICES } from '../types';
 const isBrowser = typeof window !== 'undefined';
 const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
 const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.SUPABASE_ANON_KEY;
+const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.SUPABASE_SERVICE_KEY;
 
-export const SUPABASE_ENABLED = Boolean(supabaseUrl && supabaseAnonKey);
+export const SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
 
-let supabase: any = null;
+export let supabase: any = null;
 if (SUPABASE_ENABLED) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
+  // Use service key if available (for driver app), otherwise anon key
+  const key = supabaseServiceKey || supabaseAnonKey;
+  supabase = createClient(supabaseUrl, key);
 } else {
   console.warn('Supabase is not configured. Falling back to localStorage-based local mode.');
 }
@@ -237,7 +240,7 @@ export const supabaseService = SUPABASE_ENABLED
               stops: r.stops,
               passengers: r.passengers,
               pickup_time: r.pickupTime,
-               status: r.status.toLowerCase().replace(/_/g, '_'),
+                status: r.status.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, ''),
               vehicle_id: r.vehicleId ?? null,
               notes: r.notes ?? null,
               estimated_price: r.estimatedPrice ?? null,
@@ -273,7 +276,7 @@ export const supabaseService = SUPABASE_ENABLED
             stops: db.stops,
             passengers: db.passengers,
             pickupTime: db.pickup_time,
-             status: (db.status || '').toUpperCase().replace(/_/g, '_'),
+              status: (db.status || '').split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(''),
             vehicleId: db.vehicle_id ?? null,
             notes: db.notes ?? null,
             estimatedPrice: db.estimated_price ?? null,
@@ -602,9 +605,28 @@ export const supabaseService = SUPABASE_ENABLED
       async getRideLogs() {
         return readTable('ride-log');
       },
-      async addRideLog(rideLog: any) {
-        upsertLocal('ride-log', rideLog);
-      },
+          async addRideLog(rideLog: any) {
+            const dbData = this._toDbRideLog(rideLog);
+            console.log('addRideLog: sending to database:', dbData);
+            if (SUPABASE_ENABLED) {
+              // Try update first, since the record should exist
+              const { data: updateData, error: updateError } = await supabase.from('ride_logs').update(dbData).eq('id', rideLog.id);
+              console.log('Update result:', { data: updateData, error: updateError });
+              if (updateError) {
+                console.warn('Update failed, trying upsert:', updateError);
+                const { data: upsertData, error: upsertError } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
+                console.log('Upsert result:', { data: upsertData, error: upsertError });
+                if (upsertError) {
+                  console.error('addRideLog upsert error:', upsertError);
+                  throw upsertError;
+                }
+              }
+              console.log('addRideLog: successfully saved to Supabase');
+            } else {
+              console.log('addRideLog: Supabase not enabled, using localStorage');
+            }
+            upsertLocal('ride-log', rideLog);
+          },
       async updateRideLogs(rideLogs: any[]) {
         writeTable('ride-log', rideLogs);
       },

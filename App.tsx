@@ -182,62 +182,109 @@ const AppContent: React.FC = () => {
   // Reload SMS messages periodically to show incoming messages
   useEffect(() => {
     reloadSmsMessages(); // Initial load
-    const interval = setInterval(reloadSmsMessages, 10000); // every 10 seconds
+    const interval = setInterval(reloadSmsMessages, 60000); // every 60 seconds
     return () => clearInterval(interval);
   }, [reloadSmsMessages]);
 
-  // Subscribe to real-time ride updates from drivers
-  useEffect(() => {
-    if (!SUPABASE_ENABLED) return;
+    // Subscribe to real-time ride updates from drivers
+    useEffect(() => {
+      if (!SUPABASE_ENABLED) return;
 
-    console.log('Setting up dispatcher ride updates subscription');
-    const rideChannel = supabase
-      .channel('dispatcher_ride_updates')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-        console.log('Ride updated by driver:', payload);
-        const updatedRide = payload.new;
+      console.log('Setting up dispatcher ride updates subscription');
+      const rideChannel = supabase
+        .channel('dispatcher_ride_updates')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
+          console.log('New ride inserted:', payload);
+          const newRide = payload.new;
 
-        // Update local ride log
-        const statusLower = updatedRide.status.toLowerCase();
-        setRideLog(prev => prev.map(ride =>
-          ride.id === updatedRide.id
-            ? {
-                ...ride,
-                status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                        statusLower === 'completed' ? RideStatus.Completed :
-                        statusLower === 'cancelled' ? RideStatus.Cancelled :
-                        ride.status,
-                completedAt: updatedRide.completed_at || ride.completedAt
-              }
-            : ride
-        ));
+          // Map from DB format to app format
+          const mappedRide = {
+            id: newRide.id,
+            timestamp: newRide.timestamp,
+            vehicleName: newRide.vehicle_name ?? null,
+            vehicleLicensePlate: newRide.vehicle_license_plate ?? null,
+            driverName: newRide.driver_name ?? null,
+            vehicleType: newRide.vehicle_type ?? null,
+            customerName: newRide.customer_name,
+            rideType: (newRide.ride_type ?? 'business').toUpperCase(),
+            customerPhone: newRide.customer_phone,
+            stops: newRide.stops,
+            passengers: newRide.passengers,
+            pickupTime: newRide.pickup_time,
+            status: (newRide.status || '').split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(''),
+            vehicleId: newRide.vehicle_id ?? null,
+            notes: newRide.notes ?? null,
+            estimatedPrice: newRide.estimated_price ?? null,
+            estimatedPickupTimestamp: newRide.estimated_pickup_timestamp,
+            estimatedCompletionTimestamp: newRide.estimated_completion_timestamp,
+            fuelCost: newRide.fuel_cost ?? null,
+            distance: newRide.distance ?? null,
+            acceptedAt: newRide.accepted_at ?? null,
+            startedAt: newRide.started_at ?? null,
+            completedAt: newRide.completed_at ?? null,
+          };
 
-        // Send status change message to driver if this is a status change
-        if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
-          // Find the ride in our local state to get full details
-          const localRide = rideLog.find(r => r.id === updatedRide.id);
-          if (localRide) {
-            const oldStatusLower = payload.old.status.toLowerCase();
-            const oldStatus = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
-                              oldStatusLower === 'completed' ? RideStatus.Completed :
-                              oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
-                              RideStatus.Pending;
-            const newStatus = statusLower === 'in_progress' ? RideStatus.InProgress :
-                              statusLower === 'completed' ? RideStatus.Completed :
-                              statusLower === 'cancelled' ? RideStatus.Cancelled :
-                              localRide.status;
-            const updatedRideForMessage = { ...localRide, status: newStatus };
-            sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatus);
+          // Add new ride to local ride log
+          setRideLog(prev => [mappedRide, ...prev]);
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+          console.log('Ride updated by driver:', payload);
+          const updatedRide = payload.new;
+
+          // Update local ride log
+          const statusLower = updatedRide.status.toLowerCase();
+          setRideLog(prev => prev.map(ride =>
+            ride.id === updatedRide.id
+              ? {
+                  ...ride,
+                  status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                          statusLower === 'completed' ? RideStatus.Completed :
+                          statusLower === 'cancelled' ? RideStatus.Cancelled :
+                          ride.status,
+                  completedAt: updatedRide.completed_at || ride.completedAt
+                }
+              : ride
+          ));
+
+          // Send status change message to driver if this is a status change
+          if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
+            // Find the ride in our local state to get full details
+            const localRide = rideLog.find(r => r.id === updatedRide.id);
+            if (localRide) {
+              const oldStatusLower = payload.old.status.toLowerCase();
+              const oldStatus = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
+                                oldStatusLower === 'completed' ? RideStatus.Completed :
+                                oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
+                                RideStatus.Pending;
+              const newStatus = statusLower === 'in_progress' ? RideStatus.InProgress :
+                                statusLower === 'completed' ? RideStatus.Completed :
+                                statusLower === 'cancelled' ? RideStatus.Cancelled :
+                                localRide.status;
+              const updatedRideForMessage = { ...localRide, status: newStatus };
+              sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatus);
+            }
           }
-        }
-      })
-      .subscribe();
+        })
+        .subscribe();
 
-    return () => {
-      console.log('Cleaning up dispatcher ride updates subscription');
-      supabase.removeChannel(rideChannel);
-    };
-  }, []); // Remove dependencies to prevent re-subscription on every state change
+      // Subscribe to ride update notifications from driver app
+      const updateChannel = supabase
+        .channel('ride_updates')
+        .on('broadcast', { event: 'ride_updated' }, (payload) => {
+          console.log('Received ride update notification from driver:', payload);
+          // Reload ride logs to get the latest status
+          supabaseService.getRideLogs().then(rl => {
+            setRideLog(Array.isArray(rl) ? rl : []);
+          }).catch(err => console.error('Error reloading ride logs:', err));
+        })
+        .subscribe();
+
+      return () => {
+        console.log('Cleaning up dispatcher ride updates subscription');
+        supabase.removeChannel(rideChannel);
+        supabase.removeChannel(updateChannel);
+      };
+    }, []); // Remove dependencies to prevent re-subscription on every state change
 
   // Layout and widget visibility remain local-only. Load persisted values but merge with defaults
   const [layout, setLayout] = useState<LayoutConfig>(() => {
@@ -416,7 +463,7 @@ const AppContent: React.FC = () => {
         });
         return needsUpdate ? updated : prevVehicles;
       });
-    }, 5000);
+    }, 30000); // Check every 30 seconds
 
     return () => clearInterval(interval);
   }, []);
@@ -570,7 +617,7 @@ const AppContent: React.FC = () => {
         localStorage.setItem('rapid-dispatch-layout', JSON.stringify(layout));
       }, [layout]);
 
-  // Continuous synchronization every 1 minute (fetch and save)
+  // Continuous synchronization every 5 minutes (save only)
   useEffect(() => {
     if (!SUPABASE_ENABLED || !user) return;
 
@@ -592,14 +639,14 @@ const AppContent: React.FC = () => {
 
         console.log('✅ Continuous sync (save only) completed successfully');
       } catch (err) {
-        console.warn('⚠️ Continuous sync failed, will retry in 1 minute:', err);
+        console.warn('⚠️ Continuous sync failed, will retry in 5 minutes:', err);
         // Don't show error to user, just log it
       }
     };
 
-    // Run initial sync after 5 seconds, then every 60 seconds
+    // Run initial sync after 5 seconds, then every 5 minutes
     const initialTimeout = setTimeout(syncData, 5000);
-    const interval = setInterval(syncData, 60000);
+    const interval = setInterval(syncData, 300000);
 
     return () => {
       clearTimeout(initialTimeout);
@@ -658,7 +705,7 @@ const AppContent: React.FC = () => {
          }
      };
 
-     const interval = setInterval(checkNotifications, 10000);
+      const interval = setInterval(checkNotifications, 60000);
      return () => clearInterval(interval);
    }, [rideLog, notifications]);
 
@@ -1452,6 +1499,15 @@ const AppContent: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   };
 
+  const reloadRideLogs = useCallback(async () => {
+    try {
+      const rl = await supabaseService.getRideLogs().catch(() => []);
+      setRideLog(Array.isArray(rl) ? rl : []);
+    } catch (err) {
+      console.error('Error reloading ride logs:', err);
+    }
+  }, []);
+
   const handleClearRideHistory = useCallback(() => {
     if (rideLog.length > 0 && window.confirm(t('settings.data.confirmClearHistory'))) {
       setRideLog([]);
@@ -1906,23 +1962,34 @@ const AppContent: React.FC = () => {
                         <div className={`col-start-1 row-start-3 col-span-${rideLogColSpan}`}>
                            <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
                              <div className="p-3 border-b border-slate-700">
-                               <div className="flex justify-between items-center">
-                                 <h3 className="text-sm font-semibold text-white flex items-center">
-                                   <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
-                                     <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                    </svg>
-                                   </div>
-                                   Historie jízd
-                                 </h3>
-                                   <button
-                                     onClick={handleAddRideClick}
-                                     className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
-                                   >
-                                  <PlusIcon size={14} />
-                                  <span>Přidat jízdu</span>
-                                </button>
-                              </div>
+                                <div className="flex justify-between items-center">
+                                  <h3 className="text-sm font-semibold text-white flex items-center">
+                                    <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
+                                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                     </svg>
+                                    </div>
+                                    Historie jízd
+                                  </h3>
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={reloadRideLogs}
+                                        className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                                        title="Reload ride history"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={handleAddRideClick}
+                                        className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
+                                      >
+                                     <PlusIcon size={14} />
+                                     <span>Přidat jízdu</span>
+                                   </button>
+                                    </div>
+                               </div>
                             </div>
                             <div className="p-4">
                               {widgetMap.rideLog}
@@ -2014,13 +2081,24 @@ const AppContent: React.FC = () => {
                          </div>
                          Historie jízd
                        </h3>
-                          <button
-                            onClick={handleAddRideClick}
-                            className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
-                          >
-                         <PlusIcon size={14} />
-                         <span>Přidat jízdu</span>
-                       </button>
+                         <div className="flex items-center space-x-2">
+                           <button
+                             onClick={reloadRideLogs}
+                             className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                             title="Reload ride history"
+                           >
+                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                             </svg>
+                           </button>
+                           <button
+                             onClick={handleAddRideClick}
+                             className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
+                           >
+                          <PlusIcon size={14} />
+                          <span>Přidat jízdu</span>
+                        </button>
+                         </div>
                      </div>
                    </div>
                    <div className="p-4">

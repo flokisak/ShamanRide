@@ -41,9 +41,11 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
             };
 
             // Update the ride in the database
-            console.log('Completing ride:', ride.id, 'with status:', updatedRide.status, 'price:', finalPrice);
+            console.log('completeRide: Completing ride:', ride.id, 'with status:', updatedRide.status, 'price:', finalPrice);
+            console.log('completeRide: Updated ride object:', updatedRide);
+            console.log('completeRide: Calling supabaseService.addRideLog...');
             await supabaseService.addRideLog(updatedRide);
-            console.log('Ride completion database update completed');
+            console.log('completeRide: Ride completion database update completed successfully');
 
             // Notify dispatcher of ride update
             supabase.channel('ride_updates').send({

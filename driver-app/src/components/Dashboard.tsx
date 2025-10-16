@@ -571,12 +571,16 @@ const Dashboard: React.FC = () => {
     const acceptRideSpecific = async (ride: RideLog) => {
       if (vehicleNumber) {
         try {
+          console.log('acceptRideSpecific: Starting ride acceptance for ride:', ride.id);
           // Update ride status to in_progress (skip accepted, start ride immediately)
           const updatedRide = { ...ride, status: RideStatus.InProgress, acceptedAt: Date.now(), startedAt: Date.now() };
+          console.log('acceptRideSpecific: Updated ride object:', updatedRide);
           try {
+            console.log('acceptRideSpecific: Calling supabaseService.addRideLog...');
             await supabaseService.addRideLog(updatedRide);
+            console.log('acceptRideSpecific: Ride successfully saved to database');
           } catch (rideError) {
-            console.error('Failed to accept ride:', rideError);
+            console.error('acceptRideSpecific: Failed to accept ride:', rideError);
             alert('Failed to accept ride. Please try again.');
             return;
           }

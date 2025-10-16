@@ -149,6 +149,38 @@ const SOUTH_MORAVIA_BOUNDS = { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax:
 const EXPANDED_SEARCH_BOUNDS = { lonMin: 12.0, latMin: 46.0, lonMax: 24.0, latMax: 52.0 };
 
 // Geocoding functions
+const fetchPhotonCoords = async (addrToTry: string): Promise<{ lat: number; lon: number } | null> => {
+  const addr = addrToTry.split('|')[0];
+  const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(addr)}&limit=10&bbox=12.0,46.0,24.0,52.0`;
+  const response = await fetch(photonUrl);
+  if (!response.ok) return null;
+  const data = await response.json();
+  if (data && data.features && Array.isArray(data.features) && data.features.length > 0) {
+    // First priority: results within South Moravia bounds
+    for (const feature of data.features) {
+      const coords = feature.geometry.coordinates;
+      const lon = coords[0];
+      const lat = coords[1];
+      if (lon >= 16.3 && lon <= 17.2 && lat >= 48.7 && lat <= 49.3) {
+        return { lat, lon };
+      }
+    }
+    // Second priority: results within Czech Republic
+    for (const feature of data.features) {
+      const coords = feature.geometry.coordinates;
+      const lon = coords[0];
+      const lat = coords[1];
+      if (lon >= 12.0 && lon <= 18.9 && lat >= 48.5 && lat <= 51.1) {
+        return { lat, lon };
+      }
+    }
+    // Third priority: any result within expanded bounds
+    const coords = data.features[0].geometry.coordinates;
+    return { lat: coords[1], lon: coords[0] };
+  }
+  return null;
+};
+
 async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
     // Clean up malformed addresses that might have timestamps or other data appended
     const cleanAddress = address.split('|')[0].trim();
@@ -403,7 +435,7 @@ const supabaseService: any = SUPABASE_ENABLED ? {
                stops: r.stops,
                passengers: r.passengers,
                pickup_time: r.pickupTime,
-                status: r.status.toLowerCase().replace(/_/g, '_'),
+                status: r.status, // Keep original status format
                vehicle_id: r.vehicleId ?? null,
                notes: r.notes ?? null,
                estimated_price: r.estimatedPrice ?? null,
