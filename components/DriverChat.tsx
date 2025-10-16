@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Person, Vehicle } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
-import { supabase, SUPABASE_ENABLED } from '../driver-app/src/supabaseClient';
+import { supabase, SUPABASE_ENABLED } from '../services/supabaseClient';
 
 interface DriverChatProps {
   vehicles: Vehicle[];

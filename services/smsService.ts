@@ -1,4 +1,4 @@
-import { SUPABASE_ENABLED, supabaseService } from '../driver-app/src/supabaseClient';
+import { SUPABASE_ENABLED, supabaseService } from './supabaseClient';
 import type { RideLog } from '../types';
 
 export interface SmsMessageRecord {

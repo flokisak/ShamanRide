@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { OrderModal } from './components/OrderModal';
 import { Vehicle, Person, MessagingApp, VehicleType, VehicleStatus, PersonRole, FuelType } from './types';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { SUPABASE_ENABLED, supabaseService } from './driver-app/src/supabaseClient';
+import { SUPABASE_ENABLED, supabaseService } from './services/supabaseClient';
 
 // Initial data for people
 const initialPeople: Person[] = [

@@ -1,7 +1,7 @@
 import type { RideRequest, Vehicle, RideLog, Person, Tariff, FuelPrices, MessagingApp } from '../types';
 import { RideStatus, VehicleStatus, RideType, DEFAULT_TARIFF, DEFAULT_FUEL_PRICES } from '../types';
 import { findBestVehicle, generateSms, generateShareLink } from './dispatchService';
-import { SUPABASE_ENABLED, supabaseService } from '../driver-app/src/supabaseClient';
+import { SUPABASE_ENABLED, supabaseService } from './supabaseClient';
 
 
 export interface OrderResult {

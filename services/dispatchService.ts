@@ -1,6 +1,6 @@
 import type { RideRequest, Vehicle, AssignmentResultData, ErrorResult, AssignmentAlternative, Tariff, RideLog, FlatRateRule, MessagingApp } from '../types';
 import { VehicleStatus, VehicleType, MessagingApp as AppType, RideType } from '../types';
-import { supabaseService } from '../driver-app/src/supabaseClient';
+import { supabaseService } from './supabaseClient';
 
 const urlShortenCache = new Map<string, string>();
 

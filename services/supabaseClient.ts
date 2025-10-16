@@ -17,6 +17,8 @@ if (SUPABASE_ENABLED) {
   console.warn('Supabase is not configured. Falling back to localStorage-based local mode.');
 }
 
+export { supabase };
+
 // Minimal localStorage helpers for fallback mode
 const TABLE_PREFIX = 'rapid-dispatch-';
 const readTable = (table: string) => {
