@@ -344,13 +344,19 @@ export const supabaseService = SUPABASE_ENABLED
          if (error) throw error;
          return (data || []).map((d: any) => this._fromDbRideLog(d));
        },
-         async addRideLog(rideLog: any) {
-           if (SUPABASE_ENABLED) {
-             const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });
-             if (error) throw error;
-           }
-           upsertLocal('ride-log', rideLog);
-         },
+          async addRideLog(rideLog: any) {
+            if (SUPABASE_ENABLED) {
+              const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });
+              if (error) throw error;
+              // Notify driver apps of the update
+              supabase.channel('ride_updates').send({
+                type: 'broadcast',
+                event: 'ride_updated',
+                payload: { rideId: rideLog.id, status: rideLog.status, vehicleId: rideLog.vehicleId }
+              });
+            }
+            upsertLocal('ride-log', rideLog);
+          },
         async updateRideLogs(rideLogs: any[]) {
           if (SUPABASE_ENABLED) {
             try {

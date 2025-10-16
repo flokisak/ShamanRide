@@ -198,11 +198,11 @@ const supabaseService: any = SUPABASE_ENABLED ? {
         throw error;
       }
       console.log('addRideLog: successfully saved to Supabase');
-      // Notify dispatcher app of the update
+      // Notify other apps of the update
       supabase.channel('ride_updates').send({
         type: 'broadcast',
         event: 'ride_updated',
-        payload: { rideId: rideLog.id, status: rideLog.status }
+        payload: { rideId: rideLog.id, status: rideLog.status, vehicleId: rideLog.vehicleId }
       });
     } else {
       console.log('addRideLog: Supabase not enabled, using localStorage');

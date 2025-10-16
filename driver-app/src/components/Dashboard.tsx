@@ -253,6 +253,18 @@ const Dashboard: React.FC = () => {
         })
        .subscribe();
 
+    // Subscribe to ride update broadcasts from dispatcher
+    const updateChannel = supabase
+      .channel('ride_updates')
+      .on('broadcast', { event: 'ride_updated' }, (payload) => {
+        console.log('Received ride update broadcast:', payload);
+        // Only refresh if this update is for our vehicle
+        if (vehicleNumber && payload.vehicleId === vehicleNumber) {
+          refreshVehicleData();
+        }
+      })
+      .subscribe();
+
     // Subscribe to vehicle status changes (from dispatcher app)
     const vehicleChannel = supabase
       .channel('vehicle_status_changes_driver')
@@ -288,6 +300,7 @@ const Dashboard: React.FC = () => {
     return () => {
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(vehicleChannel);
+      supabase.removeChannel(updateChannel);
     };
   }, []);
 
@@ -300,6 +313,7 @@ const Dashboard: React.FC = () => {
       .channel('ride_assignments')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('New ride assigned:', payload);
+        console.log('vehicle_id in payload:', payload.new.vehicle_id, 'vehicleNumber:', vehicleNumber, 'match:', payload.new.vehicle_id === vehicleNumber);
         // Only refresh if this ride is assigned to our vehicle
         if (payload.new.vehicle_id === vehicleNumber) {
           const now = Date.now();
