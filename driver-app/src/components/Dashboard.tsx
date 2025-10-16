@@ -45,11 +45,18 @@ const Dashboard: React.FC = () => {
        console.log('Refresh already in progress or too recent, skipping');
        return;
      }
+
+     // Don't refresh if we just accepted a ride (prevent override)
+     if (lastAcceptedRideId && now - lastAcceptTime < 10000) { // 10 second buffer
+       console.log('Skipping refresh - recently accepted ride:', lastAcceptedRideId);
+       return;
+     }
+
      setIsRefreshing(true);
      setLastRefreshTime(now);
      setRefreshTrigger(prev => prev + 1);
      setTimeout(() => setIsRefreshing(false), 3000); // Prevent refreshes for 3 seconds
-   }, [isRefreshing, lastRefreshTime]);
+   }, [isRefreshing, lastRefreshTime, lastAcceptedRideId, lastAcceptTime]);
 
   // Auto-refresh function that can access refreshVehicleData
   const startAutoRefresh = () => {
@@ -601,6 +608,12 @@ const Dashboard: React.FC = () => {
           // Track this acceptance to prevent auto-refresh from overriding it
           setLastAcceptedRideId(ride.id);
           setLastAcceptTime(Date.now());
+
+          // Clear the tracking after 10 seconds to allow normal refreshes again
+          setTimeout(() => {
+            setLastAcceptedRideId(null);
+            setLastAcceptTime(0);
+          }, 10000);
 
           // Immediately update local state to prevent UI flicker
           setPendingRides(prev => prev.filter(r => r.id !== ride.id));

@@ -1,18 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabase as mainSupabase, SUPABASE_ENABLED } from '../../services/supabaseClient';
 import { DEFAULT_FUEL_PRICES } from './types';
 
-const isBrowser = typeof window !== 'undefined';
-const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
-const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.SUPABASE_ANON_KEY;
+// Re-export the main supabase client to avoid duplication
+export const supabase = mainSupabase;
 
-export const SUPABASE_ENABLED = Boolean(supabaseUrl && supabaseAnonKey);
-
-export let supabase: any = null;
-if (SUPABASE_ENABLED) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
-} else {
-  console.warn('Supabase is not configured. Falling back to localStorage-based local mode.');
-}
+// Re-export SUPABASE_ENABLED for compatibility
+export { SUPABASE_ENABLED };
 
 // Minimal localStorage helpers for fallback mode
 const TABLE_PREFIX = 'rapid-dispatch-';
