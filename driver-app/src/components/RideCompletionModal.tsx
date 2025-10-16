@@ -45,6 +45,13 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
             await supabaseService.addRideLog(updatedRide);
             console.log('Ride completion database update completed');
 
+            // Notify dispatcher of ride update
+            supabase.channel('ride_updates').send({
+              type: 'broadcast',
+              event: 'ride_updated',
+              payload: { rideId: ride.id }
+            });
+
             setModalState('success');
 
             // Notify parent component to refresh data
