@@ -172,7 +172,7 @@ const MapResizeController: React.FC = () => {
 };
 
 
-const VehicleMarker: React.FC<{ vehicle: Vehicle, people: Person[], gpsPosition?: GpsVehicle }> = ({ vehicle, people, gpsPosition }) => {
+const VehicleMarker: React.FC<{ vehicle: Vehicle, people: Person[], gpsPosition?: GpsVehicle, lastLocation?: {latitude: number; longitude: number; timestamp: string} }> = ({ vehicle, people, gpsPosition, lastLocation }) => {
     const { t, language } = useTranslation();
     const [position, setPosition] = useState<Coords | null>(null);
     const driver = people.find(p => p.id === vehicle.driverId);
@@ -180,12 +180,14 @@ const VehicleMarker: React.FC<{ vehicle: Vehicle, people: Person[], gpsPosition?
     useEffect(() => {
         if (gpsPosition) {
             setPosition([gpsPosition.lat, gpsPosition.lon]);
+        } else if (lastLocation) {
+            setPosition([lastLocation.latitude, lastLocation.longitude]);
         } else {
             geocodeAddress(vehicle.location, language)
                 .then(setPosition)
                 .catch(err => console.error(err));
         }
-    }, [vehicle.location, language, gpsPosition]);
+    }, [vehicle.location, language, gpsPosition, lastLocation]);
     
     const color = generateColorForVehicle(vehicle.id);
     const driverFirstName = driver?.name ? driver.name.split(' ')[0] : '';
@@ -410,10 +412,11 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
-                     {vehicles.map(v => {
-                          const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
-                          return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} />;
-                      })}
+                      {vehicles.map(v => {
+                           const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
+                           const lastLoc = locations ? locations[v.id.toString()] : undefined;
+                           return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} lastLocation={lastLoc} />;
+                       })}
 
                         <RouteDrawer
                             routeToPreview={routeToPreview}
@@ -443,10 +446,11 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
-                     {vehicles.map(v => {
-                         const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
-                         return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} />;
-                     })}
+                      {vehicles.map(v => {
+                          const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
+                          const lastLoc = locations ? locations[v.id.toString()] : undefined;
+                          return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} lastLocation={lastLoc} />;
+                      })}
                     <RouteDrawer
                         routeToPreview={routeToPreview}
                         confirmedAssignment={confirmedAssignment}

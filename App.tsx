@@ -1617,7 +1617,7 @@ const AppContent: React.FC = () => {
 
   const widgetMap: Record<WidgetId, React.ReactNode> = {
     dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
-    vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} />,
+    vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} locations={locations} />,
     map: <OpenStreetMap vehicles={vehicles} people={people} locations={locations} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
       rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} />,
     leaderboard: <Leaderboard />,

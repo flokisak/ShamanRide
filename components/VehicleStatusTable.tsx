@@ -13,6 +13,7 @@ interface VehicleStatusTableProps {
   onEdit: (vehicle: Vehicle) => void;
   rideLog: RideLog[];
   onAddVehicleClick: () => void;
+  locations?: Record<string, {latitude: number; longitude: number; timestamp: string}>;
 }
 
 type WarningLevel = 'info' | 'warning' | 'urgent';
@@ -36,7 +37,7 @@ const FilterSelect: React.FC<{
     </div>
 );
 
-export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles, people, onEdit, rideLog, onAddVehicleClick }) => {
+export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles, people, onEdit, rideLog, onAddVehicleClick, locations }) => {
   const { t } = useTranslation();
 
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -348,17 +349,28 @@ export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles
                         </div>
                     </td>
                      <td className="whitespace-nowrap px-2 py-0.5 text-xs text-gray-400">
-                         {(() => {
-                             const gpsPos = gpsPositions.find(g => g.id === vehicle.id.toString() || g.name === vehicle.name);
-                             return gpsPos ? (
-                                 <div>
-                                     <div className="text-green-400 font-medium">GPS: {gpsPos.lat.toFixed(4)}, {gpsPos.lon.toFixed(4)}</div>
-                                     <div className="text-xs text-gray-500">{new Date(gpsPos.lastUpdate).toLocaleTimeString()}</div>
-                                 </div>
-                             ) : (
-                                 vehicle.location
-                             );
-                         })()}
+                          {(() => {
+                              const gpsPos = gpsPositions.find(g => g.id === vehicle.id.toString() || g.name === vehicle.name);
+                              const lastLoc = locations ? locations[vehicle.id.toString()] : undefined;
+
+                              if (gpsPos) {
+                                  return (
+                                      <div>
+                                          <div className="text-green-400 font-medium">GPS: {gpsPos.lat.toFixed(4)}, {gpsPos.lon.toFixed(4)}</div>
+                                          <div className="text-xs text-gray-500">{new Date(gpsPos.lastUpdate).toLocaleTimeString()}</div>
+                                      </div>
+                                  );
+                              } else if (lastLoc) {
+                                  return (
+                                      <div>
+                                          <div className="text-blue-400 font-medium">Poslední: {lastLoc.latitude.toFixed(4)}, {lastLoc.longitude.toFixed(4)}</div>
+                                          <div className="text-xs text-gray-500">{new Date(lastLoc.timestamp).toLocaleTimeString()}</div>
+                                      </div>
+                                  );
+                              } else {
+                                  return vehicle.location;
+                              }
+                          })()}
                      </td>
                     <td className="whitespace-nowrap px-2 py-0.5 text-xs text-gray-400">
                         {warnings.length > 0 && (
