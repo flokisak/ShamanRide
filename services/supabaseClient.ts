@@ -276,7 +276,7 @@ export const supabaseService = SUPABASE_ENABLED
             stops: db.stops,
             passengers: db.passengers,
             pickupTime: db.pickup_time,
-              status: (db.status || '').split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(''),
+              status: (db.status || '').toUpperCase().replace(/ /g, '_') as RideStatus,
             vehicleId: db.vehicle_id ?? null,
             notes: db.notes ?? null,
             estimatedPrice: db.estimated_price ?? null,

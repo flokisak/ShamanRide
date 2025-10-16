@@ -196,6 +196,7 @@ const AppContent: React.FC = () => {
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
           console.log('New ride inserted:', payload);
           const newRide = payload.new;
+          const statusLower = newRide.status.toLowerCase();
 
           // Map from DB format to app format
           const mappedRide = {
@@ -211,7 +212,10 @@ const AppContent: React.FC = () => {
             stops: newRide.stops,
             passengers: newRide.passengers,
             pickupTime: newRide.pickup_time,
-            status: (newRide.status || '').split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(''),
+             status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                     statusLower === 'completed' ? RideStatus.Completed :
+                     statusLower === 'cancelled' ? RideStatus.Cancelled :
+                     RideStatus.Pending,
             vehicleId: newRide.vehicle_id ?? null,
             notes: newRide.notes ?? null,
             estimatedPrice: newRide.estimated_price ?? null,

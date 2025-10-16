@@ -440,7 +440,7 @@ const supabaseService: any = SUPABASE_ENABLED ? {
                stops: r.stops,
                passengers: r.passengers,
                pickup_time: r.pickupTime,
-                status: r.status, // Keep original status format
+                 status: r.status.toLowerCase(),
                vehicle_id: r.vehicleId ?? null,
                notes: r.notes ?? null,
                estimated_price: r.estimatedPrice ?? null,
@@ -552,11 +552,17 @@ const supabaseService: any = SUPABASE_ENABLED ? {
                 console.error('addRideLog error:', error);
                 throw error;
               }
-              console.log('addRideLog: successfully saved to Supabase');
-            } else {
-              console.log('addRideLog: Supabase not enabled, using localStorage');
-            }
-            upsertLocal('ride-log', rideLog);
+               console.log('addRideLog: successfully saved to Supabase');
+               // Notify dispatcher app of the update
+               supabase.channel('ride_updates').send({
+                 type: 'broadcast',
+                 event: 'ride_updated',
+                 payload: { rideId: rideLog.id, status: rideLog.status }
+               });
+             } else {
+               console.log('addRideLog: Supabase not enabled, using localStorage');
+             }
+             upsertLocal('ride-log', rideLog);
           },
         async updateRideLogs(rideLogs: any[]) {
           if (SUPABASE_ENABLED) {
