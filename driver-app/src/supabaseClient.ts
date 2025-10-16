@@ -1,12 +1,23 @@
-import { supabase } from '../../services/supabaseClient';
-import { SUPABASE_ENABLED } from '../../services/supabaseClient';
+import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_FUEL_PRICES } from './types';
 
-// Re-export the main supabase client to avoid duplication
-export { supabase };
+const isBrowser = typeof window !== 'undefined';
+const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
+const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.SUPABASE_ANON_KEY;
+const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.SUPABASE_SERVICE_KEY;
 
-// Re-export SUPABASE_ENABLED for compatibility
-export { SUPABASE_ENABLED };
+export const SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
+
+let supabase: any = null;
+if (SUPABASE_ENABLED) {
+  // Use service key if available (for driver app), otherwise anon key
+  const key = supabaseServiceKey || supabaseAnonKey;
+  supabase = createClient(supabaseUrl, key);
+} else {
+  console.warn('Supabase is not configured. Falling back to localStorage-based local mode.');
+}
+
+export { supabase };
 
 // Minimal localStorage helpers for fallback mode
 const TABLE_PREFIX = 'rapid-dispatch-';
@@ -137,10 +148,268 @@ async function runWithFallback<T>(
   }
 }
 
+// Helper functions for data operations (real supabase or local fallback)
+const supabaseService: any = SUPABASE_ENABLED ? {
+  // Vehicles
+  async getVehicles() {
+    const { data, error } = await supabase.from('vehicles').select('*');
+    if (error) throw error;
+    return (data || []).map((d: any) => this._fromDbVehicle(d));
+  },
+  async updateVehicles(vehicles: any[]) {
+    const dbRows = vehicles.map(v => this._toDbVehicle(v));
+    const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
+    if (error) throw error;
+  },
+
+  // People
+  async getPeople() {
+    const { data, error } = await supabase.from('people').select('*');
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Ride Logs
+  async getRideLogs() {
+    const { data, error } = await supabase.from('ride_logs').select('*');
+    if (error) throw error;
+    return (data || []).map((d: any) => this._fromDbRideLog(d));
+  },
+  async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
+    let query = supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleId);
+    if (status) {
+      query = query.eq('status', status);
+    }
+    query = query.order('timestamp', { ascending: false });
+    if (limit) {
+      query = query.limit(limit);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map((d: any) => this._fromDbRideLog(d));
+  },
+  async addRideLog(rideLog: any) {
+    const dbData = this._toDbRideLog(rideLog);
+    console.log('addRideLog: sending to database:', dbData);
+    if (SUPABASE_ENABLED) {
+      const { error } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
+      if (error) {
+        console.error('addRideLog error:', error);
+        throw error;
+      }
+      console.log('addRideLog: successfully saved to Supabase');
+      // Notify dispatcher app of the update
+      supabase.channel('ride_updates').send({
+        type: 'broadcast',
+        event: 'ride_updated',
+        payload: { rideId: rideLog.id, status: rideLog.status }
+      });
+    } else {
+      console.log('addRideLog: Supabase not enabled, using localStorage');
+    }
+    upsertLocal('ride-log', rideLog);
+  },
+  async updateRideLogs(rideLogs: any[]) {
+    if (SUPABASE_ENABLED) {
+      try {
+        const dbRows = rideLogs.map(r => this._toDbRideLog(r));
+        const { error } = await supabase.from('ride_logs').upsert(dbRows, { onConflict: 'id' });
+        if (error) throw error;
+      } catch (err) {
+        console.warn('Failed to update ride logs in supabase, updating local:', err);
+      }
+    }
+    writeTable('ride-log', rideLogs);
+  },
+
+  // Locations
+  async getLocations() {
+    const { data, error } = await supabase.from('locations').select('*').order('timestamp', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Driver Messages
+  async getDriverMessages() {
+    return runWithFallback(
+      async () => {
+        const { data, error } = await supabase.from('driver_messages').select('*').order('timestamp', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      },
+      async () => readTable('driver-messages'),
+      'Supabase driver_messages'
+    );
+  },
+  async addDriverMessage(message: any) {
+    return runWithFallback(
+      async () => {
+        const { error } = await supabase.from('driver_messages').insert(message);
+        if (error) throw error;
+      },
+      async () => {
+        const existing = readTable('driver-messages');
+        existing.unshift(message);
+        writeTable('driver-messages', existing);
+      },
+      'Supabase addDriverMessage'
+    );
+  },
+
+  // Mapping helpers
+  _toDbVehicle(v: any) {
+    return {
+      id: v.id,
+      name: v.name,
+      driver_id: v.driverId ?? null,
+      license_plate: v.licensePlate ?? null,
+      type: v.type,
+      status: v.status,
+      location: v.location ?? null,
+      capacity: v.capacity ?? null,
+      mileage: v.mileage ?? null,
+      free_at: v.freeAt ?? null,
+      service_interval: v.serviceInterval ?? null,
+      last_service_mileage: v.lastServiceMileage ?? null,
+      technical_inspection_expiry: v.technicalInspectionExpiry ?? null,
+      vignette_expiry: v.vignetteExpiry ?? null,
+      fuel_type: v.fuelType ? v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1).toLowerCase() : null,
+      fuel_consumption: v.fuelConsumption ?? null,
+      phone: v.phone ?? null,
+      email: v.email ?? null,
+    };
+  },
+  _fromDbVehicle(db: any) {
+    return {
+      id: db.id,
+      name: db.name,
+      driverId: db.driver_id ?? null,
+      licensePlate: db.license_plate ?? null,
+      type: db.type,
+      status: db.status,
+      location: db.location ?? null,
+      capacity: db.capacity ?? null,
+      mileage: db.mileage ?? null,
+      freeAt: db.free_at ?? undefined,
+      serviceInterval: db.service_interval ?? null,
+      lastServiceMileage: db.last_service_mileage ?? null,
+      technicalInspectionExpiry: db.technical_inspection_expiry ?? null,
+      vignetteExpiry: db.vignette_expiry ?? null,
+      fuelType: db.fuel_type ? db.fuel_type.toUpperCase() : null,
+      fuelConsumption: db.fuel_consumption ?? null,
+      phone: db.phone ?? null,
+      email: db.email ?? null,
+    };
+  },
+
+  _toDbRideLog(r: any) {
+    const result: any = {
+      id: r.id,
+      timestamp: r.timestamp,
+      vehicle_name: r.vehicleName ?? null,
+      vehicle_license_plate: r.vehicleLicensePlate ?? null,
+      driver_name: r.driverName ?? null,
+      vehicle_type: r.vehicleType ?? null,
+      customer_name: r.customerName,
+      ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
+      customer_phone: r.customerPhone,
+      stops: r.stops,
+      passengers: r.passengers,
+      pickup_time: r.pickupTime,
+      status: r.status.toLowerCase(),
+      vehicle_id: r.vehicleId ?? null,
+      notes: r.notes ?? null,
+      estimated_price: r.estimatedPrice ?? null,
+      estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
+      estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
+      fuel_cost: r.fuelCost ?? null,
+      distance: r.distance ?? null,
+    };
+
+    // Add timestamp fields if they exist
+    if (r.acceptedAt) result.accepted_at = r.acceptedAt;
+    if (r.startedAt) result.started_at = r.startedAt;
+    if (r.completedAt) result.completed_at = r.completedAt;
+
+    return result;
+  },
+  _fromDbRideLog(db: any) {
+    return {
+      id: db.id,
+      timestamp: db.timestamp,
+      vehicleName: db.vehicle_name ?? null,
+      vehicleLicensePlate: db.vehicle_license_plate ?? null,
+      driverName: db.driver_name ?? null,
+      vehicleType: db.vehicle_type ?? null,
+      customerName: db.customer_name,
+      rideType: (db.ride_type ?? 'business').toUpperCase(),
+      customerPhone: db.customer_phone,
+      stops: db.stops,
+      passengers: db.passengers,
+      pickupTime: db.pickup_time,
+      status: (db.status || '').toUpperCase().replace(/_/g, '_'),
+      vehicleId: db.vehicle_id ?? null,
+      notes: db.notes ?? null,
+      estimatedPrice: db.estimated_price ?? null,
+      estimatedPickupTimestamp: db.estimated_pickup_timestamp,
+      estimatedCompletionTimestamp: db.estimated_completion_timestamp,
+      fuelCost: db.fuel_cost ?? null,
+      distance: db.distance ?? null,
+      acceptedAt: db.accepted_at ?? null,
+      startedAt: db.started_at ?? null,
+      completedAt: db.completed_at ?? null,
+    };
+  },
+} : {
+  // LocalStorage fallback implementations
+  async getVehicles() {
+    return readTable('vehicles');
+  },
+  async updateVehicles(vehicles: any[]) {
+    writeTable('vehicles', vehicles);
+  },
+  async getPeople() {
+    return readTable('people');
+  },
+  async getRideLogs() {
+    return readTable('ride-log');
+  },
+  async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
+    const rides = readTable('ride-log').filter((r: any) => r.vehicleId === vehicleId);
+    let filtered = rides;
+    if (status) {
+      filtered = filtered.filter((r: any) => r.status === status);
+    }
+    filtered.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    if (limit) {
+      filtered = filtered.slice(0, limit);
+    }
+    return filtered;
+  },
+  async addRideLog(rideLog: any) {
+    upsertLocal('ride-log', rideLog);
+  },
+  async updateRideLogs(rideLogs: any[]) {
+    writeTable('ride-log', rideLogs);
+  },
+  async getLocations() {
+    return readTable('locations');
+  },
+  async getDriverMessages() {
+    return readTable('driver-messages');
+  },
+  async addDriverMessage(message: any) {
+    const existing = readTable('driver-messages');
+    existing.unshift(message);
+    writeTable('driver-messages', existing);
+  },
+};
+
+export { supabaseService };
+
 // Geocoding constants and cache
 const geocodeCache = new Map<string, { lat: number; lon: number }>();
 const SOUTH_MORAVIA_BOUNDS = { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax: 49.3 };
-const EXPANDED_SEARCH_BOUNDS = { lonMin: 12.0, latMin: 46.0, lonMax: 24.0, latMax: 52.0 };
 
 // Geocoding functions
 const fetchPhotonCoords = async (addrToTry: string): Promise<{ lat: number; lon: number } | null> => {
@@ -174,62 +443,6 @@ const fetchPhotonCoords = async (addrToTry: string): Promise<{ lat: number; lon:
   }
   return null;
 };
-
-async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
-    // Clean up malformed addresses that might have timestamps or other data appended
-    const cleanAddress = address.split('|')[0].trim();
-
-    // Log if address was cleaned
-    if (cleanAddress !== address) {
-        console.warn('Cleaned malformed address:', address, '->', cleanAddress);
-    }
-
-    const cacheKey = `${cleanAddress}_${language}`;
-    if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
-
-    try {
-        // Try Nominatim first (more reliable for Czech addresses)
-        console.log('Trying Nominatim for address:', cleanAddress);
-        const nominatimResult = await geocodeWithNominatim(cleanAddress);
-        if (nominatimResult) {
-            geocodeCache.set(cacheKey, nominatimResult);
-            return nominatimResult;
-        }
-
-        // Fallback to Photon
-        console.log('Nominatim failed, trying Photon for address:', cleanAddress);
-        const photonResult = await fetchPhotonCoords(cleanAddress);
-        if (photonResult) {
-            geocodeCache.set(cacheKey, photonResult);
-            return photonResult;
-        }
-
-        // Fallback to Google Maps if API key available
-        const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-        if (googleMapsApiKey) {
-            console.log('Photon failed, trying Google Maps for address:', cleanAddress);
-            const proxyUrl = 'https://corsproxy.io/?';
-            const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
-
-            const response = await fetch(geocodingUrl);
-            if (response.ok) {
-                const data = await response.json();
-                if (data.status === 'OK' && data.results && data.results.length > 0) {
-                    const result = data.results[0];
-                    const location = result.geometry.location;
-                    const coords = { lat: location.lat, lon: location.lng };
-                    geocodeCache.set(cacheKey, coords);
-                    return coords;
-                }
-            }
-        }
-
-        throw new Error(`All geocoding services failed for address: ${cleanAddress}`);
-    } catch (error) {
-        console.error("Geocoding error:", error);
-        throw error;
-    }
-}
 
 function isInSouthMoravia(lat: number, lon: number): boolean {
   return lon >= SOUTH_MORAVIA_BOUNDS.lonMin && lon <= SOUTH_MORAVIA_BOUNDS.lonMax &&
@@ -336,595 +549,62 @@ const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon
     console.error("Nominatim geocoding error:", error);
     return null;
   }
+};
+
+async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
+  // Clean up malformed addresses that might have timestamps or other data appended
+  const cleanAddress = address.split('|')[0].trim();
+
+  // Log if address was cleaned
+  if (cleanAddress !== address) {
+    console.warn('Cleaned malformed address:', address, '->', cleanAddress);
+  }
+
+  const cacheKey = `${cleanAddress}_${language}`;
+  if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
+
+  try {
+    // Try Nominatim first (more reliable for Czech addresses)
+    console.log('Trying Nominatim for address:', cleanAddress);
+    const nominatimResult = await geocodeWithNominatim(cleanAddress);
+    if (nominatimResult) {
+      geocodeCache.set(cacheKey, nominatimResult);
+      return nominatimResult;
+    }
+
+    // Fallback to Photon
+    console.log('Nominatim failed, trying Photon for address:', cleanAddress);
+    const photonResult = await fetchPhotonCoords(cleanAddress);
+    if (photonResult) {
+      geocodeCache.set(cacheKey, photonResult);
+      return photonResult;
+    }
+
+    // Fallback to Google Maps if API key available
+    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (googleMapsApiKey) {
+      console.log('Photon failed, trying Google Maps for address:', cleanAddress);
+      const proxyUrl = 'https://corsproxy.io/?';
+      const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+
+      const response = await fetch(geocodingUrl);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+          const result = data.results[0];
+          const location = result.geometry.location;
+          const coords = { lat: location.lat, lon: location.lng };
+          geocodeCache.set(cacheKey, coords);
+          return coords;
+        }
+      }
+    }
+
+    throw new Error(`All geocoding services failed for address: ${cleanAddress}`);
+  } catch (error) {
+    console.error("Geocoding error:", error);
+    throw error;
+  }
 }
 
-// Helper functions for data operations (real supabase or local fallback)
-const supabaseService: any = SUPABASE_ENABLED ? {
-      // --- Helpers to map between app's camelCase and DB snake_case ---
-       _toDbVehicle(v: any) {
-         return {
-           id: v.id,
-           name: v.name,
-           driver_id: v.driverId ?? null,
-           license_plate: v.licensePlate ?? null,
-           type: v.type,
-           status: v.status,
-           location: v.location ?? null,
-           capacity: v.capacity ?? null,
-           mileage: v.mileage ?? null,
-           free_at: v.freeAt ?? null,
-           service_interval: v.serviceInterval ?? null,
-           last_service_mileage: v.lastServiceMileage ?? null,
-           technical_inspection_expiry: v.technicalInspectionExpiry ?? null,
-           vignette_expiry: v.vignetteExpiry ?? null,
-            fuel_type: v.fuelType ? v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1).toLowerCase() : null,
-           fuel_consumption: v.fuelConsumption ?? null,
-           phone: v.phone ?? null,
-           email: v.email ?? null,
-         };
-       },
-       _fromDbVehicle(db: any) {
-         return {
-           id: db.id,
-           name: db.name,
-           driverId: db.driver_id ?? null,
-           licensePlate: db.license_plate ?? null,
-           type: db.type,
-           status: db.status,
-           location: db.location ?? null,
-           capacity: db.capacity ?? null,
-           mileage: db.mileage ?? null,
-           freeAt: db.free_at ?? undefined,
-           serviceInterval: db.service_interval ?? null,
-           lastServiceMileage: db.last_service_mileage ?? null,
-           technicalInspectionExpiry: db.technical_inspection_expiry ?? null,
-           vignetteExpiry: db.vignette_expiry ?? null,
-            fuelType: db.fuel_type ? db.fuel_type.toUpperCase() : null,
-           fuelConsumption: db.fuel_consumption ?? null,
-           phone: db.phone ?? null,
-           email: db.email ?? null,
-         };
-       },
-
-      _toDbTariff(t: any) {
-        return {
-          id: 1,
-          starting_fee: t.startingFee,
-          price_per_km_car: t.pricePerKmCar,
-          price_per_km_van: t.pricePerKmVan,
-          flat_rates: t.flatRates || [],
-          time_based_tariffs: t.timeBasedTariffs || [],
-        };
-      },
-      _fromDbTariff(db: any) {
-        if (!db) return null;
-        return {
-          startingFee: db.starting_fee,
-          pricePerKmCar: db.price_per_km_car,
-          pricePerKmVan: db.price_per_km_van,
-          flatRates: db.flat_rates || [],
-          timeBasedTariffs: db.time_based_tariffs || [],
-        };
-      },
-
-      _toDbFuelPrices(fp: any) {
-        return { id: 1, diesel: fp.DIESEL, petrol: fp.PETROL };
-      },
-       _fromDbFuelPrices(db: any) {
-          if (!db) return null;
-          return { DIESEL: db.diesel, PETROL: db.petrol };
-        },
-
-          _toDbRideLog(r: any) {
-             const result: any = {
-               id: r.id,
-               timestamp: r.timestamp,
-               vehicle_name: r.vehicleName ?? null,
-               vehicle_license_plate: r.vehicleLicensePlate ?? null,
-               driver_name: r.driverName ?? null,
-               vehicle_type: r.vehicleType ?? null,
-               customer_name: r.customerName,
-               ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
-               customer_phone: r.customerPhone,
-               stops: r.stops,
-               passengers: r.passengers,
-               pickup_time: r.pickupTime,
-                 status: r.status.toLowerCase(),
-               vehicle_id: r.vehicleId ?? null,
-               notes: r.notes ?? null,
-               estimated_price: r.estimatedPrice ?? null,
-               estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
-               estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
-                fuel_cost: r.fuelCost ?? null,
-               distance: r.distance ?? null,
-              };
-
-              // Add timestamp fields if they exist
-              if (r.acceptedAt) result.accepted_at = r.acceptedAt;
-              if (r.startedAt) result.started_at = r.startedAt;
-              if (r.completedAt) result.completed_at = r.completedAt;
-
-              return result;
-         },
-        _fromDbRideLog(db: any) {
-            return {
-              id: db.id,
-              timestamp: db.timestamp,
-             vehicleName: db.vehicle_name ?? null,
-            vehicleLicensePlate: db.vehicle_license_plate ?? null,
-            driverName: db.driver_name ?? null,
-            vehicleType: db.vehicle_type ?? null,
-            customerName: db.customer_name,
-            rideType: (db.ride_type ?? 'business').toUpperCase(),
-            customerPhone: db.customer_phone,
-            stops: db.stops,
-            passengers: db.passengers,
-            pickupTime: db.pickup_time,
-             status: (db.status || '').toUpperCase().replace(/_/g, '_'),
-            vehicleId: db.vehicle_id ?? null,
-            notes: db.notes ?? null,
-            estimatedPrice: db.estimated_price ?? null,
-              estimatedPickupTimestamp: db.estimated_pickup_timestamp,
-              estimatedCompletionTimestamp: db.estimated_completion_timestamp,
-              fuelCost: db.fuel_cost ?? null,
-            distance: db.distance ?? null,
-            acceptedAt: db.accepted_at ?? null,
-            startedAt: db.started_at ?? null,
-            completedAt: db.completed_at ?? null,
-          };
-       },
-
-      // Vehicles
-      async getVehicles() {
-        const { data, error } = await supabase.from('vehicles').select('*');
-        if (error) throw error;
-        return (data || []).map((d: any) => this._fromDbVehicle(d));
-      },
-      async updateVehicles(vehicles: any[]) {
-        const dbRows = vehicles.map(v => this._toDbVehicle(v));
-        const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
-        if (error) throw error;
-      },
-      async deleteVehicle(vehicleId: number) {
-        const { error } = await supabase.from('vehicles').delete().eq('id', vehicleId);
-        if (error) throw error;
-      },
-      async addVehicle(vehicle: any) {
-        const { error } = await supabase.from('vehicles').upsert(this._toDbVehicle(vehicle), { onConflict: 'id' });
-        if (error) throw error;
-      },
-
-      // People
-      async getPeople() {
-        const { data, error } = await supabase.from('people').select('*');
-        if (error) throw error;
-        return data || [];
-      },
-      async updatePeople(people: any[]) {
-        const { error } = await supabase.from('people').upsert(people, { onConflict: 'id' });
-        if (error) throw error;
-      },
-      async addPerson(person: any) {
-        const { error } = await supabase.from('people').insert(person);
-        if (error) throw error;
-      },
-      async deletePerson(personId: number) {
-        const { error } = await supabase.from('people').delete().eq('id', personId);
-        if (error) throw error;
-      },
-
-       // Ride Logs
-        async getRideLogs() {
-          const { data, error } = await supabase.from('ride_logs').select('*');
-          if (error) throw error;
-          return (data || []).map((d: any) => this._fromDbRideLog(d));
-        },
-        async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
-          let query = supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleId);
-          if (status) {
-            query = query.eq('status', status);
-          }
-          query = query.order('timestamp', { ascending: false });
-          if (limit) {
-            query = query.limit(limit);
-          }
-          const { data, error } = await query;
-          if (error) throw error;
-          return (data || []).map((d: any) => this._fromDbRideLog(d));
-        },
-          async addRideLog(rideLog: any) {
-            const dbData = this._toDbRideLog(rideLog);
-            console.log('addRideLog: sending to database:', dbData);
-            if (SUPABASE_ENABLED) {
-              const { error } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
-              if (error) {
-                console.error('addRideLog error:', error);
-                throw error;
-              }
-               console.log('addRideLog: successfully saved to Supabase');
-               // Notify dispatcher app of the update
-               supabase.channel('ride_updates').send({
-                 type: 'broadcast',
-                 event: 'ride_updated',
-                 payload: { rideId: rideLog.id, status: rideLog.status }
-               });
-             } else {
-               console.log('addRideLog: Supabase not enabled, using localStorage');
-             }
-             upsertLocal('ride-log', rideLog);
-          },
-        async updateRideLogs(rideLogs: any[]) {
-          if (SUPABASE_ENABLED) {
-            try {
-              const dbRows = rideLogs.map(r => this._toDbRideLog(r));
-              const { error } = await supabase.from('ride_logs').upsert(dbRows, { onConflict: 'id' });
-              if (error) throw error;
-            } catch (err) {
-              console.warn('Failed to update ride logs in supabase, updating local:', err);
-            }
-          }
-          writeTable('ride-log', rideLogs);
-        },
-        async deleteRideLog(rideLogId: string) {
-          if (SUPABASE_ENABLED) {
-            try {
-              const { error } = await supabase.from('ride_logs').delete().eq('id', rideLogId);
-              if (error) throw error;
-            } catch (err) {
-              console.warn('Failed to delete ride log from supabase, deleting from local:', err);
-            }
-          }
-          deleteLocal('ride-log', rideLogId, 'id');
-        },
-
-      // Notifications
-      async getNotifications() {
-        const { data, error } = await supabase.from('notifications').select('*');
-        if (error) throw error;
-        return data || [];
-      },
-      async addNotification(notification: any) {
-        const { error } = await supabase.from('notifications').insert(notification);
-        if (error) throw error;
-      },
-      async updateNotifications(notifications: any[]) {
-        const { error } = await supabase.from('notifications').upsert(notifications, { onConflict: 'id' });
-        if (error) throw error;
-      },
-
-      // Tariff
-      async getTariff() {
-        const { data, error } = await supabase.from('tariff').select('*').single();
-        if (error) throw error;
-        return this._fromDbTariff(data);
-      },
-      async updateTariff(tariff: any) {
-        const dbRow = this._toDbTariff(tariff);
-        const { error } = await supabase.from('tariff').upsert(dbRow);
-        if (error) throw error;
-      },
-
-      // Fuel Prices
-      async getFuelPrices() {
-        try {
-          const { data, error } = await supabase.from('fuel_prices').select('*').single();
-          if (error) throw error;
-          return this._fromDbFuelPrices(data);
-        } catch (err) {
-          console.warn('Failed to load fuel prices from supabase, falling back to local:', err);
-          return readSingle('fuel-prices') || DEFAULT_FUEL_PRICES;
-        }
-      },
-      async updateFuelPrices(fuelPrices: any) {
-        if (SUPABASE_ENABLED) {
-          try {
-            const dbRow = this._toDbFuelPrices(fuelPrices);
-            const { error } = await supabase.from('fuel_prices').upsert(dbRow);
-            if (error) throw error;
-            return;
-          } catch (err) {
-            console.warn('Failed to save fuel prices to supabase, falling back to local:', err);
-          }
-        }
-        writeSingle('fuel-prices', fuelPrices);
-      },
-
-      // Messaging App
-      async getMessagingApp() {
-        const { data, error } = await supabase.from('messaging_settings').select('*').single();
-        if (error) throw error;
-        return data?.app || 'SMS';
-      },
-      async updateMessagingApp(app: string) {
-        const { error } = await supabase.from('messaging_settings').upsert({ app, id: 1 });
-        if (error) throw error;
-      },
-
-      // SMS Messages (outgoing/incoming records)
-      async getSmsMessages() {
-        return runWithFallback(
-          async () => {
-            const { data, error } = await supabase.from('sms_messages').select('*').order('timestamp', { ascending: false });
-            if (error) throw error;
-            return data || [];
-          },
-          async () => readTable('sms-messages'),
-          'Supabase sms_messages'
-        );
-      },
-      async addSmsMessage(message: any) {
-        return runWithFallback(
-          async () => {
-            const { error } = await supabase.from('sms_messages').insert(message);
-            if (error) throw error;
-          },
-          async () => {
-            const existing = readTable('sms-messages');
-            existing.unshift(message);
-            writeTable('sms-messages', existing);
-          },
-          'Supabase addSmsMessage'
-        );
-      },
-      async updateSmsMessages(messages: any[]) {
-        return runWithFallback(
-          async () => {
-            const { error } = await supabase.from('sms_messages').upsert(messages, { onConflict: 'id' });
-            if (error) throw error;
-          },
-          async () => writeTable('sms-messages', messages),
-          'Supabase updateSmsMessages'
-        );
-      },
-
-      // Company Info
-      async getCompanyInfo() {
-        const { data, error } = await supabase.from('company_info').select('*').single();
-        if (error) throw error;
-        return data;
-      },
-      async updateCompanyInfo(companyInfo: any) {
-        const { error } = await supabase.from('company_info').upsert({ ...companyInfo, id: 1 });
-        if (error) throw error;
-      },
-
-      // Gamification
-      async getDriverScores() {
-        const { data, error } = await supabase.from('driver_scores').select('*').order('total_score', { ascending: false });
-        if (error) throw error;
-        return data || [];
-      },
-      async updateDriverScore(driverId: number, scoreData: any) {
-        const { error } = await supabase.from('driver_scores').upsert({ driver_id: driverId, ...scoreData, updated_at: new Date().toISOString() }, { onConflict: 'driver_id' });
-        if (error) throw error;
-      },
-      async getDriverAchievements(driverId: number) {
-        const { data, error } = await supabase.from('achievements').select('*').eq('driver_id', driverId);
-        if (error) throw error;
-        return data || [];
-      },
-      async addAchievement(achievement: any) {
-        const { error } = await supabase.from('achievements').insert(achievement);
-        if (error) throw error;
-      },
-      async getDriverStats(driverId: number) {
-        const { data, error } = await supabase.from('driver_stats').select('*').eq('driver_id', driverId).single();
-        if (error && error.code !== 'PGRST116') throw error;
-        return data;
-      },
-      async updateDriverStats(driverId: number, stats: any) {
-        const { error } = await supabase.from('driver_stats').upsert({ driver_id: driverId, ...stats, updated_at: new Date().toISOString() }, { onConflict: 'driver_id' });
-        if (error) throw error;
-      },
-
-      // Manual Entries
-      async getManualEntries(driverId?: number) {
-        let query = supabase.from('manual_entries').select('*').order('created_at', { ascending: false });
-        if (driverId) {
-          query = query.eq('driver_id', driverId);
-        }
-        const { data, error } = await query;
-        if (error) throw error;
-        return data || [];
-      },
-      async addManualEntry(entry: any) {
-        const { error } = await supabase.from('manual_entries').insert(entry);
-        if (error) throw error;
-      },
-      async updateManualEntry(entryId: string, entry: any) {
-        const { error } = await supabase.from('manual_entries').update(entry).eq('id', entryId);
-        if (error) throw error;
-      },
-      async deleteManualEntry(entryId: string) {
-        const { error } = await supabase.from('manual_entries').delete().eq('id', entryId);
-        if (error) throw error;
-      },
-
-      // User Settings
-      async getUserSettings(userId: string) {
-        return runWithFallback(
-          async () => {
-            const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', userId).single();
-            if (error && error.code !== 'PGRST116') throw error;
-            return data;
-          },
-          async () => {
-            // fallback: read from local user-settings table
-            const all = readTable('user-settings');
-            return all.find((s: any) => String(s.user_id) === String(userId)) || null;
-          },
-          'Supabase user_settings'
-        );
-      },
-      async updateUserSettings(userId: string, settings: any) {
-        return runWithFallback(
-          async () => {
-            const { error } = await supabase.from('user_settings').upsert({ user_id: userId, ...settings, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-            if (error) throw error;
-          },
-          async () => upsertLocal('user-settings', { user_id: userId, ...settings, updated_at: new Date().toISOString() }, 'user_id'),
-          'Supabase updateUserSettings'
-        );
-      },
-    } : {
-      // LocalStorage fallback implementations
-      async getVehicles() {
-        return readTable('vehicles');
-      },
-      async updateVehicles(vehicles: any[]) {
-        writeTable('vehicles', vehicles);
-      },
-      async deleteVehicle(vehicleId: number) {
-        deleteLocal('vehicles', vehicleId);
-      },
-      async addVehicle(vehicle: any) {
-        upsertLocal('vehicles', vehicle);
-      },
-
-      // People
-      async getPeople() {
-        return readTable('people');
-      },
-      async updatePeople(people: any[]) {
-        writeTable('people', people);
-      },
-      async addPerson(person: any) {
-        upsertLocal('people', person);
-      },
-      async deletePerson(personId: number) {
-        deleteLocal('people', personId);
-      },
-
-      // Ride Logs
-      async getRideLogs() {
-        return readTable('ride-log');
-      },
-      async addRideLog(rideLog: any) {
-        upsertLocal('ride-log', rideLog);
-      },
-      async updateRideLogs(rideLogs: any[]) {
-        writeTable('ride-log', rideLogs);
-      },
-      async deleteRideLog(rideLogId: string) {
-        deleteLocal('ride-log', rideLogId, 'id');
-      },
-
-      // Notifications
-      async getNotifications() {
-        return readTable('notifications');
-      },
-      async addNotification(notification: any) {
-        const existing = readTable('notifications');
-        existing.unshift(notification);
-        writeTable('notifications', existing);
-      },
-      async updateNotifications(notifications: any[]) {
-        writeTable('notifications', notifications);
-      },
-
-      // Tariff
-      async getTariff() {
-        return readSingle('tariff');
-      },
-      async updateTariff(tariff: any) {
-        writeSingle('tariff', tariff);
-      },
-
-      // Fuel Prices
-      async getFuelPrices() {
-        return readSingle('fuel-prices');
-      },
-      async updateFuelPrices(fuelPrices: any) {
-        writeSingle('fuel-prices', fuelPrices);
-      },
-
-      // Messaging App
-      async getMessagingApp() {
-        const ms = readSingle('messaging-app');
-        return (ms && ms.app) || 'SMS';
-      },
-      async updateMessagingApp(app: string) {
-        writeSingle('messaging-app', { app });
-      },
-
-      // SMS Messages (local fallback)
-      async getSmsMessages() {
-        return readTable('sms-messages');
-      },
-      async addSmsMessage(message: any) {
-        const existing = readTable('sms-messages');
-        existing.unshift(message);
-        writeTable('sms-messages', existing);
-      },
-      async updateSmsMessages(messages: any[]) {
-        writeTable('sms-messages', messages);
-      },
-
-      // Company Info
-      async getCompanyInfo() {
-        return readSingle('company-info');
-      },
-      async updateCompanyInfo(companyInfo: any) {
-        writeSingle('company-info', companyInfo);
-      },
-
-      // Gamification
-      async getDriverScores() {
-        return readTable('driver-scores');
-      },
-      async updateDriverScore(driverId: number, scoreData: any) {
-        upsertLocal('driver-scores', { driver_id: driverId, ...scoreData }, 'driver_id');
-      },
-      async getDriverAchievements(driverId: number) {
-        return readTable('achievements').filter((a: any) => a.driver_id === driverId);
-      },
-      async addAchievement(achievement: any) {
-        const existing = readTable('achievements');
-        existing.push(achievement);
-        writeTable('achievements', existing);
-      },
-      async getDriverStats(driverId: number) {
-        const stats = readTable('driver-stats').find((s: any) => s.driver_id === driverId) || null;
-        return stats;
-      },
-      async updateDriverStats(driverId: number, stats: any) {
-        upsertLocal('driver-stats', { driver_id: driverId, ...stats }, 'driver_id');
-      },
-
-      // Manual Entries
-      async getManualEntries(driverId?: number) {
-        const entries = readTable('manual-entries');
-        if (driverId) {
-          return entries.filter((e: any) => e.driver_id === driverId);
-        }
-        return entries;
-      },
-      async addManualEntry(entry: any) {
-        const existing = readTable('manual-entries');
-        existing.push(entry);
-        writeTable('manual-entries', existing);
-      },
-      async updateManualEntry(entryId: string, entry: any) {
-        const existing = readTable('manual-entries');
-        const index = existing.findIndex((e: any) => e.id === entryId);
-        if (index !== -1) {
-          existing[index] = { ...existing[index], ...entry };
-          writeTable('manual-entries', existing);
-        }
-      },
-      async deleteManualEntry(entryId: string) {
-        const existing = readTable('manual-entries').filter((e: any) => e.id !== entryId);
-        writeTable('manual-entries', existing);
-      },
-
-      // User Settings
-      async getUserSettings(userId: string) {
-        const settings = readTable('user-settings').find((s: any) => s.user_id === userId) || null;
-        return settings;
-      },
-      async updateUserSettings(userId: string, settings: any) {
-        upsertLocal('user-settings', { user_id: userId, ...settings }, 'user_id');
-      },
-    };
-
-export { supabaseService, geocodeAddress };
+export { geocodeAddress };
