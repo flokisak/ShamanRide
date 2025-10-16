@@ -99,6 +99,14 @@ const Dashboard: React.FC = () => {
           setPendingRides([]);
         }
 
+        // Debug: Get all rides for this vehicle to see what's in the database
+        try {
+          const allRides = await supabaseService.getRideLogsByVehicle(vehicleNum, undefined);
+          console.log('All rides for vehicle', vehicleNum, ':', allRides.map(r => ({ id: r.id, status: r.status, customerName: r.customerName })));
+        } catch (error) {
+          console.warn('Could not load all rides for debugging:', error);
+        }
+
         // Get active ride for this vehicle (accepted or in progress)
         try {
           const acceptedRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'accepted');
@@ -169,8 +177,11 @@ const Dashboard: React.FC = () => {
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('Ride updated:', payload);
-        // Refresh data - getVehicleInfo will filter for current vehicle
-        getVehicleInfo();
+        // Check if this update affects our vehicle
+        if (payload.new.vehicle_id === vehicleNumber) {
+          // Refresh data - getVehicleInfo will filter for current vehicle
+          getVehicleInfo();
+        }
       })
       .subscribe();
 
