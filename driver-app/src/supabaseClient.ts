@@ -323,34 +323,36 @@ const supabaseService: any = SUPABASE_ENABLED ? {
           return { DIESEL: db.diesel, PETROL: db.petrol };
         },
 
-         _toDbRideLog(r: any) {
-            return {
-              id: r.id,
-              timestamp: r.timestamp,
-              vehicle_name: r.vehicleName ?? null,
-              vehicle_license_plate: r.vehicleLicensePlate ?? null,
-              driver_name: r.driverName ?? null,
-              vehicle_type: r.vehicleType ?? null,
-              customer_name: r.customerName,
-              ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
-              customer_phone: r.customerPhone,
-              stops: r.stops,
-              passengers: r.passengers,
-              pickup_time: r.pickupTime,
-               status: r.status.toLowerCase().replace(/_/g, '_'),
-              vehicle_id: r.vehicleId ?? null,
-              notes: r.notes ?? null,
-              estimated_price: r.estimatedPrice ?? null,
-              estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
-              estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
-               fuel_cost: r.fuelCost ?? null,
-              distance: r.distance ?? null,
-             };
+          _toDbRideLog(r: any) {
+             const result: any = {
+               id: r.id,
+               timestamp: r.timestamp,
+               vehicle_name: r.vehicleName ?? null,
+               vehicle_license_plate: r.vehicleLicensePlate ?? null,
+               driver_name: r.driverName ?? null,
+               vehicle_type: r.vehicleType ?? null,
+               customer_name: r.customerName,
+               ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
+               customer_phone: r.customerPhone,
+               stops: r.stops,
+               passengers: r.passengers,
+               pickup_time: r.pickupTime,
+                status: r.status.toLowerCase().replace(/_/g, '_'),
+               vehicle_id: r.vehicleId ?? null,
+               notes: r.notes ?? null,
+               estimated_price: r.estimatedPrice ?? null,
+               estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
+               estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
+                fuel_cost: r.fuelCost ?? null,
+               distance: r.distance ?? null,
+              };
 
-             // Add timestamp fields if they exist
-             if (r.acceptedAt) result.accepted_at = r.acceptedAt;
-             if (r.startedAt) result.started_at = r.startedAt;
-             if (r.completedAt) result.completed_at = r.completedAt;
+              // Add timestamp fields if they exist
+              if (r.acceptedAt) result.accepted_at = r.acceptedAt;
+              if (r.startedAt) result.started_at = r.startedAt;
+              if (r.completedAt) result.completed_at = r.completedAt;
+
+              return result;
          },
         _fromDbRideLog(db: any) {
             return {

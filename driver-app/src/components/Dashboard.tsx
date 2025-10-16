@@ -653,18 +653,18 @@ const Dashboard: React.FC = () => {
      }
    };
 
-   const startRide = async () => {
-     if (currentRide) {
-       const updatedRide = { ...currentRide, status: RideStatus.InProgress };
-       await supabaseService.addRideLog(updatedRide);
-       setCurrentRide(updatedRide);
-     }
-   };
+    const startRide = async () => {
+      if (currentRide) {
+        const updatedRide = { ...currentRide, status: RideStatus.InProgress, startedAt: Date.now() };
+        await supabaseService.addRideLog(updatedRide);
+        setCurrentRide(updatedRide);
+      }
+    };
 
-   const endRide = async () => {
-     if (currentRide && vehicleNumber) {
-       const updatedRide = { ...currentRide, status: RideStatus.Completed };
-       await supabaseService.addRideLog(updatedRide);
+    const endRide = async () => {
+      if (currentRide && vehicleNumber) {
+        const updatedRide = { ...currentRide, status: RideStatus.Completed, completedAt: Date.now() };
+        await supabaseService.addRideLog(updatedRide);
 
       // Check if there are pending rides in queue
       const nextRide = pendingRides.length > 0 ? pendingRides[0] : null;

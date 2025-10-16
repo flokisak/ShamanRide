@@ -151,7 +151,7 @@ const AppContent: React.FC = () => {
   const [editingRideLog, setEditingRideLog] = useState<RideLog | null>(null);
   const [isCreatingRide, setIsCreatingRide] = useState(false);
   const [isRideBookOpen, setIsRideBookOpen] = useState(false);
-  const [manualAssignmentDetails, setManualAssignmentDetails] = useState<{rideRequest: RideRequest, vehicle: Vehicle, rideDuration: number, sms: string, estimatedPrice: number, navigationUrl: string} | null>(null);
+   const [manualAssignmentDetails, setManualAssignmentDetails] = useState<{rideRequest: RideRequest, vehicle: Vehicle, rideDuration: number, sms: string, estimatedPrice: number, navigationUrl: string, optimizedStops?: string[], rideDistance?: number, eta: number} | null>(null);
   const [smsToPreview, setSmsToPreview] = useState<{ sms: string; phone?: string; navigationUrl: string; logId?: string } | null>(null);
   const [scheduledRideToDispatch, setScheduledRideToDispatch] = useState<RideLog | null>(null);
 
@@ -185,6 +185,55 @@ const AppContent: React.FC = () => {
     const interval = setInterval(reloadSmsMessages, 10000); // every 10 seconds
     return () => clearInterval(interval);
   }, [reloadSmsMessages]);
+
+  // Subscribe to real-time ride updates from drivers
+  useEffect(() => {
+    if (!SUPABASE_ENABLED) return;
+
+    const rideChannel = supabase
+      .channel('dispatcher_ride_updates')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+        console.log('Ride updated by driver:', payload);
+        const updatedRide = payload.new;
+
+        // Update local ride log
+        setRideLog(prev => prev.map(ride =>
+          ride.id === updatedRide.id
+            ? {
+                ...ride,
+                status: updatedRide.status === 'in_progress' ? RideStatus.InProgress :
+                        updatedRide.status === 'completed' ? RideStatus.Completed :
+                        updatedRide.status === 'cancelled' ? RideStatus.Cancelled :
+                        ride.status,
+                completedAt: updatedRide.completed_at || ride.completedAt
+              }
+            : ride
+        ));
+
+        // Send status change message to driver if this is a status change
+        if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
+          // Find the ride in our local state to get full details
+          const localRide = rideLog.find(r => r.id === updatedRide.id);
+          if (localRide) {
+            const oldStatus = payload.old.status === 'in_progress' ? RideStatus.InProgress :
+                              payload.old.status === 'completed' ? RideStatus.Completed :
+                              payload.old.status === 'cancelled' ? RideStatus.Cancelled :
+                              RideStatus.Pending;
+            const newStatus = payload.new.status === 'in_progress' ? RideStatus.InProgress :
+                              payload.new.status === 'completed' ? RideStatus.Completed :
+                              payload.new.status === 'cancelled' ? RideStatus.Cancelled :
+                              localRide.status;
+            const updatedRideForMessage = { ...localRide, status: newStatus };
+            sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatus);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(rideChannel);
+    };
+  }, [rideLog, sendStatusChangeMessageToDriver]);
 
   // Layout and widget visibility remain local-only. Load persisted values but merge with defaults
   const [layout, setLayout] = useState<LayoutConfig>(() => {
@@ -699,59 +748,31 @@ const AppContent: React.FC = () => {
       }
       const fuelCost = totalDistance ? calculateFuelCost(chosenVehicle, totalDistance) : undefined;
 
-        // Don't change vehicle status yet - wait for driver to accept
+         // Set up manual assignment details for SMS preview and final confirmation
+         let navigationUrl = '';
+          try {
+              const vehicleLocationCoords = await geocodeAddress(chosenVehicle.location, language);
+              const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
+              const longNavigationUrl = generateNavigationUrl(vehicleLocationCoords, stopCoords);
+              navigationUrl = longNavigationUrl;
 
-        let navigationUrl = '';
-         try {
-             const vehicleLocationCoords = await geocodeAddress(chosenVehicle.location, language);
-             const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
-             const longNavigationUrl = generateNavigationUrl(vehicleLocationCoords, stopCoords);
-             navigationUrl = longNavigationUrl;
+              setManualAssignmentDetails({
+                  rideRequest: assignmentResult!.rideRequest,
+                  vehicle: chosenVehicle,
+                  rideDuration: rideDuration || 30,
+            sms: generateSms({ ...assignmentResult!.rideRequest, stops: finalStops }, t, navigationUrl, preferredNav),
+                  estimatedPrice: option.estimatedPrice,
+                  navigationUrl: navigationUrl,
+                  optimizedStops: optimizedStops,
+                  rideDistance: totalDistance,
+                  eta: alternative.eta,
+              });
+           } catch (err: any) {
+               setError({ messageKey: "error.geocodingFailed", message: err.message });
+           }
 
-             setManualAssignmentDetails({
-                 rideRequest: assignmentResult!.rideRequest,
-                 vehicle: chosenVehicle,
-                 rideDuration: rideDuration || 30,
-           sms: generateSms({ ...assignmentResult!.rideRequest, stops: finalStops }, t, navigationUrl, preferredNav),
-                 estimatedPrice: option.estimatedPrice,
-                 navigationUrl: navigationUrl,
-             });
-          } catch (err: any) {
-              setError({ messageKey: "error.geocodingFailed", message: err.message });
-          }
-
-        const newLog: RideLog = {
-          id: `ride-${Date.now()}`,
-          timestamp: Date.now(),
-         vehicleName: chosenVehicle.name,
-         vehicleLicensePlate: chosenVehicle.licensePlate,
-         driverName: getDriverName(chosenVehicle.driverId),
-         vehicleType: chosenVehicle.type,
-         customerName: rideRequest.customerName,
-         rideType: RideType.BUSINESS, // Default to business ride
-         customerPhone: rideRequest.customerPhone,
-         stops: finalStops,
-         passengers: rideRequest.passengers,
-         pickupTime: rideRequest.pickupTime,
-         status: RideStatus.Pending, // Start as pending until driver accepts
-         vehicleId: chosenVehicle.id,
-         notes: rideRequest.notes,
-         estimatedPrice: alternative.estimatedPrice,
-          estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
-          estimatedCompletionTimestamp: Date.now() + durationInMinutes * 60 * 1000,
-          fuelCost: fuelCost,
-          distance: totalDistance,
-          navigationUrl: navigationUrl,
-        };
-
-      // Generate customer SMS for the assigned vehicle
-      const driverName = people.find(p => p.id === chosenVehicle.driverId)?.name || 'Neznámý';
-      const generatedCustomerSms = generateCustomerSms(chosenVehicle, alternative.eta, driverName);
-      setCustomerSms(generatedCustomerSms);
-
-        console.log('Ride assigned:', newLog);
-        setRideLog(prev => [newLog, ...prev]);
-        setAssignmentResult(null);
+         // Clear assignment result to close the modal
+         setAssignmentResult(null);
 
         // Ride is automatically sent to driver app via real-time subscription
 
@@ -762,47 +783,22 @@ const AppContent: React.FC = () => {
   const handleManualAssignmentConfirm = async (durationInMinutes: number) => {
        if (!manualAssignmentDetails) return;
 
-       const { rideRequest, vehicle, estimatedPrice } = manualAssignmentDetails;
-       const finalStops = assignmentResult?.optimizedStops || rideRequest.stops;
+        const { rideRequest, vehicle, estimatedPrice, optimizedStops, rideDistance, eta } = manualAssignmentDetails;
+        const finalStops = optimizedStops || rideRequest.stops;
        const destination = finalStops[finalStops.length - 1];
 
-       // Calculate total distance including from vehicle location to first stop
-       let totalDistance = 0;
-       try {
-         const vehicleCoords = await geocodeAddress(vehicle.location, language);
-         const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
-         if (stopCoords.length > 0) {
-           totalDistance += haversineDistance(vehicleCoords.lat, vehicleCoords.lon, stopCoords[0].lat, stopCoords[0].lon);
-           for (let i = 1; i < stopCoords.length; i++) {
-             totalDistance += haversineDistance(stopCoords[i-1].lat, stopCoords[i-1].lon, stopCoords[i].lat, stopCoords[i].lon);
-           }
-         }
-       } catch (err) {
-         console.error('Error calculating total distance:', err);
-         totalDistance = assignmentResult?.rideDistance || 0;
-       }
-       const fuelCost = totalDistance ? calculateFuelCost(vehicle, totalDistance) : undefined;
+        // Use the distance that was calculated during assignment
+        const totalDistance = rideDistance || 0;
+        const fuelCost = totalDistance ? calculateFuelCost(vehicle, totalDistance) : undefined;
 
-      // Calculate ETA more robustly
-      let eta = 5; // Default 5 minutes if calculation fails
-      if (assignmentResult) {
-        // Check if this vehicle was the originally suggested one
-        if (assignmentResult.vehicle.id === vehicle.id) {
-          eta = assignmentResult.eta;
-        } else {
-          // Check if it's in alternatives
-          const alternative = assignmentResult.alternatives.find(a => a.vehicle.id === vehicle.id);
-          eta = alternative?.eta ?? assignmentResult.eta ?? 5; // Fall back to original eta or 5 min
-        }
-      }
-      const totalBusyTime = eta + durationInMinutes + 5; // Add 5 min buffer
-      const freeAt = Date.now() + totalBusyTime * 60 * 1000;
-      const rideDistance = assignmentResult?.rideDistance;
+       // Use the ETA that was calculated during assignment
+       const totalBusyTime = eta + durationInMinutes + 5; // Add 5 min buffer
+       const freeAt = Date.now() + totalBusyTime * 60 * 1000;
 
-      // Generate customer SMS for the manually chosen vehicle
-      const driverName = people.find(p => p.id === vehicle.driverId)?.name || 'Neznámý';
-      const generatedCustomerSms = generateCustomerSms(vehicle, eta, driverName);
-      setCustomerSms(generatedCustomerSms);
+       // Generate customer SMS for the assigned vehicle
+       const driverName = people.find(p => p.id === vehicle.driverId)?.name || 'Neznámý';
+       const generatedCustomerSms = generateCustomerSms(vehicle, eta, driverName);
+       setCustomerSms(generatedCustomerSms);
 
       const updatedVehicles = vehicles.map(v => v.id === vehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v);
       setVehicles(updatedVehicles);
