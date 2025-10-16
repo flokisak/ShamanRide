@@ -32,6 +32,7 @@ const Dashboard: React.FC = () => {
    const [isRefreshing, setIsRefreshing] = useState(false);
     const [showManualRideModal, setShowManualRideModal] = useState(false);
      const [showCompletionModal, setShowCompletionModal] = useState(false);
+    const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
     const [showRideHistory, setShowRideHistory] = useState(true);
     const [lastRefreshTime, setLastRefreshTime] = useState(0);
     const [lastSubscriptionRefresh, setLastSubscriptionRefresh] = useState(0);
