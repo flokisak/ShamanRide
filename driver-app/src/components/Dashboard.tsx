@@ -231,7 +231,7 @@ const Dashboard: React.FC = () => {
 
     // Subscribe to driver messages
      const messageChannel = supabase
-       .channel('driver_messages')
+       .channel('driver_messages_global')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
          console.log('New driver message:', payload);
            // Check if the message is for this vehicle or general

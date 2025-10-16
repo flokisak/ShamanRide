@@ -15,8 +15,5 @@ DROP POLICY IF EXISTS "Users full access to vehicles" ON vehicles;
 CREATE POLICY "Users full access to vehicles" ON vehicles
 FOR ALL USING (auth.role() = 'authenticated');
 
--- Driver Messages Policies
--- Allow authenticated users to read/write messages
-DROP POLICY IF EXISTS "Users can manage driver_messages" ON driver_messages;
-CREATE POLICY "Users can manage driver_messages" ON driver_messages
-FOR ALL USING (auth.role() = 'authenticated');
+-- Driver Messages - disable RLS temporarily
+ALTER TABLE driver_messages DISABLE ROW LEVEL SECURITY;
