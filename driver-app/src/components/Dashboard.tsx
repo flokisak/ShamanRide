@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase, supabaseService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
+import { supabase, supabaseService, authService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications } from '../utils/notifications';
@@ -89,13 +89,8 @@ const Dashboard: React.FC = () => {
         await Promise.race([timeoutPromise, (async () => {
 
         console.log('Getting current user...');
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
-        console.log('Auth result:', { user: !!user, error: authError });
-        if (authError) {
-          setError('Authentication error: ' + authError.message);
-          return;
-        }
-
+        const user = await authService.getCurrentUser();
+        console.log('Auth result:', { user: !!user });
         if (!user) {
           setError('No user logged in');
           return;
@@ -105,16 +100,13 @@ const Dashboard: React.FC = () => {
         console.log('User ID set:', user.id, 'Email:', user.email);
 
         // Find vehicle by driver's email
-        console.log('Querying vehicle for email:', user.email);
-        const { data: vehicleData, error: vehicleQueryError } = await supabase
-          .from('vehicles')
-          .select('id')
-          .eq('email', user.email)
-          .single();
+        console.log('Querying vehicles for email:', user.email);
+        const vehicles = await supabaseService.getVehicles();
+        const vehicleData = vehicles.find(v => v.email === user.email);
 
-        console.log('Vehicle query result:', { data: vehicleData, error: vehicleQueryError });
-        if (vehicleQueryError || !vehicleData) {
-          setError('Vehicle not found for this email: ' + user.email + '. Query error: ' + (vehicleQueryError?.message || 'No data'));
+        console.log('Vehicle query result:', { data: vehicleData });
+        if (!vehicleData) {
+          setError('Vehicle not found for this email: ' + user.email);
           return;
         }
 
@@ -122,20 +114,13 @@ const Dashboard: React.FC = () => {
         setVehicleNumber(vehicleNum);
         console.log('Vehicle number set to:', vehicleNum);
 
-        // Get vehicle status and license plate from vehicles table
-        console.log('Getting vehicle status for ID:', vehicleNum);
-        const { data: vehicle, error: vehicleError } = await supabase.from('vehicles').select('status, license_plate').eq('id', vehicleNum).single();
-        console.log('Vehicle status query result:', { data: vehicle, error: vehicleError });
-        if (vehicleError) {
-          console.warn('Could not load vehicle status:', vehicleError);
-          // Continue without vehicle status
-        } else if (vehicle) {
-          setDriverStatus(vehicle.status === 'AVAILABLE' ? 'available' :
-                          vehicle.status === 'BUSY' ? 'on_ride' :
-                          vehicle.status === 'BREAK' ? 'break' :
-                          vehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
-          setLicensePlate(vehicle.license_plate);
-        }
+        // Get vehicle status and license plate
+        console.log('Vehicle data:', vehicleData);
+        setDriverStatus(vehicleData.status === 'AVAILABLE' ? 'available' :
+                        vehicleData.status === 'BUSY' ? 'on_ride' :
+                        vehicleData.status === 'BREAK' ? 'break' :
+                        vehicleData.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
+        setLicensePlate(vehicleData.licensePlate);
 
         // Get pending rides for this vehicle (queue: oldest first)
         console.log('Querying for rides with vehicle_id:', vehicleNum, 'status: pending');
@@ -189,24 +174,26 @@ const Dashboard: React.FC = () => {
 
         // Get other drivers for chat
         console.log('Getting other drivers...');
-         const { data: allVehicles, error: vehiclesError } = await supabase.from('vehicles').select('id, name, driver_id').neq('id', vehicleNum);
-         console.log('Other vehicles query result:', { count: allVehicles?.length, error: vehiclesError });
-         if (vehiclesError) {
-           console.warn('Could not load other vehicles:', vehiclesError);
-         } else if (allVehicles) {
-           // Get driver names
-           const driverIds = allVehicles.map(v => v.driver_id).filter(id => id);
-           console.log('Getting driver names for IDs:', driverIds);
-           const { data: driversData } = await supabase.from('people').select('id, name').in('id', driverIds);
-           console.log('Driver names query result:', { count: driversData?.length });
-           const driversMap = (driversData || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
-           const otherDriversList = allVehicles.map(v => ({
-             id: v.id,
-             name: driversMap[v.driver_id] || v.name,
-             vehicleId: v.id
-           })).filter(d => d.name);
-           setOtherDrivers(otherDriversList);
-         }
+        try {
+          const allVehicles = await supabaseService.getVehicles();
+          const otherVehicles = allVehicles.filter(v => v.id !== vehicleNum);
+          console.log('Other vehicles:', otherVehicles.length);
+          // Get driver names
+          const driverIds = otherVehicles.map(v => v.driverId).filter(id => id);
+          console.log('Getting driver names for IDs:', driverIds);
+          const allPeople = await supabaseService.getPeople();
+          const driversData = allPeople.filter(p => driverIds.includes(p.id));
+          console.log('Driver names query result:', { count: driversData?.length });
+          const driversMap = (driversData || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
+          const otherDriversList = otherVehicles.map(v => ({
+            id: v.id,
+            name: driversMap[v.driverId] || v.name,
+            vehicleId: v.id
+          })).filter(d => d.name);
+          setOtherDrivers(otherDriversList);
+        } catch (error) {
+          console.warn('Could not load other vehicles and drivers:', error);
+        }
 
          console.log('getVehicleInfo completed successfully');
 
@@ -328,7 +315,7 @@ const Dashboard: React.FC = () => {
   // Load messages when vehicle number is available
   useEffect(() => {
     const loadMessages = async () => {
-      if (vehicleNumber) {
+      if (vehicleNumber && SUPABASE_ENABLED && supabase) {
         try {
           const { data, error } = await supabase.from('driver_messages').select('*')
             .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
@@ -589,12 +576,14 @@ const Dashboard: React.FC = () => {
 
       console.log(`Updating vehicle ${vehicleNumber} status to ${vehicleStatus}`);
 
-      // Update vehicle status directly
-      const { error } = await supabase.from('vehicles').update({
-        status: vehicleStatus
-      }).eq('id', vehicleNumber);
-
-      if (error) {
+      // Update vehicle status using service
+      try {
+        const vehicles = await supabaseService.getVehicles();
+        const updatedVehicles = vehicles.map(v =>
+          v.id === vehicleNumber ? { ...v, status: vehicleStatus } : v
+        );
+        await supabaseService.updateVehicles(updatedVehicles);
+      } catch (error) {
         console.error('Failed to update vehicle status:', error);
         alert('Failed to update vehicle status: ' + error.message);
         return;
@@ -625,17 +614,18 @@ const Dashboard: React.FC = () => {
            return;
          }
 
-         // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
-         const freeAt = ride.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
-         const { error: vehicleError } = await supabase.from('vehicles').update({
-           status: 'BUSY',
-           free_at: freeAt
-         }).eq('id', vehicleNumber);
-
-         if (vehicleError) {
-           console.error('Failed to update vehicle status:', vehicleError);
-           // Continue anyway, the ride was accepted
-         }
+          // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+          const freeAt = ride.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+          try {
+            const vehicles = await supabaseService.getVehicles();
+            const updatedVehicles = vehicles.map(v =>
+              v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
+            );
+            await supabaseService.updateVehicles(updatedVehicles);
+          } catch (vehicleError) {
+            console.error('Failed to update vehicle status:', vehicleError);
+            // Continue anyway, the ride was accepted
+          }
 
          // Track this acceptance to prevent auto-refresh from overriding it
          setLastAcceptedRideId(ride.id);
@@ -666,17 +656,18 @@ const Dashboard: React.FC = () => {
            return;
          }
 
-         // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
-         const freeAt = currentRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
-         const { error: vehicleError } = await supabase.from('vehicles').update({
-           status: 'BUSY',
-           free_at: freeAt
-         }).eq('id', vehicleNumber);
-
-         if (vehicleError) {
-           console.error('Failed to update vehicle status:', vehicleError);
-           // Continue anyway, the ride was accepted
-         }
+          // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+          const freeAt = currentRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+          try {
+            const vehicles = await supabaseService.getVehicles();
+            const updatedVehicles = vehicles.map(v =>
+              v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
+            );
+            await supabaseService.updateVehicles(updatedVehicles);
+          } catch (vehicleError) {
+            console.error('Failed to update vehicle status:', vehicleError);
+            // Continue anyway, the ride was accepted
+          }
 
          // Track this acceptance to prevent auto-refresh from overriding it
          setLastAcceptedRideId(currentRide.id);
@@ -715,18 +706,26 @@ const Dashboard: React.FC = () => {
            const updatedNextRide = { ...nextRide, status: RideStatus.Accepted };
            await supabaseService.addRideLog(updatedNextRide);
 
-           // Update vehicle status to BUSY, set freeAt to estimated completion time
-           const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
-           const locationUpdate: any = {
-             status: 'BUSY',
-             free_at: freeAt
-           };
+            // Update vehicle status to BUSY, set freeAt to estimated completion time
+            const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+            const locationUpdate: any = {
+              status: 'BUSY',
+              freeAt
+            };
 
-           if (location) {
-             locationUpdate.location = `${location.lat}, ${location.lng}`;
-           }
+            if (location) {
+              locationUpdate.location = `${location.lat}, ${location.lng}`;
+            }
 
-           await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
+            try {
+              const vehicles = await supabaseService.getVehicles();
+              const updatedVehicles = vehicles.map(v =>
+                v.id === vehicleNumber ? { ...v, ...locationUpdate } : v
+              );
+              await supabaseService.updateVehicles(updatedVehicles);
+            } catch (error) {
+              console.error('Failed to update vehicle for next ride:', error);
+            }
 
            // Update state: remove from pending, set as current
            setPendingRides(prev => prev.filter(r => r.id !== nextRide.id));
@@ -734,17 +733,25 @@ const Dashboard: React.FC = () => {
            console.log('Next ride accepted and set as current');
          } else {
            console.log('No more rides, setting vehicle to available');
-           // No more rides, set to AVAILABLE and clear freeAt
-           const locationUpdate: any = {
-             status: 'AVAILABLE',
-             free_at: null
-           };
+            // No more rides, set to AVAILABLE and clear freeAt
+            const locationUpdate: any = {
+              status: 'AVAILABLE',
+              freeAt: null
+            };
 
-           if (location) {
-             locationUpdate.location = `${location.lat}, ${location.lng}`;
-           }
+            if (location) {
+              locationUpdate.location = `${location.lat}, ${location.lng}`;
+            }
 
-           await supabase.from('vehicles').update(locationUpdate).eq('id', vehicleNumber);
+            try {
+              const vehicles = await supabaseService.getVehicles();
+              const updatedVehicles = vehicles.map(v =>
+                v.id === vehicleNumber ? { ...v, ...locationUpdate } : v
+              );
+              await supabaseService.updateVehicles(updatedVehicles);
+            } catch (error) {
+              console.error('Failed to update vehicle to available:', error);
+            }
 
            setCurrentRide(null);
            console.log('Vehicle set to available, no current ride');
@@ -818,13 +825,19 @@ const Dashboard: React.FC = () => {
     const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' :
                       selectedRecipient === 'general' ? 'general' :
                       `driver_${selectedRecipient}`;
-    await supabase.from('driver_messages').insert({
-      sender_id: `driver_${vehicleNumber}`,
-      receiver_id: receiverId,
-      message: newMessage,
-      timestamp: Date.now(),
-      read: false
-    });
+    if (SUPABASE_ENABLED && supabase) {
+      try {
+        await supabase.from('driver_messages').insert({
+          sender_id: `driver_${vehicleNumber}`,
+          receiver_id: receiverId,
+          message: newMessage,
+          timestamp: Date.now(),
+          read: false
+        });
+      } catch (error) {
+        console.error('Failed to send message:', error);
+      }
+    }
     setNewMessage('');
   };
 
@@ -845,6 +858,11 @@ const Dashboard: React.FC = () => {
   // Test function to check and create locations table
   const testLocationsTable = async () => {
     console.log('Testing locations table...');
+
+    if (!SUPABASE_ENABLED || !supabase) {
+      console.log('Supabase not enabled, skipping locations table test');
+      return true;
+    }
 
     try {
       // Try to query the locations table
