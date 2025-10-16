@@ -468,9 +468,9 @@ const Dashboard: React.FC = () => {
 
      const refreshInterval = setInterval(async () => {
        try {
-         const { data, error } = await supabase.from('driver_messages').select('*')
-           .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
-           .order('timestamp', { ascending: false });
+          const { data, error } = await supabase.from('driver_messages').select('*')
+            .or(`sender_id.eq.dispatcher,receiver_id.eq.driver_${vehicleNumber},sender_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
+            .order('timestamp', { ascending: false });
 
          if (error) {
            console.warn('Could not refresh messages:', error);

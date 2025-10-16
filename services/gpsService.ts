@@ -18,21 +18,46 @@ export interface GpsVehicle {
  * Fetches current GPS positions of all vehicles from Supabase locations table.
  */
 export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
-    try {
-        // Get recent locations (last 5 minutes) with vehicle information
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  if (!SUPABASE_ENABLED) {
+    return [];
+  }
 
-        // First get recent locations
-        const { data: locations, error: locationsError } = await supabase
-            .from('locations')
-            .select('vehicle_id, latitude, longitude, timestamp')
-            .gte('timestamp', fiveMinutesAgo)
-            .order('timestamp', { ascending: false });
+  try {
+    const { data, error } = await supabase
+      .from('locations')
+      .select('*')
+      .gte('timestamp', new Date(Date.now() - 3600000).toISOString()) // last 1 hour
+      .order('timestamp', { ascending: false })
+      .limit(100);
 
-        if (locationsError) {
-            console.error('Error fetching locations from Supabase:', locationsError);
-            return [];
-        }
+    if (error) {
+      console.warn('Could not fetch locations from Supabase:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Group by vehicle_id and take the most recent location for each
+    const vehicleMap = new Map<number, any>();
+    for (const location of data) {
+      if (!vehicleMap.has(location.vehicle_id)) {
+        vehicleMap.set(location.vehicle_id, location);
+      }
+    }
+
+    return Array.from(vehicleMap.values()).map((loc: any) => ({
+      id: loc.vehicle_id.toString(),
+      name: loc.vehicle_name || `Vehicle ${loc.vehicle_id}`,
+      lat: loc.lat,
+      lon: loc.lon,
+    }));
+  } catch (err) {
+    console.warn('Error fetching vehicle positions:', err);
+    return [];
+  }
+}
 
         if (!locations || locations.length === 0) {
             console.log('No recent locations found in Supabase');
