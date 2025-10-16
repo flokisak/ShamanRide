@@ -25,6 +25,8 @@ const Dashboard: React.FC = () => {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
   const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
+  const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
+  const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
 
   useEffect(() => {
     // Initialize notifications and check permissions
@@ -175,14 +177,18 @@ const Dashboard: React.FC = () => {
         // Notify user with sound and vibration for new ride assignment
         notifyUser('ride');
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-        console.log('Ride updated:', payload);
-        // Check if this update affects our vehicle
-        if (payload.new.vehicle_id === vehicleNumber) {
-          // Refresh data - getVehicleInfo will filter for current vehicle
-          getVehicleInfo();
-        }
-      })
+       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+         console.log('Ride updated:', payload);
+         // Check if this update affects our vehicle
+         if (payload.new.vehicle_id === vehicleNumber) {
+           // Only refresh if this is a different ride than our current one, or if status changed significantly
+           const shouldRefresh = !currentRide || currentRide.id !== payload.new.id ||
+                                 payload.old.status !== payload.new.status;
+           if (shouldRefresh) {
+             getVehicleInfo();
+           }
+         }
+       })
       .subscribe();
 
     // Subscribe to driver messages
@@ -452,17 +458,27 @@ const Dashboard: React.FC = () => {
          const inProgressRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'in_progress');
          const activeRides = [...acceptedRides, ...inProgressRides];
 
-         // Check if pending rides changed
-         const currentPendingIds = pendingRides.map(r => r.id).sort();
-         const newPendingIds = pending.map(r => r.id).sort();
-         if (JSON.stringify(currentPendingIds) !== JSON.stringify(newPendingIds)) {
-           console.log('Pending rides updated:', pending);
-           setPendingRides(pending);
-           // Notify if new rides were added
-           if (pending.length > pendingRides.length) {
-             notifyUser('ride');
-           }
-         }
+          // Check if pending rides changed
+          const currentPendingIds = pendingRides.map(r => r.id).sort();
+          const newPendingIds = pending.map(r => r.id).sort();
+          if (JSON.stringify(currentPendingIds) !== JSON.stringify(newPendingIds)) {
+            // Don't override local state if we just accepted a ride (within last 5 seconds)
+            const timeSinceLastAccept = Date.now() - lastAcceptTime;
+            const shouldUpdatePending = timeSinceLastAccept > 5000 ||
+                                       !lastAcceptedRideId ||
+                                       !pending.some(r => r.id === lastAcceptedRideId);
+
+            if (shouldUpdatePending) {
+              console.log('Pending rides updated:', pending);
+              setPendingRides(pending);
+              // Notify if new rides were added
+              if (pending.length > pendingRides.length) {
+                notifyUser('ride');
+              }
+            } else {
+              console.log('Skipping pending rides update due to recent acceptance');
+            }
+          }
 
          // Check if current ride changed
          if (activeRides.length > 0 && (!currentRide || currentRide.id !== activeRides[0].id)) {
@@ -559,37 +575,87 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const acceptRideSpecific = async (ride: RideLog) => {
-    if (vehicleNumber) {
-      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', ride.id);
+   const acceptRideSpecific = async (ride: RideLog) => {
+     if (vehicleNumber) {
+       try {
+         // Update ride status to accepted
+         const { error: rideError } = await supabase.from('ride_logs').update({
+           status: RideStatus.Accepted,
+           accepted_at: Date.now()
+         }).eq('id', ride.id);
 
-      // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
-      const freeAt = ride.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
-      await supabase.from('vehicles').update({
-        status: 'BUSY',
-        free_at: freeAt
-      }).eq('id', vehicleNumber);
+         if (rideError) {
+           console.error('Failed to accept ride:', rideError);
+           alert('Failed to accept ride. Please try again.');
+           return;
+         }
 
-      // Remove from pending rides and set as current ride
-      setPendingRides(prev => prev.filter(r => r.id !== ride.id));
-      setCurrentRide({ ...ride, status: RideStatus.Accepted });
-    }
-  };
+         // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+         const freeAt = ride.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+         const { error: vehicleError } = await supabase.from('vehicles').update({
+           status: 'BUSY',
+           free_at: freeAt
+         }).eq('id', vehicleNumber);
 
-  const acceptRide = async () => {
-    if (currentRide && vehicleNumber) {
-      await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', currentRide.id);
+         if (vehicleError) {
+           console.error('Failed to update vehicle status:', vehicleError);
+           // Continue anyway, the ride was accepted
+         }
 
-      // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
-      const freeAt = currentRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
-      await supabase.from('vehicles').update({
-        status: 'BUSY',
-        free_at: freeAt
-      }).eq('id', vehicleNumber);
+         // Track this acceptance to prevent auto-refresh from overriding it
+         setLastAcceptedRideId(ride.id);
+         setLastAcceptTime(Date.now());
 
-      setCurrentRide({ ...currentRide, status: RideStatus.Accepted });
-    }
-  };
+         // Immediately update local state to prevent UI flicker
+         setPendingRides(prev => prev.filter(r => r.id !== ride.id));
+         setCurrentRide({ ...ride, status: RideStatus.Accepted });
+
+         // The real-time subscription will handle any additional updates
+       } catch (error) {
+         console.error('Error accepting ride:', error);
+         alert('Error accepting ride. Please try again.');
+       }
+     }
+   };
+
+   const acceptRide = async () => {
+     if (currentRide && vehicleNumber) {
+       try {
+         // Update ride status to accepted
+         const { error: rideError } = await supabase.from('ride_logs').update({
+           status: RideStatus.Accepted,
+           accepted_at: Date.now()
+         }).eq('id', currentRide.id);
+
+         if (rideError) {
+           console.error('Failed to accept ride:', rideError);
+           alert('Failed to accept ride. Please try again.');
+           return;
+         }
+
+         // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+         const freeAt = currentRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+         const { error: vehicleError } = await supabase.from('vehicles').update({
+           status: 'BUSY',
+           free_at: freeAt
+         }).eq('id', vehicleNumber);
+
+         if (vehicleError) {
+           console.error('Failed to update vehicle status:', vehicleError);
+           // Continue anyway, the ride was accepted
+         }
+
+         // Track this acceptance to prevent auto-refresh from overriding it
+         setLastAcceptedRideId(currentRide.id);
+         setLastAcceptTime(Date.now());
+
+         setCurrentRide({ ...currentRide, status: RideStatus.Accepted });
+       } catch (error) {
+         console.error('Error accepting ride:', error);
+         alert('Error accepting ride. Please try again.');
+       }
+     }
+   };
 
   const startRide = async () => {
     if (currentRide) {
@@ -670,16 +736,13 @@ const Dashboard: React.FC = () => {
           const destination = `${stopsCoords[stopsCoords.length - 1].lat},${stopsCoords[stopsCoords.length - 1].lon}`;
           const waypoints = stopsCoords.slice(0, -1).map(coord => `${coord.lat},${coord.lon}`); // All stops except destination
 
-          const params = new URLSearchParams();
-          params.append('api', '1');
-          params.append('destination', destination);
+          let googleUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
 
           if (waypoints.length > 0) {
-            params.append('waypoints', waypoints.join('|'));
+            googleUrl += `&waypoints=${encodeURIComponent(waypoints.join('|'))}`;
           }
 
-          params.append('travelmode', 'driving');
-          url = `https://www.google.com/maps/dir/?${params.toString()}`;
+          url = googleUrl;
         }
       } catch (error) {
         console.error('Error generating navigation URL:', error);
@@ -915,21 +978,26 @@ const Dashboard: React.FC = () => {
                     {t('dashboard.acceptRide')}
                   </button>
                 )}
-                {currentRide.status === RideStatus.Accepted && (
-                  <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
-                    {t('dashboard.startRide')}
-                  </button>
-                )}
-                 {currentRide.status === RideStatus.InProgress && (
-                  <div className="space-y-2">
-                    <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
-                      {t('dashboard.completeRide')}
-                    </button>
+                 {currentRide.status === RideStatus.Accepted && (
+                   <div className="space-y-2">
+                     <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
+                       {t('dashboard.startRide')}
+                     </button>
                      <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
                        🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
                      </button>
-                  </div>
-                )}
+                   </div>
+                 )}
+                  {currentRide.status === RideStatus.InProgress && (
+                   <div className="space-y-2">
+                     <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
+                       {t('dashboard.completeRide')}
+                     </button>
+                      <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                        🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
+                      </button>
+                   </div>
+                 )}
              </div>
           </div>
         )}
