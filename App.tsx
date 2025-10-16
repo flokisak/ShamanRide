@@ -197,13 +197,14 @@ const AppContent: React.FC = () => {
         const updatedRide = payload.new;
 
         // Update local ride log
+        const statusLower = updatedRide.status.toLowerCase();
         setRideLog(prev => prev.map(ride =>
           ride.id === updatedRide.id
             ? {
                 ...ride,
-                status: updatedRide.status === 'in_progress' ? RideStatus.InProgress :
-                        updatedRide.status === 'completed' ? RideStatus.Completed :
-                        updatedRide.status === 'cancelled' ? RideStatus.Cancelled :
+                status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                        statusLower === 'completed' ? RideStatus.Completed :
+                        statusLower === 'cancelled' ? RideStatus.Cancelled :
                         ride.status,
                 completedAt: updatedRide.completed_at || ride.completedAt
               }
@@ -215,13 +216,14 @@ const AppContent: React.FC = () => {
           // Find the ride in our local state to get full details
           const localRide = rideLog.find(r => r.id === updatedRide.id);
           if (localRide) {
-            const oldStatus = payload.old.status === 'in_progress' ? RideStatus.InProgress :
-                              payload.old.status === 'completed' ? RideStatus.Completed :
-                              payload.old.status === 'cancelled' ? RideStatus.Cancelled :
+            const oldStatusLower = payload.old.status.toLowerCase();
+            const oldStatus = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
+                              oldStatusLower === 'completed' ? RideStatus.Completed :
+                              oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
                               RideStatus.Pending;
-            const newStatus = payload.new.status === 'in_progress' ? RideStatus.InProgress :
-                              payload.new.status === 'completed' ? RideStatus.Completed :
-                              payload.new.status === 'cancelled' ? RideStatus.Cancelled :
+            const newStatus = statusLower === 'in_progress' ? RideStatus.InProgress :
+                              statusLower === 'completed' ? RideStatus.Completed :
+                              statusLower === 'cancelled' ? RideStatus.Cancelled :
                               localRide.status;
             const updatedRideForMessage = { ...localRide, status: newStatus };
             sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatus);
@@ -1009,6 +1011,40 @@ const AppContent: React.FC = () => {
     setIsRideBookOpen(true); // Re-open ride book after creating
   };
 
+  async function sendStatusChangeMessageToDriver(updatedLog: RideLog, oldStatus: RideStatus) {
+    try {
+      if (!updatedLog.vehicleId) return;
+
+      let message = '';
+      if (updatedLog.status === RideStatus.Cancelled) {
+        message = `❌ Jízda zrušena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDůvod: Zrušeno dispečerem`;
+      } else if (updatedLog.status === RideStatus.Completed) {
+        message = `✅ Jízda dokončena\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDěkujeme za dokončení jízdy!`;
+      } else if (updatedLog.status === RideStatus.Accepted && oldStatus === RideStatus.Pending) {
+        message = `📋 Jízda potvrzena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nPokračujte podle plánu.`;
+      }
+
+      if (message) {
+        const { error } = await supabase
+          .from('driver_messages')
+          .insert({
+            sender_id: 'dispatcher',
+            receiver_id: `driver_${updatedLog.vehicleId}`,
+            message: message,
+            read: false
+          });
+
+        if (error) {
+          console.error('Error sending status change message to driver:', error);
+        } else {
+          console.log('Status change message sent to driver');
+        }
+      }
+    } catch (error) {
+      console.error('Error in sendStatusChangeMessageToDriver:', error);
+    }
+  };
+
   const handleUpdateRideLog = async (updatedLog: RideLog) => {
     const originalLog = rideLog.find(log => log.id === updatedLog.id);
 
@@ -1116,39 +1152,7 @@ const AppContent: React.FC = () => {
     setEditingRideLog(null);
   };
 
-  const sendStatusChangeMessageToDriver = async (updatedLog: RideLog, oldStatus: RideStatus) => {
-    try {
-      if (!updatedLog.vehicleId) return;
 
-      let message = '';
-      if (updatedLog.status === RideStatus.Cancelled) {
-        message = `❌ Jízda zrušena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDůvod: Zrušeno dispečerem`;
-      } else if (updatedLog.status === RideStatus.Completed) {
-        message = `✅ Jízda dokončena\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDěkujeme za dokončení jízdy!`;
-      } else if (updatedLog.status === RideStatus.Accepted && oldStatus === RideStatus.Pending) {
-        message = `📋 Jízda potvrzena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nPokračujte podle plánu.`;
-      }
-
-      if (message) {
-        const { error } = await supabase
-          .from('driver_messages')
-          .insert({
-            sender_id: 'dispatcher',
-            receiver_id: `driver_${updatedLog.vehicleId}`,
-            message: message,
-            read: false
-          });
-
-        if (error) {
-          console.error('Error sending status change message to driver:', error);
-        } else {
-          console.log('Status change message sent to driver');
-        }
-      }
-    } catch (error) {
-      console.error('Error in sendStatusChangeMessageToDriver:', error);
-    }
-  };
 
   const handleSendSms = async (logId: string) => {
     const log = rideLog.find(l => l.id === logId);

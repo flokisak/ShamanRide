@@ -244,7 +244,7 @@ const EXPANDED_SEARCH_BOUNDS = { lonMin: 12.0, latMin: 46.0, lonMax: 24.0, latMa
 /**
  * Fallback geocoding using Nominatim (OpenStreetMap)
  */
-async function geocodeWithNominatim(address: string): Promise<{ lat: number; lon: number }> {
+const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number }> => {
   try {
     const proxyUrl = 'https://corsproxy.io/?';
     const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
