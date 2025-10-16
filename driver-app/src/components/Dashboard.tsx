@@ -31,11 +31,12 @@ const Dashboard: React.FC = () => {
    const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
    const [isRefreshing, setIsRefreshing] = useState(false);
    const [showManualRideModal, setShowManualRideModal] = useState(false);
-   const [showCompletionModal, setShowCompletionModal] = useState(false);
-   const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
-   const [lastRefreshTime, setLastRefreshTime] = useState(0);
-   const [lastSubscriptionRefresh, setLastSubscriptionRefresh] = useState(0);
-   const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [showCompletionModal, setShowCompletionModal] = useState(false);
+    const [showManualRideModal, setShowManualRideModal] = useState(false);
+    const [showRideHistory, setShowRideHistory] = useState(true);
+    const [lastRefreshTime, setLastRefreshTime] = useState(0);
+    const [lastSubscriptionRefresh, setLastSubscriptionRefresh] = useState(0);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
    // Debounced refresh function to prevent multiple simultaneous calls
    const refreshVehicleData = useCallback(async () => {
@@ -219,28 +220,7 @@ const Dashboard: React.FC = () => {
 
     getVehicleInfo();
 
-    // Subscribe to ride assignments and updates
-    console.log('Setting up ride subscriptions...');
-    const rideChannel = supabase
-      .channel('ride_assignments')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-        console.log('New ride assigned:', payload);
-        // Only refresh if this ride is assigned to our vehicle
-        if (payload.new.vehicle_id === vehicleNumber) {
-          const now = Date.now();
-          if (now - lastSubscriptionRefresh > 5000) { // Minimum 5 seconds between subscription-triggered refreshes
-            setLastSubscriptionRefresh(now);
-            refreshVehicleData();
-            // Notify user with sound and vibration for new ride assignment
-            notifyUser('ride');
-          }
-        }
-      })
-       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-         // Disabled UPDATE handling to prevent loops - rely on periodic refresh
-         // console.log('Ride updated:', payload);
-       })
-      .subscribe();
+    // Ride subscription will be set up after vehicleNumber is known
 
     // Subscribe to driver messages
      const messageChannel = supabase
@@ -297,69 +277,47 @@ const Dashboard: React.FC = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(rideChannel);
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(vehicleChannel);
     };
-   }, [refreshTrigger]); // Re-run when refresh is triggered
+  }, []);
 
-  // Auto-refresh ride data every 30 seconds
+  // Separate effect for ride subscriptions that depends on vehicleNumber
   useEffect(() => {
-    if (!vehicleNumber) return;
+    if (!vehicleNumber || !SUPABASE_ENABLED) return;
 
-    const refreshInterval = setInterval(async () => {
-      try {
-        console.log('Auto-refreshing ride data...');
-        await refreshVehicleData();
-      } catch (err) {
-        console.warn('Error auto-refreshing ride data:', err);
-      }
-    }, 30000); // Refresh every 30 seconds
-
-    return () => clearInterval(refreshInterval);
-  }, [vehicleNumber, refreshVehicleData]);
-
-
-
-  // Load messages when vehicle number is available
-  useEffect(() => {
-    const loadMessages = async () => {
-      if (vehicleNumber && SUPABASE_ENABLED && supabase) {
-        try {
-          const { data, error } = await supabase.from('driver_messages').select('*')
-            .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
-            .order('timestamp', { ascending: false });
-          if (error) {
-            console.warn('Could not load messages:', error);
-          } else if (data) {
-            setMessages(data);
+    console.log('Setting up ride subscriptions for vehicle:', vehicleNumber);
+    const rideChannel = supabase
+      .channel('ride_assignments')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
+        console.log('New ride assigned:', payload);
+        // Only refresh if this ride is assigned to our vehicle
+        if (payload.new.vehicle_id === vehicleNumber) {
+          const now = Date.now();
+          if (now - lastSubscriptionRefresh > 5000) { // Minimum 5 seconds between subscription-triggered refreshes
+            setLastSubscriptionRefresh(now);
+            refreshVehicleData();
+            // Notify user with sound and vibration for new ride assignment
+            notifyUser('ride');
           }
-        } catch (err) {
-          console.warn('Error loading messages:', err);
         }
-      }
-    };
-
-    loadMessages();
-  }, [vehicleNumber]);
-
-  // Network connectivity monitoring for mobile
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+      })
+       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+         // Only refresh if this ride is assigned to our vehicle
+         if (payload.new.vehicle_id === vehicleNumber) {
+           const now = Date.now();
+           if (now - lastSubscriptionRefresh > 5000) {
+             setLastSubscriptionRefresh(now);
+             refreshVehicleData();
+           }
+         }
+       })
+      .subscribe();
 
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      supabase.removeChannel(rideChannel);
     };
-  }, []);
+  }, [vehicleNumber, lastSubscriptionRefresh, refreshVehicleData]);
 
   // GPS Location tracking and sending
   useEffect(() => {
@@ -1191,37 +1149,68 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Ride History */}
-        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
-            <div className="text-sm text-slate-300">
-              <span className="font-medium">Denní tržba:</span> {dailyCash} Kč
+        {showRideHistory && (
+          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
+              <div className="flex items-center space-x-2">
+                <div className="text-sm text-slate-300">
+                  <span className="font-medium">Denní tržba:</span> {dailyCash} Kč
+                </div>
+                <button
+                  onClick={() => setShowRideHistory(false)}
+                  className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                  title="Hide ride history"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            {rideHistory.length > 0 ? (
+              <ul className="space-y-2">
+                {rideHistory.map((ride) => (
+                  <li key={ride.id} className="text-sm text-slate-300 bg-slate-800/30 rounded-lg p-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="font-medium text-white">{ride.customerName}</span>
+                        <div className="text-xs text-slate-400">
+                          {new Date(ride.timestamp).toLocaleDateString()} • {ride.status}
+                        </div>
+                      </div>
+                      {ride.estimatedPrice && (
+                        <div className="text-sm font-medium text-green-400">
+                          {ride.estimatedPrice} Kč
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-400 italic">{t('dashboard.noCompletedRides')}</p>
+            )}
+          </div>
+        )}
+
+        {!showRideHistory && (
+          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
+              <button
+                onClick={() => setShowRideHistory(true)}
+                className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                title="Show ride history"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
             </div>
           </div>
-          {rideHistory.length > 0 ? (
-            <ul className="space-y-2">
-              {rideHistory.map((ride) => (
-                <li key={ride.id} className="text-sm text-slate-300 bg-slate-800/30 rounded-lg p-2">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="font-medium text-white">{ride.customerName}</span>
-                      <div className="text-xs text-slate-400">
-                        {new Date(ride.timestamp).toLocaleDateString()} • {ride.status}
-                      </div>
-                    </div>
-                    {ride.estimatedPrice && (
-                      <div className="text-sm font-medium text-green-400">
-                        {ride.estimatedPrice} Kč
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-slate-400 italic">{t('dashboard.noCompletedRides')}</p>
-          )}
-        </div>
+        )}
 
         {/* Navigation Settings */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
