@@ -3,6 +3,8 @@ import { supabase, supabaseService, authService, geocodeAddress, SUPABASE_ENABLE
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications } from '../utils/notifications';
+import { ManualRideModal } from './ManualRideModal';
+import { RideCompletionModal } from './RideCompletionModal';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -24,10 +26,13 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
-  const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
-  const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
-  const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+   const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
+   const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
+   const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
+   const [isRefreshing, setIsRefreshing] = useState(false);
+   const [showManualRideModal, setShowManualRideModal] = useState(false);
+   const [showCompletionModal, setShowCompletionModal] = useState(false);
+   const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
    const [lastRefreshTime, setLastRefreshTime] = useState(0);
    const [lastSubscriptionRefresh, setLastSubscriptionRefresh] = useState(0);
    const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -689,81 +694,13 @@ const Dashboard: React.FC = () => {
       }
     };
 
-    const endRide = async () => {
-      if (currentRide && vehicleNumber) {
-        try {
-          console.log('Ending ride:', currentRide.id);
-          const updatedRide = { ...currentRide, status: RideStatus.Completed, completedAt: Date.now() };
-          await supabaseService.addRideLog(updatedRide);
-          console.log('Ride completed in database');
-
-         // Check if there are pending rides in queue
-         const nextRide = pendingRides.length > 0 ? pendingRides[0] : null;
-
-         if (nextRide) {
-           console.log('Accepting next ride in queue:', nextRide.id);
-           // Automatically accept the next ride in queue
-           const updatedNextRide = { ...nextRide, status: RideStatus.Accepted };
-           await supabaseService.addRideLog(updatedNextRide);
-
-            // Update vehicle status to BUSY, set freeAt to estimated completion time
-            const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
-            const locationUpdate: any = {
-              status: 'BUSY',
-              freeAt
-            };
-
-            if (location) {
-              locationUpdate.location = `${location.lat}, ${location.lng}`;
-            }
-
-            try {
-              const vehicles = await supabaseService.getVehicles();
-              const updatedVehicles = vehicles.map(v =>
-                v.id === vehicleNumber ? { ...v, ...locationUpdate } : v
-              );
-              await supabaseService.updateVehicles(updatedVehicles);
-            } catch (error) {
-              console.error('Failed to update vehicle for next ride:', error);
-            }
-
-           // Update state: remove from pending, set as current
-           setPendingRides(prev => prev.filter(r => r.id !== nextRide.id));
-           setCurrentRide({ ...nextRide, status: RideStatus.Accepted });
-           console.log('Next ride accepted and set as current');
-         } else {
-           console.log('No more rides, setting vehicle to available');
-            // No more rides, set to AVAILABLE and clear freeAt
-            const locationUpdate: any = {
-              status: 'AVAILABLE',
-              freeAt: null
-            };
-
-            if (location) {
-              locationUpdate.location = `${location.lat}, ${location.lng}`;
-            }
-
-            try {
-              const vehicles = await supabaseService.getVehicles();
-              const updatedVehicles = vehicles.map(v =>
-                v.id === vehicleNumber ? { ...v, ...locationUpdate } : v
-              );
-              await supabaseService.updateVehicles(updatedVehicles);
-            } catch (error) {
-              console.error('Failed to update vehicle to available:', error);
-            }
-
-           setCurrentRide(null);
-           console.log('Vehicle set to available, no current ride');
-         }
-       } catch (error) {
-         console.error('Error ending ride:', error);
-         alert('Error ending ride: ' + error.message);
+     const endRide = async () => {
+       if (currentRide) {
+         // Show completion modal instead of immediately completing
+         setRideToComplete(currentRide);
+         setShowCompletionModal(true);
        }
-     } else {
-       console.log('Cannot end ride: currentRide =', !!currentRide, 'vehicleNumber =', vehicleNumber);
-     }
-   };
+     };
 
   const navigateToDestination = async (ride?: RideLog, navApp?: 'google' | 'mapy') => {
     const targetRide = ride || currentRide;
@@ -848,12 +785,22 @@ const Dashboard: React.FC = () => {
     return driver ? driver.name : 'Neznámý řidič';
   };
 
-  const formatMessageTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('cs-CZ', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+   const formatMessageTime = (timestamp: string) => {
+     return new Date(timestamp).toLocaleTimeString('cs-CZ', {
+       hour: '2-digit',
+       minute: '2-digit'
+     });
+   };
+
+   const handleManualRideAdded = () => {
+     // Refresh the vehicle data to show the new ride
+     refreshVehicleData();
+   };
+
+   const handleRideCompleted = () => {
+     // Refresh the vehicle data to show the completed ride
+     refreshVehicleData();
+   };
 
   // Test function to check and create locations table
   const testLocationsTable = async () => {
@@ -968,30 +915,43 @@ const Dashboard: React.FC = () => {
       <div className="max-w-md mx-auto space-y-6">
         <h1 className="text-2xl font-bold text-center text-white">{t('dashboard.title')} - {licensePlate || `Vehicle ${vehicleNumber}`}</h1>
 
-        {/* Status */}
-        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-          <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.status')}</label>
-           <select
-             value={driverStatus}
-             onChange={(e) => updateVehicleStatus(e.target.value)}
-             className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+         {/* Status */}
+         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+           <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.status')}</label>
+            <select
+              value={driverStatus}
+              onChange={(e) => updateVehicleStatus(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+            >
+             <option value="available">{t('dashboard.available')}</option>
+             <option value="on_ride">{t('dashboard.onRide')}</option>
+             <option value="break_10">Pauza 10 min</option>
+             <option value="break_20">Pauza 20 min</option>
+             <option value="break_30">Pauza 30 min</option>
+             <option value="break_60">Pauza 1 hod</option>
+             <option value="pause">{t('dashboard.pause')}</option>
+             <option value="refueling">{t('dashboard.refueling')}</option>
+             <option value="offline">{t('dashboard.offline')}</option>
+           </select>
+           {driverStatus === 'break' && breakEndTime && (
+             <div className="mt-2 text-sm text-warning">
+               {t('dashboard.breakEndsIn')}: {Math.max(0, Math.ceil((breakEndTime - Date.now()) / (1000 * 60)))} min
+             </div>
+           )}
+         </div>
+
+         {/* Manual Ride Button */}
+         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+           <button
+             onClick={() => setShowManualRideModal(true)}
+             className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg"
            >
-            <option value="available">{t('dashboard.available')}</option>
-            <option value="on_ride">{t('dashboard.onRide')}</option>
-            <option value="break_10">Pauza 10 min</option>
-            <option value="break_20">Pauza 20 min</option>
-            <option value="break_30">Pauza 30 min</option>
-            <option value="break_60">Pauza 1 hod</option>
-            <option value="pause">{t('dashboard.pause')}</option>
-            <option value="refueling">{t('dashboard.refueling')}</option>
-            <option value="offline">{t('dashboard.offline')}</option>
-          </select>
-          {driverStatus === 'break' && breakEndTime && (
-            <div className="mt-2 text-sm text-warning">
-              {t('dashboard.breakEndsIn')}: {Math.max(0, Math.ceil((breakEndTime - Date.now()) / (1000 * 60)))} min
-            </div>
-          )}
-        </div>
+             ➕ Přidat přímou jízdu
+           </button>
+           <p className="text-xs text-slate-400 mt-2 text-center">
+             Pro zákazníky, kteří přijdou přímo k vozidlu
+           </p>
+         </div>
 
         {/* New Rides */}
         {pendingRides.length > 0 && (
@@ -1001,11 +961,12 @@ const Dashboard: React.FC = () => {
               {pendingRides.map((ride) => (
                 <div key={ride.id} className="bg-slate-800/50 rounded-lg p-3 border border-slate-600">
                   <div className="space-y-2 text-slate-300">
-                    <p><span className="font-medium">Zákazník:</span> {ride.customerName}</p>
-                    <p><span className="font-medium">Telefon:</span> <a href={`tel:${ride.customerPhone}`} className="text-blue-400 underline hover:text-blue-300">{ride.customerPhone}</a></p>
-                    <p><span className="font-medium">Odkud:</span> {ride.stops[0]}</p>
-                    <p><span className="font-medium">Kam:</span> {ride.stops[ride.stops.length - 1]}</p>
-                    {ride.estimatedPrice && <p><span className="font-medium">Cena:</span> {ride.estimatedPrice} Kč</p>}
+                     <p><span className="font-medium">Zákazník:</span> {ride.customerName}</p>
+                     <p><span className="font-medium">Telefon:</span> <a href={`tel:${ride.customerPhone}`} className="text-blue-400 underline hover:text-blue-300">{ride.customerPhone}</a></p>
+                     <p><span className="font-medium">Odkud:</span> {ride.stops[0]}</p>
+                     <p><span className="font-medium">Kam:</span> {ride.stops[ride.stops.length - 1]}</p>
+                     <p><span className="font-medium">Počet pasažérů:</span> {ride.passengers}</p>
+                     {ride.estimatedPrice && <p><span className="font-medium">Cena:</span> {ride.estimatedPrice} Kč</p>}
                   </div>
                   <div className="mt-3 space-y-2">
                      <button
@@ -1031,13 +992,14 @@ const Dashboard: React.FC = () => {
         {currentRide && (
           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
             <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.currentRide')}</h2>
-             <div className="space-y-2 text-slate-300">
-               <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
-               <p><span className="font-medium">{t('dashboard.phone')}:</span> <a href={`tel:${currentRide.customerPhone}`} className="text-blue-600 underline">{currentRide.customerPhone}</a></p>
-               <p><span className="font-medium">{t('dashboard.pickup')}:</span> {currentRide.stops[0]}</p>
-               <p><span className="font-medium">{t('dashboard.destination')}:</span> {currentRide.stops[currentRide.stops.length - 1]}</p>
-               <p><span className="font-medium">{t('dashboard.status')}:</span> {currentRide.status}</p>
-             </div>
+              <div className="space-y-2 text-slate-300">
+                <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
+                <p><span className="font-medium">{t('dashboard.phone')}:</span> <a href={`tel:${currentRide.customerPhone}`} className="text-blue-600 underline">{currentRide.customerPhone}</a></p>
+                <p><span className="font-medium">{t('dashboard.pickup')}:</span> {currentRide.stops[0]}</p>
+                <p><span className="font-medium">{t('dashboard.destination')}:</span> {currentRide.stops[currentRide.stops.length - 1]}</p>
+                <p><span className="font-medium">Počet pasažérů:</span> {currentRide.passengers}</p>
+                <p><span className="font-medium">{t('dashboard.status')}:</span> {currentRide.status}</p>
+              </div>
 
              <div className="mt-4 space-y-2">
                  {currentRide.status === RideStatus.Pending && (
@@ -1240,16 +1202,45 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Logout */}
-        <button
-          onClick={() => supabase.auth.signOut()}
-          className="w-full bg-danger hover:bg-red-700 py-3 rounded-2xl btn-modern text-white font-medium shadow-frost"
-        >
-          {t('dashboard.logout')}
-        </button>
-      </div>
-    </div>
-  );
-};
+         {/* Logout */}
+         <button
+           onClick={() => supabase.auth.signOut()}
+           className="w-full bg-danger hover:bg-red-700 py-3 rounded-2xl btn-modern text-white font-medium shadow-frost"
+         >
+           {t('dashboard.logout')}
+         </button>
+       </div>
+
+       {/* Manual Ride Modal */}
+       {showManualRideModal && vehicleNumber && (
+         <ManualRideModal
+           onClose={() => setShowManualRideModal(false)}
+           vehicleNumber={vehicleNumber}
+           licensePlate={licensePlate || `Vehicle ${vehicleNumber}`}
+           onRideAdded={handleManualRideAdded}
+           onNavigateToDestination={async (stops, navApp) => {
+             // Create a temporary ride object for navigation
+             const tempRide = { stops } as any;
+             await navigateToDestination(tempRide, navApp);
+           }}
+           preferredNavApp={preferredNavApp}
+         />
+       )}
+
+       {/* Ride Completion Modal */}
+       {showCompletionModal && rideToComplete && vehicleNumber && (
+         <RideCompletionModal
+           onClose={() => {
+             setShowCompletionModal(false);
+             setRideToComplete(null);
+           }}
+           ride={rideToComplete}
+           vehicleNumber={vehicleNumber}
+           onRideCompleted={handleRideCompleted}
+         />
+       )}
+     </div>
+   );
+ };
 
 export default Dashboard;
