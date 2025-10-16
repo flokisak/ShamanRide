@@ -210,9 +210,9 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
 }
 
 const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number }> => {
-  try {
+  const tryGeocode = async (query: string): Promise<{ lat: number; lon: number } | null> => {
     const proxyUrl = 'https://corsproxy.io/?';
-    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=cz`;
 
     const response = await fetch(nominatimUrl);
     if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
@@ -239,6 +239,33 @@ const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon
       const result = data[0];
       return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
     }
+    return null;
+  };
+
+  try {
+    // Try full address first
+    let result = await tryGeocode(address);
+    if (result) return result;
+
+    // Try simplified address (first part before comma)
+    const simplified = address.split(',')[0].trim();
+    if (simplified !== address) {
+      console.log('Trying simplified address:', simplified);
+      result = await tryGeocode(simplified);
+      if (result) return result;
+    }
+
+    // Try just the city name (remove numbers and special chars)
+    const cityMatch = address.match(/^([^,0-9]+)/);
+    if (cityMatch) {
+      const cityOnly = cityMatch[1].trim();
+      if (cityOnly !== simplified && cityOnly !== address) {
+        console.log('Trying city only:', cityOnly);
+        result = await tryGeocode(cityOnly);
+        if (result) return result;
+      }
+    }
+
     throw new Error(`Address not found: ${address}.`);
   } catch (error) {
     console.error("Nominatim geocoding error:", error);
