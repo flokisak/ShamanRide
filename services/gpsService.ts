@@ -26,7 +26,6 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
     const { data, error } = await supabase
       .from('locations')
       .select('*')
-      .gte('timestamp', new Date(Date.now() - 3600000).toISOString()) // last 1 hour
       .order('timestamp', { ascending: false })
       .limit(100);
 
