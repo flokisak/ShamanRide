@@ -243,16 +243,21 @@ export const supabaseService = SUPABASE_ENABLED
               estimated_price: r.estimatedPrice ?? null,
               estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
               estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
-               fuel_cost: r.fuelCost ?? null,
-              distance: r.distance ?? null,
-            };
+                fuel_cost: r.fuelCost ?? null,
+               distance: r.distance ?? null,
+             };
 
-            // Only include navigation_url if it exists (to avoid schema errors)
-            if (r.navigationUrl) {
-              result.navigation_url = r.navigationUrl;
-            }
+             // Add timestamp fields if they exist
+             if (r.acceptedAt) result.accepted_at = r.acceptedAt;
+             if (r.startedAt) result.started_at = r.startedAt;
+             if (r.completedAt) result.completed_at = r.completedAt;
 
-            return result;
+             // Only include navigation_url if it exists (to avoid schema errors)
+             if (r.navigationUrl) {
+               result.navigation_url = r.navigationUrl;
+             }
+
+             return result;
          },
           _fromDbRideLog(db: any) {
             return {
@@ -274,10 +279,13 @@ export const supabaseService = SUPABASE_ENABLED
             estimatedPrice: db.estimated_price ?? null,
               estimatedPickupTimestamp: db.estimated_pickup_timestamp,
               estimatedCompletionTimestamp: db.estimated_completion_timestamp,
-             fuelCost: db.fuel_cost ?? null,
-            distance: db.distance ?? null,
-            navigationUrl: db.navigation_url ?? null,
-          };
+              fuelCost: db.fuel_cost ?? null,
+             distance: db.distance ?? null,
+             acceptedAt: db.accepted_at ?? null,
+             startedAt: db.started_at ?? null,
+             completedAt: db.completed_at ?? null,
+             navigationUrl: db.navigation_url ?? null,
+           };
        },
 
       // Vehicles

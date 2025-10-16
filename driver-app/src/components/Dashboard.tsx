@@ -578,13 +578,11 @@ const Dashboard: React.FC = () => {
    const acceptRideSpecific = async (ride: RideLog) => {
      if (vehicleNumber) {
        try {
-         // Update ride status to accepted
-         const { error: rideError } = await supabase.from('ride_logs').update({
-           status: RideStatus.Accepted,
-           accepted_at: Date.now()
-         }).eq('id', ride.id);
-
-         if (rideError) {
+         // Update ride status to accepted using the service (which handles proper conversion)
+         const updatedRide = { ...ride, status: RideStatus.Accepted, acceptedAt: Date.now() };
+         try {
+           await supabaseService.addRideLog(updatedRide);
+         } catch (rideError) {
            console.error('Failed to accept ride:', rideError);
            alert('Failed to accept ride. Please try again.');
            return;
@@ -621,13 +619,11 @@ const Dashboard: React.FC = () => {
    const acceptRide = async () => {
      if (currentRide && vehicleNumber) {
        try {
-         // Update ride status to accepted
-         const { error: rideError } = await supabase.from('ride_logs').update({
-           status: RideStatus.Accepted,
-           accepted_at: Date.now()
-         }).eq('id', currentRide.id);
-
-         if (rideError) {
+         // Update ride status to accepted using the service (which handles proper conversion)
+         const updatedRide = { ...currentRide, status: RideStatus.Accepted };
+         try {
+           await supabaseService.addRideLog(updatedRide);
+         } catch (rideError) {
            console.error('Failed to accept ride:', rideError);
            alert('Failed to accept ride. Please try again.');
            return;
@@ -657,23 +653,26 @@ const Dashboard: React.FC = () => {
      }
    };
 
-  const startRide = async () => {
-    if (currentRide) {
-      await supabase.from('ride_logs').update({ status: RideStatus.InProgress, started_at: Date.now() }).eq('id', currentRide.id);
-      setCurrentRide({ ...currentRide, status: RideStatus.InProgress });
-    }
-  };
+   const startRide = async () => {
+     if (currentRide) {
+       const updatedRide = { ...currentRide, status: RideStatus.InProgress };
+       await supabaseService.addRideLog(updatedRide);
+       setCurrentRide(updatedRide);
+     }
+   };
 
-  const endRide = async () => {
-    if (currentRide && vehicleNumber) {
-      await supabase.from('ride_logs').update({ status: RideStatus.Completed, completed_at: Date.now() }).eq('id', currentRide.id);
+   const endRide = async () => {
+     if (currentRide && vehicleNumber) {
+       const updatedRide = { ...currentRide, status: RideStatus.Completed };
+       await supabaseService.addRideLog(updatedRide);
 
       // Check if there are pending rides in queue
       const nextRide = pendingRides.length > 0 ? pendingRides[0] : null;
 
       if (nextRide) {
         // Automatically accept the next ride in queue
-        await supabase.from('ride_logs').update({ status: RideStatus.Accepted, accepted_at: Date.now() }).eq('id', nextRide.id);
+        const updatedNextRide = { ...nextRide, status: RideStatus.Accepted };
+        await supabaseService.addRideLog(updatedNextRide);
 
         // Update vehicle status to BUSY, set freeAt to estimated completion time
         const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set

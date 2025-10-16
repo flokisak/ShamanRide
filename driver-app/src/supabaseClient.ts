@@ -343,9 +343,14 @@ const supabaseService: any = SUPABASE_ENABLED ? {
               estimated_price: r.estimatedPrice ?? null,
               estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
               estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
-              fuel_cost: r.fuelCost ?? null,
-             distance: r.distance ?? null,
-            };
+               fuel_cost: r.fuelCost ?? null,
+              distance: r.distance ?? null,
+             };
+
+             // Add timestamp fields if they exist
+             if (r.acceptedAt) result.accepted_at = r.acceptedAt;
+             if (r.startedAt) result.started_at = r.startedAt;
+             if (r.completedAt) result.completed_at = r.completedAt;
          },
         _fromDbRideLog(db: any) {
             return {
@@ -367,9 +372,12 @@ const supabaseService: any = SUPABASE_ENABLED ? {
             estimatedPrice: db.estimated_price ?? null,
               estimatedPickupTimestamp: db.estimated_pickup_timestamp,
               estimatedCompletionTimestamp: db.estimated_completion_timestamp,
-            fuelCost: db.fuel_cost ?? null,
-           distance: db.distance ?? null,
-         };
+              fuelCost: db.fuel_cost ?? null,
+            distance: db.distance ?? null,
+            acceptedAt: db.accepted_at ?? null,
+            startedAt: db.started_at ?? null,
+            completedAt: db.completed_at ?? null,
+          };
        },
 
       // Vehicles
