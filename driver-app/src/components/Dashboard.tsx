@@ -601,85 +601,85 @@ const Dashboard: React.FC = () => {
     }
   };
 
-   const acceptRideSpecific = async (ride: RideLog) => {
-     if (vehicleNumber) {
-       try {
-         // Update ride status to accepted using the service (which handles proper conversion)
-         const updatedRide = { ...ride, status: RideStatus.Accepted, acceptedAt: Date.now() };
-         try {
-           await supabaseService.addRideLog(updatedRide);
-         } catch (rideError) {
-           console.error('Failed to accept ride:', rideError);
-           alert('Failed to accept ride. Please try again.');
-           return;
-         }
-
-          // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
-          const freeAt = ride.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+    const acceptRideSpecific = async (ride: RideLog) => {
+      if (vehicleNumber) {
+        try {
+          // Update ride status to in_progress (skip accepted, start ride immediately)
+          const updatedRide = { ...ride, status: RideStatus.InProgress, acceptedAt: Date.now(), startedAt: Date.now() };
           try {
-            const vehicles = await supabaseService.getVehicles();
-            const updatedVehicles = vehicles.map(v =>
-              v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
-            );
-            await supabaseService.updateVehicles(updatedVehicles);
-          } catch (vehicleError) {
-            console.error('Failed to update vehicle status:', vehicleError);
-            // Continue anyway, the ride was accepted
+            await supabaseService.addRideLog(updatedRide);
+          } catch (rideError) {
+            console.error('Failed to accept ride:', rideError);
+            alert('Failed to accept ride. Please try again.');
+            return;
           }
 
-         // Track this acceptance to prevent auto-refresh from overriding it
-         setLastAcceptedRideId(ride.id);
-         setLastAcceptTime(Date.now());
+           // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+           const freeAt = ride.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+           try {
+             const vehicles = await supabaseService.getVehicles();
+             const updatedVehicles = vehicles.map(v =>
+               v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
+             );
+             await supabaseService.updateVehicles(updatedVehicles);
+           } catch (vehicleError) {
+             console.error('Failed to update vehicle status:', vehicleError);
+             // Continue anyway, the ride was accepted
+           }
 
-         // Immediately update local state to prevent UI flicker
-         setPendingRides(prev => prev.filter(r => r.id !== ride.id));
-         setCurrentRide({ ...ride, status: RideStatus.Accepted });
+          // Track this acceptance to prevent auto-refresh from overriding it
+          setLastAcceptedRideId(ride.id);
+          setLastAcceptTime(Date.now());
 
-         // The real-time subscription will handle any additional updates
-       } catch (error) {
-         console.error('Error accepting ride:', error);
-         alert('Error accepting ride. Please try again.');
-       }
-     }
-   };
+          // Immediately update local state to prevent UI flicker
+          setPendingRides(prev => prev.filter(r => r.id !== ride.id));
+          setCurrentRide({ ...ride, status: RideStatus.InProgress });
 
-   const acceptRide = async () => {
-     if (currentRide && vehicleNumber) {
-       try {
-         // Update ride status to accepted using the service (which handles proper conversion)
-         const updatedRide = { ...currentRide, status: RideStatus.Accepted };
-         try {
-           await supabaseService.addRideLog(updatedRide);
-         } catch (rideError) {
-           console.error('Failed to accept ride:', rideError);
-           alert('Failed to accept ride. Please try again.');
-           return;
-         }
+          // The real-time subscription will handle any additional updates
+        } catch (error) {
+          console.error('Error accepting ride:', error);
+          alert('Error accepting ride. Please try again.');
+        }
+      }
+    };
 
-          // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
-          const freeAt = currentRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+    const acceptRide = async () => {
+      if (currentRide && vehicleNumber) {
+        try {
+          // Update ride status to in_progress (skip accepted, start ride immediately)
+          const updatedRide = { ...currentRide, status: RideStatus.InProgress, startedAt: Date.now() };
           try {
-            const vehicles = await supabaseService.getVehicles();
-            const updatedVehicles = vehicles.map(v =>
-              v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
-            );
-            await supabaseService.updateVehicles(updatedVehicles);
-          } catch (vehicleError) {
-            console.error('Failed to update vehicle status:', vehicleError);
-            // Continue anyway, the ride was accepted
+            await supabaseService.addRideLog(updatedRide);
+          } catch (rideError) {
+            console.error('Failed to accept ride:', rideError);
+            alert('Failed to accept ride. Please try again.');
+            return;
           }
 
-         // Track this acceptance to prevent auto-refresh from overriding it
-         setLastAcceptedRideId(currentRide.id);
-         setLastAcceptTime(Date.now());
+           // Update vehicle status to BUSY when ride is accepted, set freeAt to estimated completion time
+           const freeAt = currentRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000); // Default 30 min if not set
+           try {
+             const vehicles = await supabaseService.getVehicles();
+             const updatedVehicles = vehicles.map(v =>
+               v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
+             );
+             await supabaseService.updateVehicles(updatedVehicles);
+           } catch (vehicleError) {
+             console.error('Failed to update vehicle status:', vehicleError);
+             // Continue anyway, the ride was accepted
+           }
 
-         setCurrentRide({ ...currentRide, status: RideStatus.Accepted });
-       } catch (error) {
-         console.error('Error accepting ride:', error);
-         alert('Error accepting ride. Please try again.');
-       }
-     }
-   };
+          // Track this acceptance to prevent auto-refresh from overriding it
+          setLastAcceptedRideId(currentRide.id);
+          setLastAcceptTime(Date.now());
+
+          setCurrentRide({ ...currentRide, status: RideStatus.InProgress });
+        } catch (error) {
+          console.error('Error accepting ride:', error);
+          alert('Error accepting ride. Please try again.');
+        }
+      }
+    };
 
     const startRide = async () => {
       if (currentRide) {
@@ -1008,12 +1008,12 @@ const Dashboard: React.FC = () => {
                     {ride.estimatedPrice && <p><span className="font-medium">Cena:</span> {ride.estimatedPrice} Kč</p>}
                   </div>
                   <div className="mt-3 space-y-2">
-                    <button
-                      onClick={() => acceptRideSpecific(ride)}
-                      className="w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg"
-                    >
-                      ✅ Přijmout
-                    </button>
+                     <button
+                       onClick={() => acceptRideSpecific(ride)}
+                       className="w-full bg-green-600 hover:bg-green-700 py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg"
+                     >
+                       ✅ Začít jízdu
+                     </button>
                      <button
                        onClick={() => navigateToDestination(ride)}
                        className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium"
@@ -1040,11 +1040,11 @@ const Dashboard: React.FC = () => {
              </div>
 
              <div className="mt-4 space-y-2">
-                {currentRide.status === RideStatus.Pending && (
-                  <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
-                    {t('dashboard.acceptRide')}
-                  </button>
-                )}
+                 {currentRide.status === RideStatus.Pending && (
+                   <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
+                     Začít jízdu
+                   </button>
+                 )}
                  {currentRide.status === RideStatus.Accepted && (
                    <div className="space-y-2">
                      <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
