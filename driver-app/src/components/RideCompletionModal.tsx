@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CloseIcon, CheckCircleIcon, AlertTriangleIcon } from '../icons';
-import { supabaseService } from '../supabaseClient';
+import { supabase, supabaseService } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 
 interface RideCompletionModalProps {
