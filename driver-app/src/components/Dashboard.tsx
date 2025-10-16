@@ -743,13 +743,18 @@ const Dashboard: React.FC = () => {
                       `driver_${selectedRecipient}`;
     if (SUPABASE_ENABLED && supabase) {
       try {
-        await supabase.from('driver_messages').insert({
-          sender_id: `driver_${vehicleNumber}`,
-          receiver_id: receiverId,
-          message: newMessage,
-          timestamp: Date.now(),
-          read: false
-        });
+        const { data, error } = await supabase
+          .from('driver_messages')
+          .insert({
+            sender_id: `driver_${vehicleNumber}`,
+            receiver_id: selectedRecipient,
+            message: newMessage,
+            read: false
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
       } catch (error) {
         console.error('Failed to send message:', error);
       }
