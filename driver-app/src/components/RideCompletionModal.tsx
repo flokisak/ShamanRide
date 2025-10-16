@@ -41,41 +41,9 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
             };
 
             // Update the ride in the database
+            console.log('Completing ride:', ride.id, 'with status:', updatedRide.status, 'price:', finalPrice);
             await supabaseService.addRideLog(updatedRide);
-
-            // Update vehicle status to available or handle next ride
-            const vehicles = await supabaseService.getVehicles();
-            const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
-
-            if (currentVehicle) {
-                // Check if there are pending rides in queue
-                const pendingRides = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'pending');
-
-                if (pendingRides.length > 0) {
-                    // Automatically accept the next ride in queue
-                    const nextRide = pendingRides[0];
-                    const acceptedRide = {
-                        ...nextRide,
-                        status: RideStatus.InProgress,
-                        acceptedAt: Date.now(),
-                        startedAt: Date.now()
-                    };
-                    await supabaseService.addRideLog(acceptedRide);
-
-                    // Update vehicle status to BUSY for next ride
-                    const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000);
-                    const updatedVehicles = vehicles.map(v =>
-                        v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
-                    );
-                    await supabaseService.updateVehicles(updatedVehicles);
-                } else {
-                    // No more rides, set to AVAILABLE
-                    const updatedVehicles = vehicles.map(v =>
-                        v.id === vehicleNumber ? { ...v, status: 'AVAILABLE', freeAt: null } : v
-                    );
-                    await supabaseService.updateVehicles(updatedVehicles);
-                }
-            }
+            console.log('Ride completion database update completed');
 
             setModalState('success');
 

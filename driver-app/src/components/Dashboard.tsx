@@ -151,8 +151,12 @@ const Dashboard: React.FC = () => {
           const acceptedRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'accepted');
           const inProgressRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'in_progress');
           const activeRides = [...acceptedRides, ...inProgressRides];
+          console.log('Active rides found:', activeRides.length, activeRides.map(r => ({ id: r.id, status: r.status })));
           if (activeRides.length > 0) {
             setCurrentRide(activeRides[0]);
+          } else {
+            console.log('No active rides found, setting currentRide to null');
+            setCurrentRide(null);
           }
         } catch (error) {
           console.warn('Could not load active rides:', error);
@@ -797,9 +801,60 @@ const Dashboard: React.FC = () => {
      refreshVehicleData();
    };
 
-   const handleRideCompleted = () => {
-     // Refresh the vehicle data to show the completed ride
-     refreshVehicleData();
+   const handleRideCompleted = async () => {
+     console.log('handleRideCompleted called, clearing current ride');
+     // Clear the current ride since it was completed
+     setCurrentRide(null);
+
+     // Check if there are pending rides in queue and handle them
+     if (!vehicleNumber) return;
+
+     try {
+       const pendingRides = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'pending');
+
+       if (pendingRides.length > 0) {
+         const nextRide = pendingRides[0];
+         console.log('Accepting next ride in queue:', nextRide.id);
+
+         // Automatically accept the next ride in queue
+         const acceptedRide = {
+           ...nextRide,
+           status: RideStatus.InProgress,
+           acceptedAt: Date.now(),
+           startedAt: Date.now()
+         };
+         await supabaseService.addRideLog(acceptedRide);
+
+         // Update vehicle status to BUSY for next ride
+         const freeAt = nextRide.estimatedCompletionTimestamp || (Date.now() + 30 * 60 * 1000);
+         const vehicles = await supabaseService.getVehicles();
+         const updatedVehicles = vehicles.map(v =>
+           v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt } : v
+         );
+         await supabaseService.updateVehicles(updatedVehicles);
+
+         // Update state: remove from pending, set as current
+         setPendingRides(prev => prev.filter(r => r.id !== nextRide.id));
+         setCurrentRide(acceptedRide);
+         console.log('Next ride accepted and set as current');
+       } else {
+         console.log('No more rides, vehicle remains available');
+         // Update vehicle status to AVAILABLE
+         const vehicles = await supabaseService.getVehicles();
+         const updatedVehicles = vehicles.map(v =>
+           v.id === vehicleNumber ? { ...v, status: 'AVAILABLE', freeAt: null } : v
+         );
+         await supabaseService.updateVehicles(updatedVehicles);
+       }
+     } catch (error) {
+       console.error('Error handling next ride after completion:', error);
+     }
+
+     // Small delay to ensure database operations complete, then refresh
+     setTimeout(async () => {
+       console.log('Calling refreshVehicleData after ride completion');
+       await refreshVehicleData();
+     }, 1000);
    };
 
   // Test function to check and create locations table

@@ -506,13 +506,21 @@ const supabaseService: any = SUPABASE_ENABLED ? {
           if (error) throw error;
           return (data || []).map((d: any) => this._fromDbRideLog(d));
         },
-         async addRideLog(rideLog: any) {
-           if (SUPABASE_ENABLED) {
-             const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });
-             if (error) throw error;
-           }
-           upsertLocal('ride-log', rideLog);
-         },
+          async addRideLog(rideLog: any) {
+            const dbData = this._toDbRideLog(rideLog);
+            console.log('addRideLog: sending to database:', dbData);
+            if (SUPABASE_ENABLED) {
+              const { error } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
+              if (error) {
+                console.error('addRideLog error:', error);
+                throw error;
+              }
+              console.log('addRideLog: successfully saved to Supabase');
+            } else {
+              console.log('addRideLog: Supabase not enabled, using localStorage');
+            }
+            upsertLocal('ride-log', rideLog);
+          },
         async updateRideLogs(rideLogs: any[]) {
           if (SUPABASE_ENABLED) {
             try {

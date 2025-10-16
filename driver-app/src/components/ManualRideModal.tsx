@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CloseIcon, CheckCircleIcon, AlertTriangleIcon } from '../icons';
-import { supabaseService } from '../supabaseClient';
+import { supabaseService, SUPABASE_ENABLED } from '../supabaseClient';
 import { RideLog, RideStatus, RideType } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 
@@ -23,6 +23,8 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
     onNavigateToDestination,
     preferredNavApp = 'google'
 }) => {
+    console.log('ManualRideModal opened with:', { vehicleNumber, licensePlate });
+    console.log('SUPABASE_ENABLED:', SUPABASE_ENABLED);
     const { t } = useTranslation();
     const [stops, setStops] = useState<string[]>(['', '']);
     const [customerName, setCustomerName] = useState('');
@@ -64,9 +66,10 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
             // Calculate estimated completion time (assume 30 minutes for now)
             const estimatedCompletionTimestamp = Date.now() + 30 * 60 * 1000;
 
-            // Create new ride log entry
+            // Create new ride log entry - first as PENDING, then immediately accept it
+            const rideId = `manual-ride-${Date.now()}`;
             const newRide: RideLog = {
-                id: `manual-ride-${Date.now()}`,
+                id: rideId,
                 timestamp: Date.now(),
                 vehicleName: licensePlate,
                 vehicleLicensePlate: licensePlate,
@@ -78,7 +81,7 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 stops,
                 passengers: passengers || 1,
                 pickupTime: 'ihned',
-                status: RideStatus.InProgress, // Start immediately since driver is adding it
+                status: RideStatus.Pending, // Create as pending first so dispatcher can see it's assigned
                 vehicleId: vehicleNumber,
                 notes: notes || 'Přímá objednávka řidiče',
                 estimatedPrice,
@@ -92,8 +95,31 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 businessPurpose: undefined
             };
 
-            // Add the ride to the database
-            await supabaseService.addRideLog(newRide);
+            console.log('Creating manual ride:', {
+                id: rideId,
+                vehicleId: vehicleNumber,
+                vehicleNumber,
+                licensePlate,
+                status: newRide.status,
+                fullRide: newRide
+            });
+
+            // Add the ride as pending first
+            console.log('Adding ride to database:', newRide);
+            const result1 = await supabaseService.addRideLog(newRide);
+            console.log('First addRideLog result:', result1);
+
+            // Immediately accept/start the ride
+            const acceptedRide: RideLog = {
+                ...newRide,
+                status: RideStatus.InProgress,
+                acceptedAt: Date.now(),
+                startedAt: Date.now()
+            };
+
+            console.log('Updating ride to in progress:', acceptedRide);
+            const result2 = await supabaseService.addRideLog(acceptedRide);
+            console.log('Second addRideLog result:', result2);
 
             // Update vehicle status to BUSY
             const vehicles = await supabaseService.getVehicles();
