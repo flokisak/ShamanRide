@@ -161,41 +161,47 @@ async function geocodeAddress(address: string, language: string): Promise<{ lat:
     const cacheKey = `${cleanAddress}_${language}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
-    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (!googleMapsApiKey) {
-        console.warn('Google Maps API key not configured, falling back to Nominatim');
-        // Fallback to Nominatim for now
-        return await geocodeWithNominatim(cleanAddress);
-    }
-
     try {
-        const proxyUrl = 'https://corsproxy.io/?';
-        const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
-
-        const response = await fetch(geocodingUrl);
-        if (!response.ok) {
-            throw new Error(`Geocoding API error: ${response.status}`);
+        // Try Nominatim first (more reliable for Czech addresses)
+        console.log('Trying Nominatim for address:', cleanAddress);
+        const nominatimResult = await geocodeWithNominatim(cleanAddress);
+        if (nominatimResult) {
+            geocodeCache.set(cacheKey, nominatimResult);
+            return nominatimResult;
         }
 
-        const data = await response.json();
-
-        if (data.status === 'OK' && data.results && data.results.length > 0) {
-            const result = data.results[0];
-            const location = result.geometry.location;
-            const coords = { lat: location.lat, lon: location.lng };
-
-            geocodeCache.set(cacheKey, coords);
-            return coords;
-        } else {
-            console.warn('Google Maps geocoding failed:', data.status, data.error_message);
-
-            // Fallback to Nominatim
-            return await geocodeWithNominatim(cleanAddress);
+        // Fallback to Photon
+        console.log('Nominatim failed, trying Photon for address:', cleanAddress);
+        const photonResult = await fetchPhotonCoords(cleanAddress);
+        if (photonResult) {
+            geocodeCache.set(cacheKey, photonResult);
+            return photonResult;
         }
+
+        // Fallback to Google Maps if API key available
+        const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        if (googleMapsApiKey) {
+            console.log('Photon failed, trying Google Maps for address:', cleanAddress);
+            const proxyUrl = 'https://corsproxy.io/?';
+            const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+
+            const response = await fetch(geocodingUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'OK' && data.results && data.results.length > 0) {
+                    const result = data.results[0];
+                    const location = result.geometry.location;
+                    const coords = { lat: location.lat, lon: location.lng };
+                    geocodeCache.set(cacheKey, coords);
+                    return coords;
+                }
+            }
+        }
+
+        throw new Error(`All geocoding services failed for address: ${cleanAddress}`);
     } catch (error) {
-        console.error("Google Maps geocoding error:", error);
-        // Fallback to Nominatim
-        return await geocodeWithNominatim(cleanAddress);
+        console.error("Geocoding error:", error);
+        throw error;
     }
 }
 
@@ -211,34 +217,48 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
 
 const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number }> => {
   const tryGeocode = async (query: string): Promise<{ lat: number; lon: number } | null> => {
-    const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10`;
+    const proxyUrl = 'https://corsproxy.io/?';
+    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10`;
 
-    const response = await fetch(nominatimUrl);
-    if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
-    const data = await response.json();
+    try {
+      const response = await fetch(nominatimUrl);
+      if (!response.ok) {
+        console.warn(`Nominatim API error: ${response.status} for query: ${query}`);
+        return null;
+      }
+      const data = await response.json();
 
-    if (data && Array.isArray(data) && data.length > 0) {
-      // First priority: results within South Moravia bounds
-      for (const result of data) {
-        const lat = parseFloat(result.lat);
-        const lon = parseFloat(result.lon);
-        if (isInSouthMoravia(lat, lon)) {
-          return { lat, lon };
+      if (data && Array.isArray(data) && data.length > 0) {
+        console.log(`Nominatim found ${data.length} results for "${query}"`);
+        // First priority: results within South Moravia bounds
+        for (const result of data) {
+          const lat = parseFloat(result.lat);
+          const lon = parseFloat(result.lon);
+          if (isInSouthMoravia(lat, lon)) {
+            console.log(`Using South Moravia result: ${lat}, ${lon}`);
+            return { lat, lon };
+          }
         }
-      }
-      // Second priority: results within Czech Republic
-      for (const result of data) {
-        const lat = parseFloat(result.lat);
-        const lon = parseFloat(result.lon);
-        if (isInCzechRepublic(lat, lon)) {
-          return { lat, lon };
+        // Second priority: results within Czech Republic
+        for (const result of data) {
+          const lat = parseFloat(result.lat);
+          const lon = parseFloat(result.lon);
+          if (isInCzechRepublic(lat, lon)) {
+            console.log(`Using Czech Republic result: ${lat}, ${lon}`);
+            return { lat, lon };
+          }
         }
+        // Third priority: any result
+        const result = data[0];
+        console.log(`Using any result: ${result.lat}, ${result.lon}`);
+        return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
       }
-      // Third priority: any result
-      const result = data[0];
-      return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
+      console.warn(`No results from Nominatim for "${query}"`);
+      return null;
+    } catch (error) {
+      console.error(`Nominatim fetch error for "${query}":`, error);
+      return null;
     }
-    return null;
   };
 
   try {
@@ -284,10 +304,11 @@ const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon
       }
     }
 
-    throw new Error(`Address not found: ${address}.`);
+    console.error(`All geocoding attempts failed for address: ${address}`);
+    return null;
   } catch (error) {
     console.error("Nominatim geocoding error:", error);
-    throw new Error(`Could not find coordinates for address: ${address}.`);
+    return null;
   }
 }
 
