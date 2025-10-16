@@ -410,20 +410,10 @@ const Dashboard: React.FC = () => {
       }
     );
 
-    // Send location every 30 seconds
-    locationInterval = setInterval(async () => {
-      if (currentPosition && vehicleNumber) {
-        const locationData = {
-          vehicle_id: vehicleNumber,
-          latitude: currentPosition.lat,
-          longitude: currentPosition.lng,
-          timestamp: new Date().toISOString(),
-        };
-
-        console.log('Sending location to Supabase:', locationData);
-
+    // Check locations table if Supabase is enabled
+    if (SUPABASE_ENABLED && supabase) {
+      (async () => {
         try {
-          // First check if locations table exists by trying to query it
           const { error: tableCheckError } = await supabase
             .from('locations')
             .select('count', { count: 'exact', head: true });
@@ -441,31 +431,56 @@ const Dashboard: React.FC = () => {
               console.error('Locations table exists but has issues. Current error:', tableCheckError);
               console.error('This might be a permissions issue or column mismatch.');
             }
-            return;
+          } else {
+            console.log('Locations table exists and is accessible');
           }
+        } catch (err) {
+          console.error('Exception checking locations table:', err);
+        }
+      })();
+    }
 
-          console.log('Locations table exists, attempting to insert location data...');
+    // Send location every 30 seconds
+    locationInterval = setInterval(async () => {
+      if (currentPosition && vehicleNumber) {
+        const locationData = {
+          vehicle_id: vehicleNumber,
+          latitude: currentPosition.lat,
+          longitude: currentPosition.lng,
+          timestamp: new Date().toISOString(),
+        };
 
-          const { data, error } = await supabase.from('locations').insert(locationData);
+        console.log('Sending location:', locationData);
 
-          if (error) {
-            console.error('Failed to send location to Supabase:', error);
-            console.error('Error details:', {
-              message: error.message,
-              details: error.details,
-              hint: error.hint,
-              code: error.code
-            });
+        if (SUPABASE_ENABLED && supabase) {
+          try {
+            const { data, error } = await supabase.from('locations').insert(locationData);
+
+            if (error) {
+              console.error('Failed to send location to Supabase:', error);
+              console.error('Error details:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+              });
+              // Store in localStorage as fallback
+              const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
+              queued.push(locationData);
+              localStorage.setItem('queued_locations', JSON.stringify(queued));
+            } else {
+              console.log('Location sent successfully:', data);
+            }
+          } catch (err) {
+            console.error('Exception sending location:', err);
             // Store in localStorage as fallback
             const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
             queued.push(locationData);
             localStorage.setItem('queued_locations', JSON.stringify(queued));
-          } else {
-            console.log('Location sent successfully:', data);
           }
-        } catch (err) {
-          console.error('Exception sending location:', err);
-          // Store in localStorage as fallback
+        } else {
+          console.log('Supabase not enabled, storing location locally');
+          // Store in localStorage when Supabase is not available
           const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
           queued.push(locationData);
           localStorage.setItem('queued_locations', JSON.stringify(queued));
