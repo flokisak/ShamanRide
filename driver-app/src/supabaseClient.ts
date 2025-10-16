@@ -1,8 +1,9 @@
-import { supabase as mainSupabase, SUPABASE_ENABLED } from '../../services/supabaseClient';
+import { supabase } from '../../services/supabaseClient';
+import { SUPABASE_ENABLED } from '../../services/supabaseClient';
 import { DEFAULT_FUEL_PRICES } from './types';
 
 // Re-export the main supabase client to avoid duplication
-export const supabase = mainSupabase;
+export { supabase };
 
 // Re-export SUPABASE_ENABLED for compatibility
 export { SUPABASE_ENABLED };

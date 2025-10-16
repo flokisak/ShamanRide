@@ -8,7 +8,7 @@ const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY
 
 export const SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
 
-export let supabase: any = null;
+let supabase: any = null;
 if (SUPABASE_ENABLED) {
   // Use service key if available (for driver app), otherwise anon key
   const key = supabaseServiceKey || supabaseAnonKey;
@@ -16,8 +16,6 @@ if (SUPABASE_ENABLED) {
 } else {
   console.warn('Supabase is not configured. Falling back to localStorage-based local mode.');
 }
-
-export { supabase };
 
 // Minimal localStorage helpers for fallback mode
 const TABLE_PREFIX = 'rapid-dispatch-';
