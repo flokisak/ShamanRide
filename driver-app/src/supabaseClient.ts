@@ -211,8 +211,7 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
 
 const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number }> => {
   const tryGeocode = async (query: string): Promise<{ lat: number; lon: number } | null> => {
-    const proxyUrl = 'https://corsproxy.io/?';
-    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=cz`;
+    const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10`;
 
     const response = await fetch(nominatimUrl);
     if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
@@ -253,6 +252,25 @@ const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon
       console.log('Trying simplified address:', simplified);
       result = await tryGeocode(simplified);
       if (result) return result;
+    }
+
+    // Try the city part (usually the third or second part in Czech addresses)
+    const parts = address.split(',').map(p => p.trim());
+    if (parts.length >= 3) {
+      // Try the third part (city)
+      const cityCandidate = parts[2];
+      if (cityCandidate && !cityCandidate.includes('okres') && !cityCandidate.includes('kraj')) {
+        console.log('Trying city candidate:', cityCandidate);
+        result = await tryGeocode(cityCandidate);
+        if (result) return result;
+      }
+      // Try the second part
+      const secondCandidate = parts[1];
+      if (secondCandidate && secondCandidate !== simplified) {
+        console.log('Trying second candidate:', secondCandidate);
+        result = await tryGeocode(secondCandidate);
+        if (result) return result;
+      }
     }
 
     // Try just the city name (remove numbers and special chars)
