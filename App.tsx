@@ -155,7 +155,7 @@ const AppContent: React.FC = () => {
   const [smsToPreview, setSmsToPreview] = useState<{ sms: string; phone?: string; navigationUrl: string; logId?: string } | null>(null);
   const [scheduledRideToDispatch, setScheduledRideToDispatch] = useState<RideLog | null>(null);
 
-  const [isAiEnabled, setIsAiEnabled] = useState<boolean>(true);
+
 
   const [messagingApp, setMessagingApp] = useState<MessagingApp>(MessagingApp.SMS);
   const [preferredNav, setPreferredNav] = useState<'google' | 'waze'>(() => {
@@ -323,10 +323,7 @@ const AppContent: React.FC = () => {
         } catch {}
          try {
            const userSettings = (await supabaseService.getUserSettings((user as any)?.id || 'local')) || {};
-           setPreferredNav((userSettings.preferred_nav as 'google' | 'waze') || 'google');
-           if (userSettings.is_ai_enabled !== undefined) {
-             setIsAiEnabled(userSettings.is_ai_enabled);
-           }
+            setPreferredNav((userSettings.preferred_nav as 'google' | 'waze') || 'google');
          } catch (err) {
            // ignore
          }
@@ -471,21 +468,7 @@ const AppContent: React.FC = () => {
         save();
       }, [companyInfo]);
 
-      useEffect(() => {
-        const save = async () => {
-          try {
-            if (user && (user as any).id) {
-              await supabaseService.updateUserSettings(String((user as any).id), { is_ai_enabled: isAiEnabled });
-            } else {
-              // Use a 'local' user settings record in the service local fallback
-              await supabaseService.updateUserSettings('local', { is_ai_enabled: isAiEnabled }).catch(() => {});
-            }
-          } catch (err) {
-            console.error('Error saving AI setting via supabaseService', err);
-          }
-        };
-        save();
-      }, [isAiEnabled, user]);
+
 
       useEffect(() => {
         const save = async () => {
@@ -661,7 +644,7 @@ const AppContent: React.FC = () => {
     setCustomerSms('');
     
     try {
-        const result = await findBestVehicle(rideRequest, vehicles, isAiEnabled, tariff, language, optimize);
+        const result = await findBestVehicle(rideRequest, vehicles, tariff, language, optimize);
         if ('messageKey' in result) {
           setError(result);
         } else {
@@ -673,7 +656,7 @@ const AppContent: React.FC = () => {
       setIsLoading(false);
       // Removed cooldown to allow immediate new ride submissions
     }
-  }, [vehicles, isAiEnabled, tariff, language]);
+  }, [vehicles, tariff, language]);
   
   const getDriverName = (driverId: number | null) => {
     return people.find(p => p.id === driverId)?.name || t('general.unassigned');
@@ -719,7 +702,7 @@ const AppContent: React.FC = () => {
 
         // Don't change vehicle status yet - wait for driver to accept
 
-     if (!isAiEnabled) {
+
          try {
              const vehicleLocationCoords = await geocodeAddress(chosenVehicle.location, language);
              const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
@@ -734,11 +717,9 @@ const AppContent: React.FC = () => {
                  estimatedPrice: option.estimatedPrice,
                  navigationUrl: navigationUrl,
              });
-         } catch (err: any) {
-             setError({ messageKey: "error.geocodingFailed", message: err.message });
-         }
-         return;
-     }
+          } catch (err: any) {
+              setError({ messageKey: "error.geocodingFailed", message: err.message });
+          }
 
         const newLog: RideLog = {
           id: `ride-${Date.now()}`,
@@ -759,9 +740,10 @@ const AppContent: React.FC = () => {
          estimatedPrice: alternative.estimatedPrice,
           estimatedPickupTimestamp: Date.now() + alternative.eta * 60 * 1000,
           estimatedCompletionTimestamp: Date.now() + durationInMinutes * 60 * 1000,
-         fuelCost: fuelCost,
-         distance: totalDistance,
-       };
+          fuelCost: fuelCost,
+          distance: totalDistance,
+          navigationUrl: navigationUrl,
+        };
 
       // Generate customer SMS for the assigned vehicle
       const driverName = people.find(p => p.id === chosenVehicle.driverId)?.name || 'Neznámý';
@@ -776,7 +758,7 @@ const AppContent: React.FC = () => {
 
         // Automatically open SMS modal for the customer
        handleSendSms(newLog.id);
-   }, [assignmentResult, isAiEnabled, people, t, language, calculateFuelCost]);
+    }, [assignmentResult, people, t, language, calculateFuelCost]);
   
   const handleManualAssignmentConfirm = async (durationInMinutes: number) => {
        if (!manualAssignmentDetails) return;
@@ -2065,8 +2047,8 @@ const AppContent: React.FC = () => {
       {(isLoading || assignmentResult || error) && (
            <div className="fixed inset-0 bg-black/70 z-50 flex justify-center items-start pt-24 p-4 animate-fade-in overflow-y-auto">
               {isLoading && !assignmentResult && <LoadingSpinner text={t('loading.calculating')} />}
-              {assignmentResult && (<AssignmentResult result={assignmentResult} error={error} onClear={handleClearResult} onConfirm={handleConfirmAssignment} isAiMode={isAiEnabled} people={people} messagingApp={messagingApp} className="max-w-4xl w-full" fuelPrices={fuelPrices} />)}
-              {error && !assignmentResult && (<AssignmentResult result={null} error={error} onClear={handleClearResult} onConfirm={() => {}} isAiMode={isAiEnabled} people={people} messagingApp={messagingApp} className="max-w-xl w-full" fuelPrices={fuelPrices}/>)}
+              {assignmentResult && (<AssignmentResult result={assignmentResult} error={error} onClear={handleClearResult} onConfirm={handleConfirmAssignment} people={people} messagingApp={messagingApp} className="max-w-4xl w-full" fuelPrices={fuelPrices} />)}
+              {error && !assignmentResult && (<AssignmentResult result={null} error={error} onClear={handleClearResult} onConfirm={() => {}} people={people} messagingApp={messagingApp} className="max-w-xl w-full" fuelPrices={fuelPrices}/>)}
            </div>
       )}
 
@@ -2093,8 +2075,7 @@ const AppContent: React.FC = () => {
           <SettingsModal
             isOpen={isSettingsModalOpen}
             onClose={() => setIsSettingsModalOpen(false)}
-            isAiEnabled={isAiEnabled}
-            onToggleAi={() => setIsAiEnabled(!isAiEnabled)}
+
             messagingApp={messagingApp}
             onMessagingAppChange={setMessagingApp}
             preferredNav={preferredNav}

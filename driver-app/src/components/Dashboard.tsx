@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase, supabaseService } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
-import { notifyUser } from '../utils/notifications';
+import { notifyUser, initializeNotifications } from '../utils/notifications';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -23,8 +23,23 @@ const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
 
   useEffect(() => {
+    // Initialize notifications and check permissions
+    const initNotifications = async () => {
+      const granted = await initializeNotifications();
+      setNotificationPermission(Notification.permission as NotificationPermission);
+    };
+    initNotifications();
+
+    // Load preferred navigation app from localStorage
+    const savedNavApp = localStorage.getItem('preferredNavApp') as 'google' | 'mapy';
+    if (savedNavApp) {
+      setPreferredNavApp(savedNavApp);
+    }
+
     // Get current user and their vehicle info
     const getVehicleInfo = async () => {
       try {
@@ -150,7 +165,7 @@ const Dashboard: React.FC = () => {
         // Refresh data - getVehicleInfo will filter for current vehicle
         getVehicleInfo();
         // Notify user with sound and vibration for new ride assignment
-        notifyUser();
+        notifyUser('ride');
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('Ride updated:', payload);
@@ -174,7 +189,7 @@ const Dashboard: React.FC = () => {
             // Notify for dispatcher or general messages
             if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
               // Notify user with sound and vibration for dispatcher or general message
-              notifyUser();
+              notifyUser('message');
               // Messages will appear in the chat widget automatically
             }
           }
@@ -434,7 +449,7 @@ const Dashboard: React.FC = () => {
            setPendingRides(pending);
            // Notify if new rides were added
            if (pending.length > pendingRides.length) {
-             notifyUser();
+             notifyUser('ride');
            }
          }
 
@@ -453,9 +468,14 @@ const Dashboard: React.FC = () => {
      }, 15000); // Refresh every 15 seconds
 
      return () => clearInterval(refreshInterval);
-   }, [vehicleNumber, pendingRides, currentRide]);
+    }, [vehicleNumber, pendingRides, currentRide]);
 
-  // Handle break timer
+  // Save preferred navigation app to localStorage
+  useEffect(() => {
+    localStorage.setItem('preferredNavApp', preferredNavApp);
+  }, [preferredNavApp]);
+
+   // Handle break timer
   useEffect(() => {
     if (breakEndTime && driverStatus === 'break' && vehicleNumber) {
       const checkBreakEnd = async () => {
@@ -612,11 +632,27 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const navigateToDestination = (ride?: RideLog) => {
+  const navigateToDestination = (ride?: RideLog, navApp?: 'google' | 'mapy') => {
     const targetRide = ride || currentRide;
-    if (targetRide && targetRide.stops.length > 0) {
-      const destination = targetRide.stops[targetRide.stops.length - 1];
-      const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+    if (targetRide) {
+      // Use provided navApp or fall back to preferred navigation app
+      const appToUse = navApp || preferredNavApp;
+      let url: string;
+
+      if (appToUse === 'mapy') {
+        // For Mapy.cz, use a simple destination search
+        const destination = targetRide.stops[targetRide.stops.length - 1];
+        url = `https://mapy.cz/zakladni?q=${encodeURIComponent(destination)}`;
+      } else {
+        // Use Google Maps - either the stored navigation URL or fallback
+        if (targetRide.navigationUrl) {
+          url = targetRide.navigationUrl;
+        } else {
+          const destination = targetRide.stops[targetRide.stops.length - 1];
+          url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+        }
+      }
+
       window.open(url, '_blank');
     }
   };
@@ -804,12 +840,12 @@ const Dashboard: React.FC = () => {
                     >
                       ✅ Přijmout
                     </button>
-                    <button
-                      onClick={() => navigateToDestination(ride)}
-                      className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium"
-                    >
-                      🗺️ Navigovat
-                    </button>
+                     <button
+                       onClick={() => navigateToDestination(ride)}
+                       className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium"
+                     >
+                       🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
+                     </button>
                   </div>
                 </div>
               ))}
@@ -840,16 +876,16 @@ const Dashboard: React.FC = () => {
                     {t('dashboard.startRide')}
                   </button>
                 )}
-                {currentRide.status === RideStatus.InProgress && (
-                 <div className="space-y-2">
-                   <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
-                     {t('dashboard.completeRide')}
-                   </button>
-                    <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                      {t('dashboard.navigate')}
+                 {currentRide.status === RideStatus.InProgress && (
+                  <div className="space-y-2">
+                    <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
+                      {t('dashboard.completeRide')}
                     </button>
-                 </div>
-               )}
+                     <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                       🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
+                     </button>
+                  </div>
+                )}
              </div>
           </div>
         )}
@@ -866,13 +902,32 @@ const Dashboard: React.FC = () => {
             </p>
           )}
 
-          {/* Network Status Indicator */}
-          <div className="flex items-center gap-2 mt-2">
-            <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
-            <span className="text-xs text-slate-400">
-              {isOnline ? 'Online' : 'Offline'}
-            </span>
-          </div>
+           {/* Network Status Indicator */}
+           <div className="flex items-center gap-2 mt-2">
+             <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+             <span className="text-xs text-slate-400">
+               {isOnline ? 'Online' : 'Offline'}
+             </span>
+           </div>
+
+           {/* Notification Permission Indicator */}
+           {notificationPermission !== 'granted' && (
+             <div className="flex items-center gap-2 mt-2">
+               <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+               <span className="text-xs text-yellow-400">
+                 Upozornění: Povolte notifikace pro lepší zážitek
+               </span>
+               <button
+                 onClick={async () => {
+                   const granted = await initializeNotifications();
+                   setNotificationPermission(Notification.permission as NotificationPermission);
+                 }}
+                 className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
+               >
+                 Povolit
+               </button>
+             </div>
+           )}
         </div>
 
 
@@ -970,6 +1025,40 @@ const Dashboard: React.FC = () => {
           ) : (
             <p className="text-sm text-slate-400 italic">{t('dashboard.noCompletedRides')}</p>
           )}
+        </div>
+
+        {/* Navigation Settings */}
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <h2 className="text-lg font-semibold mb-3 text-white">Nastavení navigace</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Preferovaná navigační aplikace
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPreferredNavApp('google')}
+                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                    preferredNavApp === 'google'
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-slate-700 hover:bg-slate-600'
+                  }`}
+                >
+                  Google Maps
+                </button>
+                <button
+                  onClick={() => setPreferredNavApp('mapy')}
+                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                    preferredNavApp === 'mapy'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-slate-700 hover:bg-slate-600'
+                  }`}
+                >
+                  Mapy.cz
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Logout */}

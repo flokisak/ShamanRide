@@ -243,9 +243,10 @@ export const supabaseService = SUPABASE_ENABLED
              estimated_price: r.estimatedPrice ?? null,
              estimated_pickup_timestamp: r.estimatedPickupTimestamp ? new Date(r.estimatedPickupTimestamp).toISOString() : null,
              estimated_completion_timestamp: r.estimatedCompletionTimestamp ? new Date(r.estimatedCompletionTimestamp).toISOString() : null,
-             fuel_cost: r.fuelCost ?? null,
-            distance: r.distance ?? null,
-           };
+              fuel_cost: r.fuelCost ?? null,
+             distance: r.distance ?? null,
+             navigation_url: r.navigationUrl ?? null,
+            };
          },
           _fromDbRideLog(db: any) {
            return {
@@ -267,9 +268,10 @@ export const supabaseService = SUPABASE_ENABLED
             estimatedPrice: db.estimated_price ?? null,
              estimatedPickupTimestamp: db.estimated_pickup_timestamp ? new Date(db.estimated_pickup_timestamp).getTime() : null,
              estimatedCompletionTimestamp: db.estimated_completion_timestamp ? new Date(db.estimated_completion_timestamp).getTime() : null,
-            fuelCost: db.fuel_cost ?? null,
-           distance: db.distance ?? null,
-         };
+             fuelCost: db.fuel_cost ?? null,
+            distance: db.distance ?? null,
+            navigationUrl: db.navigation_url ?? null,
+          };
        },
 
       // Vehicles

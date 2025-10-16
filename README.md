@@ -71,7 +71,11 @@ The ShamanRide app is now feature-complete with robust data persistence, accurat
 
 1. Clone the repository
 2. Install dependencies: `npm install`
-3. Set up environment variables in `.env.local`
+3. Set up environment variables in `.env.local`:
+   - `VITE_SUPABASE_URL` - Your Supabase project URL
+   - `VITE_SUPABASE_ANON_KEY` - Your Supabase anonymous key
+   - `VITE_GOOGLE_MAPS_API_KEY` - Google Maps API key (required for address geocoding and suggestions)
+   - `VITE_API_BASE_URL` - Backend API base URL (default: http://localhost:3001)
 4. Run the development server: `npm run dev`
 5. For full stack: `npm run dev:full`
 
@@ -82,7 +86,7 @@ The ShamanRide app is now feature-complete with robust data persistence, accurat
 - **Maps:** Leaflet with OpenStreetMap
 - **SMS:** Android SMS Gateway integration
 - **PDF Generation:** jsPDF, html2canvas
-- **AI:** Google Generative AI
+
 
 ## License
 

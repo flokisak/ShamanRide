@@ -1,15 +1,12 @@
 import React from 'react';
 import { CloseIcon, UploadIcon, DownloadIcon, CsvIcon, UndoIcon, TrashIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
-import { AiToggle } from './AiToggle';
 import type { WidgetId, MessagingApp, FuelPrices, CompanyInfo } from '../types';
 import { MessagingApp as AppType, FuelType } from '../types';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  isAiEnabled: boolean;
-  onToggleAi: () => void;
   messagingApp: MessagingApp;
   onMessagingAppChange: (app: MessagingApp) => void;
   isEditMode: boolean;
@@ -55,7 +52,7 @@ const VisibilityToggle: React.FC<{
 );
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
-  isOpen, onClose, isAiEnabled, onToggleAi, messagingApp, onMessagingAppChange,
+  isOpen, onClose, messagingApp, onMessagingAppChange,
   isEditMode, onToggleEditMode, onResetLayout, onSaveData, onLoadData, onExportCsv, onClearRideHistory,
   widgetVisibility, onWidgetVisibilityChange, fuelPrices, onFuelPricesChange, companyInfo, onCompanyInfoChange, smsGateConfig, onSmsGateConfigChange,
   user, onSyncToSupabase, onLoadFromSupabase, onSyncAllDataToSupabase, preferredNav, onPreferredNavChange
@@ -108,10 +105,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <option value="en">English</option>
                   <option value="de">Deutsch</option>
                 </select>
-              </div>
-               <div className="flex justify-between items-center bg-slate-700 p-3 rounded-lg">
-                 <span className="text-gray-200">{t('settings.general.aiMode')}</span>
-                 <AiToggle isEnabled={isAiEnabled} onToggle={onToggleAi} />
                </div>
             </div>
           </section>

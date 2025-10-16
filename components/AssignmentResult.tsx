@@ -7,10 +7,9 @@ import { generateSms, generateShareLink } from '../services/dispatchService';
 
 interface AssignmentResultProps {
   result: AssignmentResultData | null;
-  error: ErrorResult | null;
+  error: { messageKey: string; message?: string } | null;
   onClear: () => void;
   onConfirm: (option: AssignmentAlternative) => void;
-  isAiMode: boolean;
   people: Person[];
   messagingApp: MessagingApp;
   className?: string;
@@ -21,11 +20,10 @@ const VehicleOption: React.FC<{
     option: AssignmentAlternative,
     isRecommended: boolean,
     onConfirm: (option: AssignmentAlternative) => void;
-    isAiMode: boolean;
     people: Person[];
     rideDistance?: number;
     fuelPrices: FuelPrices;
-}> = ({ option, isRecommended, onConfirm, isAiMode, people, rideDistance, fuelPrices }) => {
+}> = ({ option, isRecommended, onConfirm, people, rideDistance, fuelPrices }) => {
     const { t } = useTranslation();
     const { vehicle, eta, waitTime, estimatedPrice } = option;
     const driver = people.find(p => p.id === vehicle.driverId);
@@ -40,7 +38,7 @@ const VehicleOption: React.FC<{
     }, [vehicle, rideDistance, fuelPrices]);
 
     return (
-          <div className={`p-4 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 ${isRecommended && isAiMode ? 'bg-cyan-900 border border-cyan-700' : 'bg-slate-700'}`}>
+          <div className="p-4 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0 bg-slate-700">
             <div className="flex items-center space-x-4">
               <div className={vehicle.type === VehicleType.Car ? "text-cyan-400" : "text-gray-200"}>
                 <CarIcon size={40} />
@@ -49,7 +47,7 @@ const VehicleOption: React.FC<{
                 <p className="font-bold text-lg text-white">{vehicle.name}</p>
                 <p className="text-gray-300 text-sm">{driver?.name || <span className="italic text-gray-500">{t('general.unassigned')}</span>}</p>
                 {driver?.phone && <p className="text-teal-400 text-xs font-mono">{driver.phone}</p>}
-                {isRecommended && isAiMode && <span className="text-xs font-bold text-cyan-300 uppercase tracking-wider mt-1 inline-block">{t('assignment.recommended')}</span>}
+
               </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end sm:space-x-6">
@@ -85,7 +83,7 @@ const VehicleOption: React.FC<{
     )
 };
 
-export const AssignmentResult: React.FC<AssignmentResultProps> = ({ result, error, onClear, onConfirm, isAiMode, people, messagingApp, className, fuelPrices }) => {
+export const AssignmentResult: React.FC<AssignmentResultProps> = ({ result, error, onClear, onConfirm, people, messagingApp, className, fuelPrices }) => {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   
@@ -138,7 +136,7 @@ export const AssignmentResult: React.FC<AssignmentResultProps> = ({ result, erro
                  <div className="bg-cyan-500 p-2 rounded-full">
                     <CheckCircleIcon />
                 </div>
-                <h2 className="text-2xl font-semibold">{isAiMode ? t('assignment.titleAI') : t('assignment.titleManual')}</h2>
+                <h2 className="text-2xl font-semibold">{t('assignment.titleManual')}</h2>
             </div>
              <button
                 onClick={onClear}
@@ -166,9 +164,8 @@ export const AssignmentResult: React.FC<AssignmentResultProps> = ({ result, erro
                 <VehicleOption 
                     key={opt.vehicle.id} 
                     option={opt} 
-                    isRecommended={index === 0 && isAiMode} 
+                    isRecommended={false}
                     onConfirm={onConfirm}
-                    isAiMode={isAiMode}
                     people={people}
                     rideDistance={rideDistance}
                     fuelPrices={fuelPrices}
@@ -177,43 +174,7 @@ export const AssignmentResult: React.FC<AssignmentResultProps> = ({ result, erro
         </div>
 
 
-      {/* Communication - Only shown in AI mode */}
-      {isAiMode && smsText && (
-        <div>
-            <h4 className="text-sm text-gray-400 font-medium mb-2">{t('assignment.communication')}</h4>
-            <div className="relative bg-slate-900 p-4 rounded-lg border border-slate-700">
-            <p className="text-gray-200 whitespace-pre-wrap font-mono text-sm">{smsText}</p>
-            <div className="absolute top-2 right-2 flex items-center space-x-2">
-                <a
-                  href={navigationUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 rounded-md bg-slate-700 text-gray-300 transition-colors enabled:hover:bg-slate-600 enabled:hover:text-white"
-                  title={t('assignment.openNavigation')}
-                >
-                  <NavigationIcon className="w-5 h-5" />
-                </a>
-                <a
-                  href={shareLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 rounded-md bg-slate-700 text-gray-300 transition-colors enabled:hover:bg-slate-600 enabled:hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={phoneNumber ? t('assignment.sendVia', { app: messagingApp }) : t('assignment.noPhoneNumber')}
-                  onClick={(e) => !phoneNumber && e.preventDefault()}
-                >
-                  <ShareIcon className="w-5 h-5"/>
-                </a>
-                <button
-                    onClick={handleCopy}
-                    className="p-2 rounded-md bg-slate-700 hover:bg-slate-600 text-gray-300 hover:text-white transition-colors"
-                    title={t('assignment.copyText')}
-                >
-                    {copied ? <CheckCircleIcon className="w-5 h-5 text-green-400" /> : <ClipboardIcon className="w-5 h-5"/>}
-                </button>
-            </div>
-            </div>
-        </div>
-      )}
+
     </div>
   );
 };

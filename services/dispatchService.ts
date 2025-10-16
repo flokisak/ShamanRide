@@ -1,13 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import type { RideRequest, Vehicle, AssignmentResultData, ErrorResult, AssignmentAlternative, Tariff, RideLog, FlatRateRule, MessagingApp } from '../types';
 import { VehicleStatus, VehicleType, MessagingApp as AppType, RideType } from '../types';
 import { supabaseService } from './supabaseClient';
-
-const GEMINI_API_KEY = process.env.API_KEY;
-if (!GEMINI_API_KEY) {
-  console.error("API_KEY environment variable not set for Gemini.");
-}
-const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY! });
 
 const urlShortenCache = new Map<string, string>();
 
@@ -179,10 +172,12 @@ export function generateShareLink(app: AppType, phone: string, text: string): st
 export function generateNavigationUrl(
     driverLocationCoords: { lat: number; lon: number } | null,
     stopsCoords: { lat: number; lon: number }[],
-    navApp: 'google' | 'waze' = 'google'
+    navApp: 'google' | 'waze' | 'mapy' = 'google'
 ): string {
     if (stopsCoords.length === 0) {
-        return navApp === 'waze' ? 'https://waze.com' : 'https://maps.google.com';
+        if (navApp === 'waze') return 'https://waze.com';
+        if (navApp === 'mapy') return 'https://mapy.cz';
+        return 'https://maps.google.com';
     }
 
     if (navApp === 'waze') {
@@ -194,6 +189,21 @@ export function generateNavigationUrl(
         let url = `https://waze.com/ul?ll=${formatCoord(destination)}&from=${formatCoord(origin)}&navigate=yes`;
         if (waypoints.length > 0) {
             url += `&via=${waypoints.map(formatCoord).join('|')}`;
+        }
+        return url;
+    }
+
+    if (navApp === 'mapy') {
+        const formatCoord = (coord: { lat: number; lon: number }) => `${coord.lat},${coord.lon}`;
+        const destination = stopsCoords[stopsCoords.length - 1];
+        const waypoints = stopsCoords.slice(0, -1);
+
+        // Mapy.cz uses a different URL format
+        let url = `https://mapy.cz/zakladni?x=${destination.lon}&y=${destination.lat}&z=15`;
+        if (waypoints.length > 0) {
+            // Add waypoints as route points
+            const routePoints = waypoints.map((wp, index) => `&rl${index + 1}=${wp.lon}%2C${wp.lat}`);
+            url += routePoints.join('');
         }
         return url;
     }
@@ -241,106 +251,85 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
 }
 
 /**
- * Converts an address to geographic coordinates using Nominatim (free), falling back to Photon.
+ * Converts an address to geographic coordinates using Google Maps Geocoding API.
  */
 export async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
     const cacheKey = `${address}_${language}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
-    const fetchNominatimCoords = async (addrToTry: string) => {
-        try {
-            const proxyUrl = 'https://corsproxy.io/?';
-            const address = addrToTry.split('|')[0]; // Strip placeId if present
+    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!googleMapsApiKey) {
+        console.warn('Google Maps API key not configured, falling back to Nominatim');
+        // Fallback to Nominatim for now
+        return await geocodeWithNominatim(address);
+    }
 
-            const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+    try {
+        const proxyUrl = 'https://corsproxy.io/?';
+        const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
 
-            const response = await fetch(nominatimUrl);
-            if (!response.ok) return null;
-            const data = await response.json();
-
-            if (data && Array.isArray(data) && data.length > 0) {
-                // First priority: results within South Moravia bounds
-                for (const result of data) {
-                    const lat = parseFloat(result.lat);
-                    const lon = parseFloat(result.lon);
-                    if (isInSouthMoravia(lat, lon)) {
-                        return { lat, lon };
-                    }
-                }
-                // Second priority: results within Czech Republic
-                for (const result of data) {
-                    const lat = parseFloat(result.lat);
-                    const lon = parseFloat(result.lon);
-                    if (isInCzechRepublic(lat, lon)) {
-                        return { lat, lon };
-                    }
-                }
-                // Third priority: any result
-                const result = data[0];
-                return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
-            }
-        } catch (error) {
-            console.error("Nominatim geocoding error:", error);
+        const response = await fetch(geocodingUrl);
+        if (!response.ok) {
+            throw new Error(`Geocoding API error: ${response.status}`);
         }
-        return null;
-    };
 
-    const fetchPhotonCoords = async (addrToTry: string, lang: string) => {
-        // First try with expanded bounds to find results including foreign countries
-        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(addrToTry)}&limit=10&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
-        const response = await fetch(photonUrl);
-        if (!response.ok) return null;
         const data = await response.json();
-        if (data && data.features && Array.isArray(data.features) && data.features.length > 0) {
+
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+            const result = data.results[0];
+            const location = result.geometry.location;
+            const coords = { lat: location.lat, lon: location.lng };
+
+            geocodeCache.set(cacheKey, coords);
+            return coords;
+        } else {
+            console.warn('Google Maps geocoding failed:', data.status, data.error_message);
+            // Fallback to Nominatim
+            return await geocodeWithNominatim(address);
+        }
+    } catch (error) {
+        console.error("Google Maps geocoding error:", error);
+        // Fallback to Nominatim
+        return await geocodeWithNominatim(address);
+    }
+}
+
+/**
+ * Fallback geocoding using Nominatim (OpenStreetMap)
+ */
+async function geocodeWithNominatim(address: string): Promise<{ lat: number; lon: number }> {
+    try {
+        const proxyUrl = 'https://corsproxy.io/?';
+        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+
+        const response = await fetch(nominatimUrl);
+        if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
+        const data = await response.json();
+
+        if (data && Array.isArray(data) && data.length > 0) {
             // First priority: results within South Moravia bounds
-            for (const feature of data.features) {
-                const coords = feature.geometry.coordinates;
-                const lon = coords[0];
-                const lat = coords[1];
+            for (const result of data) {
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
                 if (isInSouthMoravia(lat, lon)) {
                     return { lat, lon };
                 }
             }
-            // Second priority: results within Czech Republic (approximate bounds)
-            for (const feature of data.features) {
-                const coords = feature.geometry.coordinates;
-                const lon = coords[0];
-                const lat = coords[1];
+            // Second priority: results within Czech Republic
+            for (const result of data) {
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
                 if (isInCzechRepublic(lat, lon)) {
                     return { lat, lon };
                 }
             }
-            // Third priority: any result within expanded bounds
-            const coords = data.features[0].geometry.coordinates;
-            return { lat: coords[1], lon: coords[0] };
-        }
-        return null;
-    };
-
-    try {
-        // Try Nominatim first
-        let result = await fetchNominatimCoords(address);
-        if (!result) {
-            // Fallback to Photon
-            result = await fetchPhotonCoords(address, language);
-        }
-        if (!result) {
-            const city = address.split(',').map(p => p.trim()).pop();
-            if (city && city.toLowerCase() !== address.toLowerCase()) {
-                result = await fetchNominatimCoords(city);
-                if (!result) {
-                    result = await fetchPhotonCoords(city, language);
-                }
-            }
-        }
-
-        if (result) {
-            geocodeCache.set(cacheKey, result);
-            return result;
+            // Third priority: any result
+            const result = data[0];
+            return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
         }
         throw new Error(`Address not found: ${address}`);
     } catch (error) {
-        console.error("Geocoding error:", error);
+        console.error("Nominatim geocoding error:", error);
         throw new Error(`Could not find coordinates for address: ${address}.`);
     }
 }
@@ -389,148 +378,7 @@ function getMatchingFrequentAddresses(query: string): string[] {
         .map(a => a.address);
 }
 
-// POI categories with their OSM tags for better search results
-const POI_CATEGORIES = {
-    // Hotels and accommodation
-    hotel: [
-        { key: 'tourism', value: 'hotel' },
-        { key: 'tourism', value: 'guest_house' },
-        { key: 'tourism', value: 'hostel' },
-        { key: 'tourism', value: 'motel' },
-        { key: 'tourism', value: 'apartment' },
-        { key: 'tourism', value: 'chalet' }
-    ],
-    // Restaurants and food
-    restaurant: [
-        { key: 'amenity', value: 'restaurant' },
-        { key: 'amenity', value: 'cafe' },
-        { key: 'amenity', value: 'bar' },
-        { key: 'amenity', value: 'pub' },
-        { key: 'amenity', value: 'fast_food' }
-    ],
-    // Wineries and alcohol
-    winery: [
-        { key: 'craft', value: 'winery' },
-        { key: 'shop', value: 'wine' },
-        { key: 'amenity', value: 'bar' },
-        { key: 'tourism', value: 'attraction' }
-    ],
-    // Tourism and attractions
-    tourism: [
-        { key: 'tourism', value: 'attraction' },
-        { key: 'tourism', value: 'museum' },
-        { key: 'tourism', value: 'gallery' },
-        { key: 'tourism', value: 'viewpoint' },
-        { key: 'historic', value: 'castle' },
-        { key: 'historic', value: 'monument' }
-    ],
-    // Shopping
-    shop: [
-        { key: 'shop', value: 'supermarket' },
-        { key: 'shop', value: 'mall' },
-        { key: 'shop', value: 'department_store' },
-        { key: 'shop', value: 'convenience' }
-    ],
-    // Healthcare
-    healthcare: [
-        { key: 'amenity', value: 'hospital' },
-        { key: 'amenity', value: 'clinic' },
-        { key: 'amenity', value: 'pharmacy' },
-        { key: 'amenity', value: 'doctors' }
-    ],
-    // Transportation
-    transport: [
-        { key: 'amenity', value: 'bus_station' },
-        { key: 'amenity', value: 'taxi' },
-        { key: 'amenity', value: 'ferry_terminal' },
-        { key: 'railway', value: 'station' }
-    ],
-    // Fuel stations
-    fuel: [
-        { key: 'amenity', value: 'fuel' },
-        { key: 'amenity', value: 'charging_station' }
-    ],
-    // Parking
-    parking: [
-        { key: 'amenity', value: 'parking' },
-        { key: 'amenity', value: 'parking_entrance' }
-    ],
-    // Education
-    education: [
-        { key: 'amenity', value: 'school' },
-        { key: 'amenity', value: 'university' },
-        { key: 'amenity', value: 'college' }
-    ]
-};
 
-// Keywords that trigger POI search for each category
-const POI_KEYWORDS = {
-    hotel: ['hotel', 'hotelu', 'ubytování', 'pension', 'penzion', 'apartmán', 'apartman', 'hostel', 'motel', 'guesthouse'],
-    restaurant: ['restaurace', 'restaurant', 'hospoda', 'bar', 'kavárna', 'cafe', 'pizzeria', 'pizza', 'fast food', 'rychlé občerstvení'],
-    winery: ['vinárna', 'vinotéka', 'vinařství', 'vinař', 'wine', 'víno', 'vinar', 'degustace', 'degustation'],
-    tourism: ['hrad', 'zámek', 'muzeum', 'galerie', 'památka', 'atrakce', 'castle', 'museum', 'gallery', 'attraction'],
-    shop: ['obchod', 'supermarket', 'nákupní centrum', 'mall', 'prodejna', 'shop', 'market'],
-    healthcare: ['nemocnice', 'lékař', 'doktor', 'lékárna', 'klinika', 'hospital', 'doctor', 'pharmacy', 'clinic'],
-    transport: ['nádraží', 'autobus', 'bus', 'vlak', 'taxi', 'letiště', 'airport', 'station'],
-    fuel: ['benzín', 'benzínka', 'čerpací stanice', 'fuel', 'gas', 'station', 'tankstelle'],
-    parking: ['parkování', 'parking', 'parkoviště', 'garáž', 'garage'],
-    education: ['škola', 'škola', 'univerzita', 'vysoká škola', 'school', 'university', 'college']
-};
-
-/**
- * Detects if a query contains POI-related keywords and returns matching categories
- */
-function detectPOICategories(query: string): string[] {
-    const lowerQuery = query.toLowerCase();
-    const categories: string[] = [];
-
-    for (const [category, keywords] of Object.entries(POI_KEYWORDS)) {
-        if (keywords.some(keyword => lowerQuery.includes(keyword))) {
-            categories.push(category);
-        }
-    }
-
-    return categories;
-}
-
-/**
- * Fetches POI-specific suggestions from Photon API
- */
-async function fetchPOISuggestions(query: string, categories: string[], language: string): Promise<any[]> {
-    const allFeatures: any[] = [];
-
-    // Get POI-specific results for each detected category
-    for (const category of categories) {
-        const poiTags = POI_CATEGORIES[category as keyof typeof POI_CATEGORIES];
-        if (!poiTags) continue;
-
-        for (const tag of poiTags.slice(0, 2)) { // Limit to 2 tags per category to avoid too many requests
-            try {
-                const poiUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=3&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}&osm_tag=${tag.key}:${tag.value}`;
-
-                const response = await fetch(poiUrl);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data?.features) {
-                        allFeatures.push(...data.features);
-                    }
-                }
-            } catch (error) {
-                console.warn(`POI search failed for ${category}:${tag.key}=${tag.value}`, error);
-            }
-        }
-    }
-
-    // Remove duplicates based on coordinates
-    const uniqueFeatures = allFeatures.filter((feature, index, self) =>
-        index === self.findIndex(f =>
-            f.geometry?.coordinates?.[0] === feature.geometry?.coordinates?.[0] &&
-            f.geometry?.coordinates?.[1] === feature.geometry?.coordinates?.[1]
-        )
-    );
-
-    return uniqueFeatures.slice(0, 8); // Limit total POI results
-}
 
 /**
  * Fetches address suggestions from Nominatim (free), falling back to Photon if needed.
@@ -561,9 +409,8 @@ async function getNominatimSuggestions(query: string, isPOISearch: boolean = fal
 }
 
 /**
- * Fetches address suggestions from Photon API based on user input.
- * Enhanced with POI detection and specialized search for hotels, wineries, restaurants, etc.
- * Falls back to Google Places Autocomplete if Photon returns few results.
+ * Fetches address suggestions using Google Places Autocomplete API.
+ * Falls back to Nominatim if Google API is not available or fails.
  */
 export async function getAddressSuggestions(query: string, language: string): Promise<{text: string, placeId?: string}[]> {
     if (!query || query.trim().length < 3) {
@@ -574,88 +421,50 @@ export async function getAddressSuggestions(query: string, language: string): Pr
         return suggestionsCache.get(cacheKey)!;
     }
 
-    const poiCategories = detectPOICategories(query);
-    const isPOISearch = poiCategories.length > 0;
+    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!googleMapsApiKey) {
+        console.warn('Google Maps API key not configured, falling back to Nominatim');
+        // Fallback to Nominatim
+        return await getNominatimSuggestions(query, false);
+    }
 
     try {
-        const suggestions: {text: string, placeId?: string}[] = [];
+        const proxyUrl = 'https://corsproxy.io/?';
+        const autocompleteUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
 
-        // Fetch Photon suggestions first (no rate limit)
-        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=8&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
-        const photonResponse = await fetch(photonUrl);
-        if (photonResponse.ok) {
-            const photonData = await photonResponse.json();
-            if (photonData?.features) {
-                const photonSuggestions = photonData.features.map((feature: any) => {
-                    const props = feature.properties;
-                    const name = props.name || '';
-                    const city = props.city || props.town || props.village || '';
-                    const street = props.street || '';
-                    const housenumber = props.housenumber || '';
-                    const address = [name, street, housenumber, city].filter(Boolean).join(', ');
-                    return { text: address };
-                }).filter(s => s.text.trim());
-                suggestions.push(...photonSuggestions);
-            }
+        const response = await fetch(autocompleteUrl);
+        if (!response.ok) {
+            throw new Error(`Places Autocomplete API error: ${response.status}`);
         }
 
-        // Fetch Nominatim suggestions as fallback
-        const nominatimSuggestions = await getNominatimSuggestions(query, isPOISearch);
-        suggestions.push(...nominatimSuggestions);
+        const data = await response.json();
 
-        // If POI keywords detected and Nominatim returned few results, fetch POI-specific results from Photon
-        if (isPOISearch && suggestions.length < 5) {
-            const poiFeatures = await fetchPOISuggestions(query, poiCategories, language);
-            const poiSuggestions = poiFeatures.map((feature: any) => {
-                const props = feature.properties;
-                const name = props.name || '';
-                const city = props.city || props.town || props.village || '';
-                const street = props.street || '';
-                const housenumber = props.housenumber || '';
-                const category = props.osm_value || '';
-                const address = [name, street, housenumber, city].filter(Boolean).join(', ');
-                return { text: address };
-            }).filter(s => s.text.trim());
-            suggestions.push(...poiSuggestions);
+        if (data.status === 'OK' && data.predictions && data.predictions.length > 0) {
+            const suggestions = data.predictions.map((prediction: any) => ({
+                text: prediction.description,
+                placeId: prediction.place_id
+            }));
+
+            // Add frequent addresses
+            const frequentSuggestions = getMatchingFrequentAddresses(query).map(text => ({ text }));
+            const allSuggestions = [...frequentSuggestions, ...suggestions.filter(s =>
+                !frequentSuggestions.some(f => f.text.toLowerCase() === s.text.toLowerCase())
+            )];
+
+            // Limit total suggestions
+            const finalSuggestions = allSuggestions.filter(s => s.text && s.text.trim()).slice(0, 8);
+
+            suggestionsCache.set(cacheKey, finalSuggestions);
+            return finalSuggestions;
+        } else {
+            console.warn('Google Places Autocomplete failed:', data.status, data.error_message);
+            // Fallback to Nominatim
+            return await getNominatimSuggestions(query, false);
         }
-
-        // Fetch Photon general suggestions only if still few results
-        if (suggestions.length < 5) {
-            const generalUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&bbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
-            const generalResponse = await fetch(generalUrl);
-            if (generalResponse.ok) {
-                const data = await generalResponse.json();
-                if (data?.features) {
-                    const generalSuggestions = data.features.map((feature: any) => {
-                        const props = feature.properties;
-                        const name = props.name || '';
-                        const city = props.city || props.town || props.village || '';
-                        const street = props.street || '';
-                        const housenumber = props.housenumber || '';
-                        const address = [name, street, housenumber, city].filter(Boolean).join(', ');
-                        return { text: shortenAddress(address) };
-                    }).filter(s => s.text.trim());
-
-                    suggestions.push(...generalSuggestions);
-                }
-            }
-        }
-
-        // Add frequent addresses
-        const frequentSuggestions = getMatchingFrequentAddresses(query).map(text => ({ text }));
-        const allSuggestions = [...frequentSuggestions, ...suggestions.filter(s =>
-            !frequentSuggestions.some(f => f.text.toLowerCase() === s.text.toLowerCase())
-        )];
-
-        // Limit total suggestions
-        const finalSuggestions = allSuggestions.filter(s => s.text && s.text.trim()).slice(0, 8);
-
-        suggestionsCache.set(cacheKey, finalSuggestions);
-        return finalSuggestions;
-
     } catch (error) {
-        console.error("Address suggestion fetching error:", error);
-        return [];
+        console.error("Google Places Autocomplete error:", error);
+        // Fallback to Nominatim
+        return await getNominatimSuggestions(query, false);
     }
 }
 
@@ -822,12 +631,10 @@ function optimizeRouteNearestNeighbor(matrix: number[][]): number[] {
 export async function findBestVehicle(
   rideRequest: RideRequest,
   vehicles: Vehicle[],
-  isAiEnabled: boolean,
   tariff: Tariff,
   language: string,
   optimize: boolean
 ): Promise<AssignmentResultData | ErrorResult> {
-    if (isAiEnabled && !GEMINI_API_KEY) return { messageKey: "error.missingApiKey" };
 
     // Ensure tariff has proper structure
     const ensuredTariff: Tariff = {
@@ -849,23 +656,15 @@ export async function findBestVehicle(
         
         // --- Optimize route if more than 2 stops and requested ---
         if (rideRequest.stops.length > 2 && optimize) {
-             let reorderingIndices: number[];
+             // Use Nearest Neighbor heuristic for route optimization
+             const travelMatrix = await buildTravelMatrix(allStopCoords, 'seconds');
+             const reorderingIndices = optimizeRouteNearestNeighbor(travelMatrix);
 
-             if (isAiEnabled) {
-                const travelTimeMatrix = await buildTravelMatrix(allStopCoords, 'minutes');
-                const optimalDestinationOrder = await getOptimalRouteOrder(travelTimeMatrix, rideRequest.stops.length - 1);
-                reorderingIndices = [0, ...optimalDestinationOrder]; // Prepend start index
-            } else {
-                // Use non-AI Nearest Neighbor heuristic
-                const travelMatrix = await buildTravelMatrix(allStopCoords, 'seconds');
-                reorderingIndices = optimizeRouteNearestNeighbor(travelMatrix);
-            }
+             const reorderedStops = reorderingIndices.map(i => rideRequest.stops[i]);
+             const reorderedCoords = reorderingIndices.map(i => allStopCoords[i]);
 
-            const reorderedStops = reorderingIndices.map(i => rideRequest.stops[i]);
-            const reorderedCoords = reorderingIndices.map(i => allStopCoords[i]);
-
-            allStopCoords = reorderedCoords;
-            optimizedStops = reorderedStops;
+             allStopCoords = reorderedCoords;
+             optimizedStops = reorderedStops;
         }
 
         const mainRideRoute = await getOsrmRoute(allStopCoords.map(c => `${c.lon},${c.lat}`).join(';'));
@@ -894,17 +693,9 @@ export async function findBestVehicle(
         const suitableVehicles = alternativesWithEta.filter(alt => alt.vehicle.capacity >= rideRequest.passengers);
         if (suitableVehicles.length === 0) return { messageKey: "error.insufficientCapacity", message: `${rideRequest.passengers}` };
         
-        let bestAlternative: AssignmentAlternative;
-        let otherAlternatives: AssignmentAlternative[];
-
-        if (isAiEnabled) {
-            bestAlternative = await chooseBestVehicleWithAI(rideRequest, suitableVehicles);
-            otherAlternatives = suitableVehicles.filter(v => v.vehicle.id !== bestAlternative.vehicle.id);
-        } else {
-            // In non-AI mode, the best vehicle is simply the first one in the list sorted by ETA.
-            bestAlternative = suitableVehicles[0];
-            otherAlternatives = suitableVehicles.slice(1);
-        }
+        // Select the best vehicle by ETA (first in sorted list)
+        const bestAlternative = suitableVehicles[0];
+        const otherAlternatives = suitableVehicles.slice(1);
 
         const bestVehicleIndex = vehiclesInService.findIndex(v => v.id === bestAlternative.vehicle.id);
         const bestVehicleCoords = vehicleCoords[bestVehicleIndex];
@@ -933,94 +724,7 @@ export async function findBestVehicle(
     }
 }
 
-async function getOptimalRouteOrder(matrix: number[][], numDestinations: number): Promise<number[]> {
-    const destinationIndices = Array.from({ length: numDestinations }, (_, i) => i + 1);
 
-    const prompt = `
-        You are a logistics expert tasked with finding the most efficient route.
-        Given a travel time matrix, find the shortest path that starts at index 0 and visits all other specified destinations exactly once. The path does not need to return to the start.
-
-        **Problem Details:**
-        - **Start Point:** Index 0 (fixed).
-        - **Destinations to Visit:** Indices ${JSON.stringify(destinationIndices)}.
-        - **Travel Time Matrix (in minutes):** Each entry matrix[i][j] is the time from location i to location j.
-        ${JSON.stringify(matrix)}
-
-        **Required Output:**
-        Return a single, valid JSON object with a key "optimal_order". The value should be an array of the destination indices (e.g., ${JSON.stringify(destinationIndices)}) in the most efficient order.
-        For example, if the destinations are [1, 2, 3], a valid output showing the optimal path 0 -> 3 -> 1 -> 2 would be:
-        {"optimal_order": [3, 1, 2]}
-
-        Do not include any other text, explanations, or markdown formatting.
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents: prompt,
-            config: {
-                temperature: 0,
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        optimal_order: {
-                            type: Type.ARRAY,
-                            items: { type: Type.INTEGER }
-                        }
-                    },
-                    required: ["optimal_order"]
-                },
-            }
-        });
-
-        const result = JSON.parse(response.text.trim());
-        // Basic validation
-        if (Array.isArray(result.optimal_order) && result.optimal_order.length === numDestinations) {
-            return result.optimal_order;
-        } else {
-            console.error("AI returned an invalid route order. Falling back to original order.", result);
-            return destinationIndices; // Fallback to original order
-        }
-    } catch (error) {
-        console.error("Error getting optimal route from AI. Falling back to original order.", error);
-        return destinationIndices; // Fallback to original order on error
-    }
-}
-
-
-async function chooseBestVehicleWithAI(rideRequest: RideRequest, suitableVehicles: AssignmentAlternative[]): Promise<AssignmentAlternative> {
-    const vehicleDataForPrompt = suitableVehicles.map(alt => ({ id: alt.vehicle.id, name: alt.vehicle.name, capacity: alt.vehicle.capacity, eta: alt.eta, price: alt.estimatedPrice }));
-    const prompt = `
-        You are an expert taxi dispatcher. Your task is to select the single best vehicle for a customer from the provided list of options.
-        **Ride Request Details:**
-        - Number of Passengers: ${rideRequest.passengers}
-        - Route: ${rideRequest.stops.join(" -> ")}
-        **Vehicle Options (pre-sorted by ETA):**
-        ${JSON.stringify(vehicleDataForPrompt, null, 2)}
-        **Decision Criteria:**
-        Your primary goal is to minimize the customer's wait time. Select the vehicle with the lowest 'eta'.
-        If multiple vehicles have the same lowest ETA, choose the first one in the list.
-        **Required Output:**
-        Return a SINGLE, VALID JSON object containing only the ID of your chosen vehicle. Do not include any other text or markdown.
-    `;
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash', contents: prompt, config: {
-            temperature: 0, responseMimeType: "application/json",
-            responseSchema: { type: Type.OBJECT, properties: { bestVehicleId: { type: Type.INTEGER } }, required: ["bestVehicleId"] },
-        }
-    });
-
-    const choiceResult = JSON.parse(response.text.trim());
-    const bestVehicleId = choiceResult.bestVehicleId;
-    let bestAlternative = suitableVehicles.find(alt => alt.vehicle.id === bestVehicleId);
-    if (!bestAlternative) {
-        console.error("AI returned an invalid vehicle ID. Falling back to the first suitable vehicle.");
-        bestAlternative = suitableVehicles[0];
-    }
-    return bestAlternative;
-}
 
 /**
  * Calculates the distance traveled for a ride based on start and end mileage.
