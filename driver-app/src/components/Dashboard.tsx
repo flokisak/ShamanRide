@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, supabaseService, authService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
@@ -8,6 +8,8 @@ import { RideCompletionModal } from './RideCompletionModal';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
+  const watchIdRef = useRef<number | null>(null);
+  const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [driverStatus, setDriverStatus] = useState('offline');
   const [breakEndTime, setBreakEndTime] = useState<number | null>(null);
   const [currentRide, setCurrentRide] = useState<RideLog | null>(null);
@@ -336,14 +338,22 @@ const Dashboard: React.FC = () => {
       return;
     }
 
-    let watchId: number | null = null;
-    let locationInterval: NodeJS.Timeout | null = null;
     let currentPosition: { lat: number; lng: number } | null = null;
 
     console.log('Starting GPS tracking for vehicle:', vehicleNumber);
 
+    // Clear any existing GPS tracking
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    if (locationIntervalRef.current) {
+      clearInterval(locationIntervalRef.current);
+      locationIntervalRef.current = null;
+    }
+
     // Watch position continuously
-    watchId = navigator.geolocation.watchPosition(
+    watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
         currentPosition = { lat: latitude, lng: longitude };
@@ -401,8 +411,8 @@ const Dashboard: React.FC = () => {
       })();
     }
 
-    // Send location every 30 seconds
-    locationInterval = setInterval(async () => {
+    // Send location every 5 minutes to reduce data usage
+    locationIntervalRef.current = setInterval(async () => {
       if (currentPosition && vehicleNumber) {
         const locationData = {
           vehicle_id: vehicleNumber,
@@ -449,15 +459,17 @@ const Dashboard: React.FC = () => {
       } else {
         console.log('Not sending location - currentPosition:', !!currentPosition, 'vehicleNumber:', vehicleNumber);
       }
-    }, 30000); // Send every 30 seconds
+    }, 300000); // Send every 5 minutes
 
     return () => {
       console.log('Stopping GPS tracking');
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
       }
-      if (locationInterval) {
-        clearInterval(locationInterval);
+      if (locationIntervalRef.current) {
+        clearInterval(locationIntervalRef.current);
+        locationIntervalRef.current = null;
       }
     };
   }, [vehicleNumber]);
@@ -747,7 +759,7 @@ const Dashboard: React.FC = () => {
           .from('driver_messages')
           .insert({
             sender_id: `driver_${vehicleNumber}`,
-            receiver_id: selectedRecipient,
+            receiver_id: receiverId,
             message: newMessage,
             read: false
           })
