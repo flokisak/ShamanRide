@@ -10,11 +10,24 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Get initial session with timeout
+    const getSessionWithTimeout = async () => {
+      try {
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Auth session loading timed out')), 10000)
+        );
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+        setUser(session?.user ?? null);
+      } catch (error) {
+        console.error('Auth session error:', error);
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getSessionWithTimeout();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

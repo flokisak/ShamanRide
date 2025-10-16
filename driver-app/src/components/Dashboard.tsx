@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { supabase, supabaseService, geocodeAddress } from '../supabaseClient';
+import React, { useState, useEffect, useCallback } from 'react';
+import { supabase, supabaseService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications } from '../utils/notifications';
@@ -27,6 +27,39 @@ const Dashboard: React.FC = () => {
   const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
   const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
   const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+   const [lastRefreshTime, setLastRefreshTime] = useState(0);
+   const [lastSubscriptionRefresh, setLastSubscriptionRefresh] = useState(0);
+   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+   // Debounced refresh function to prevent multiple simultaneous calls
+   const refreshVehicleData = useCallback(async () => {
+     const now = Date.now();
+     if (isRefreshing || now - lastRefreshTime < 3000) {
+       console.log('Refresh already in progress or too recent, skipping');
+       return;
+     }
+     setIsRefreshing(true);
+     setLastRefreshTime(now);
+     setRefreshTrigger(prev => prev + 1);
+     setTimeout(() => setIsRefreshing(false), 3000); // Prevent refreshes for 3 seconds
+   }, [isRefreshing, lastRefreshTime]);
+
+  // Auto-refresh function that can access refreshVehicleData
+  const startAutoRefresh = () => {
+    const refreshInterval = setInterval(async () => {
+      if (vehicleNumber) {
+        try {
+          console.log('Auto-refreshing ride data...');
+          await refreshVehicleData();
+        } catch (err) {
+          console.warn('Error auto-refreshing ride data:', err);
+        }
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  };
 
   useEffect(() => {
     // Initialize notifications and check permissions
@@ -44,11 +77,20 @@ const Dashboard: React.FC = () => {
 
     // Get current user and their vehicle info
     const getVehicleInfo = async () => {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Vehicle data loading timed out after 30 seconds')), 30000)
+      );
+
       try {
+        console.log('Starting getVehicleInfo... SUPABASE_ENABLED:', SUPABASE_ENABLED);
         setIsLoading(true);
         setError(null);
 
+        await Promise.race([timeoutPromise, (async () => {
+
+        console.log('Getting current user...');
         const { data: { user }, error: authError } = await supabase.auth.getUser();
+        console.log('Auth result:', { user: !!user, error: authError });
         if (authError) {
           setError('Authentication error: ' + authError.message);
           return;
@@ -60,16 +102,19 @@ const Dashboard: React.FC = () => {
         }
 
         setUserId(user.id);
+        console.log('User ID set:', user.id, 'Email:', user.email);
 
         // Find vehicle by driver's email
+        console.log('Querying vehicle for email:', user.email);
         const { data: vehicleData, error: vehicleQueryError } = await supabase
           .from('vehicles')
           .select('id')
           .eq('email', user.email)
           .single();
 
+        console.log('Vehicle query result:', { data: vehicleData, error: vehicleQueryError });
         if (vehicleQueryError || !vehicleData) {
-          setError('Vehicle not found for this email: ' + user.email);
+          setError('Vehicle not found for this email: ' + user.email + '. Query error: ' + (vehicleQueryError?.message || 'No data'));
           return;
         }
 
@@ -78,7 +123,9 @@ const Dashboard: React.FC = () => {
         console.log('Vehicle number set to:', vehicleNum);
 
         // Get vehicle status and license plate from vehicles table
+        console.log('Getting vehicle status for ID:', vehicleNum);
         const { data: vehicle, error: vehicleError } = await supabase.from('vehicles').select('status, license_plate').eq('id', vehicleNum).single();
+        console.log('Vehicle status query result:', { data: vehicle, error: vehicleError });
         if (vehicleError) {
           console.warn('Could not load vehicle status:', vehicleError);
           // Continue without vehicle status
@@ -141,13 +188,17 @@ const Dashboard: React.FC = () => {
         }
 
         // Get other drivers for chat
+        console.log('Getting other drivers...');
          const { data: allVehicles, error: vehiclesError } = await supabase.from('vehicles').select('id, name, driver_id').neq('id', vehicleNum);
+         console.log('Other vehicles query result:', { count: allVehicles?.length, error: vehiclesError });
          if (vehiclesError) {
            console.warn('Could not load other vehicles:', vehiclesError);
          } else if (allVehicles) {
            // Get driver names
            const driverIds = allVehicles.map(v => v.driver_id).filter(id => id);
+           console.log('Getting driver names for IDs:', driverIds);
            const { data: driversData } = await supabase.from('people').select('id, name').in('id', driverIds);
+           console.log('Driver names query result:', { count: driversData?.length });
            const driversMap = (driversData || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
            const otherDriversList = allVehicles.map(v => ({
              id: v.id,
@@ -157,37 +208,41 @@ const Dashboard: React.FC = () => {
            setOtherDrivers(otherDriversList);
          }
 
-      } catch (err: any) {
-        console.error('Error loading vehicle info:', err);
-        setError('Failed to load vehicle data: ' + err.message);
-      } finally {
-        setIsLoading(false);
-      }
+         console.log('getVehicleInfo completed successfully');
+
+        })()]);
+
+       } catch (err: any) {
+         console.error('Error loading vehicle info:', err);
+         setError('Failed to load vehicle data: ' + err.message);
+       } finally {
+         console.log('Setting isLoading to false');
+         setIsLoading(false);
+       }
     };
 
     getVehicleInfo();
 
     // Subscribe to ride assignments and updates
+    console.log('Setting up ride subscriptions...');
     const rideChannel = supabase
       .channel('ride_assignments')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
         console.log('New ride assigned:', payload);
-        // Refresh data - getVehicleInfo will filter for current vehicle
-        getVehicleInfo();
-        // Notify user with sound and vibration for new ride assignment
-        notifyUser('ride');
+        // Only refresh if this ride is assigned to our vehicle
+        if (payload.new.vehicle_id === vehicleNumber) {
+          const now = Date.now();
+          if (now - lastSubscriptionRefresh > 5000) { // Minimum 5 seconds between subscription-triggered refreshes
+            setLastSubscriptionRefresh(now);
+            refreshVehicleData();
+            // Notify user with sound and vibration for new ride assignment
+            notifyUser('ride');
+          }
+        }
       })
        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-         console.log('Ride updated:', payload);
-         // Check if this update affects our vehicle
-         if (payload.new.vehicle_id === vehicleNumber) {
-           // Only refresh if this is a different ride than our current one, or if status changed significantly
-           const shouldRefresh = !currentRide || currentRide.id !== payload.new.id ||
-                                 payload.old.status !== payload.new.status;
-           if (shouldRefresh) {
-             getVehicleInfo();
-           }
-         }
+         // Disabled UPDATE handling to prevent loops - rely on periodic refresh
+         // console.log('Ride updated:', payload);
        })
       .subscribe();
 
@@ -196,22 +251,22 @@ const Dashboard: React.FC = () => {
        .channel('driver_messages')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
          console.log('New driver message:', payload);
-          // Check if the message is for this vehicle or general
-          if (vehicleNumber && (
-            payload.new.sender_id === `driver_${vehicleNumber}` ||
-            payload.new.receiver_id === `driver_${vehicleNumber}` ||
-            payload.new.receiver_id === 'general'
-          )) {
-            setMessages(prev => [...prev, payload.new]);
-            // Notify for dispatcher or general messages
-            if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
-              // Notify user with sound and vibration for dispatcher or general message
-              notifyUser('message');
-              // Messages will appear in the chat widget automatically
-            }
-          }
-       })
-      .subscribe();
+           // Check if the message is for this vehicle or general
+           if (vehicleNumber && (
+             payload.new.sender_id === `driver_${vehicleNumber}` ||
+             payload.new.receiver_id === `driver_${vehicleNumber}` ||
+             payload.new.receiver_id === 'general'
+           )) {
+             setMessages(prev => [...prev, payload.new]);
+             // Notify for dispatcher or general messages
+             if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
+               // Notify user with sound and vibration for dispatcher or general message
+               notifyUser('message');
+               // Messages will appear in the chat widget automatically
+             }
+           }
+        })
+       .subscribe();
 
     // Subscribe to vehicle status changes (from dispatcher app)
     const vehicleChannel = supabase
@@ -224,36 +279,51 @@ const Dashboard: React.FC = () => {
         const updatedVehicle = payload.new;
         console.log('Vehicle status changed (driver app):', updatedVehicle);
 
-        // Only update if this is our vehicle
+        // Only update if this is our vehicle and it's an external change
         if (vehicleNumber && updatedVehicle.id === vehicleNumber) {
-          const newStatus = updatedVehicle.status === 'AVAILABLE' ? 'available' :
-                           updatedVehicle.status === 'BUSY' ? 'on_ride' :
-                           updatedVehicle.status === 'BREAK' ? 'break' :
-                           updatedVehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline';
+          // Check if this is different from our current status to avoid loops
+          const currentDbStatus = driverStatus === 'available' ? 'AVAILABLE' :
+                                 driverStatus === 'on_ride' ? 'BUSY' :
+                                 driverStatus === 'break' ? 'BREAK' :
+                                 driverStatus === 'offline' ? 'OUT_OF_SERVICE' : 'AVAILABLE';
 
-          console.log(`Updating local status to ${newStatus} from database change`);
-          setDriverStatus(newStatus);
+          if (updatedVehicle.status !== currentDbStatus) {
+            const newStatus = updatedVehicle.status === 'AVAILABLE' ? 'available' :
+                              updatedVehicle.status === 'BUSY' ? 'on_ride' :
+                              updatedVehicle.status === 'BREAK' ? 'break' :
+                              updatedVehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline';
+
+            console.log(`Updating local status to ${newStatus} from external database change`);
+            setDriverStatus(newStatus);
+          }
         }
       })
       .subscribe();
 
-    // Load recent driver messages
-    const loadMessages = async () => {
-      if (vehicleNumber) {
-        const { data } = await supabase.from('driver_messages').select('*')
-          .or(`sender_id.eq.driver_${vehicleNumber},receiver_id.eq.driver_${vehicleNumber}`)
-          .order('timestamp', { ascending: false });
-        if (data) {
-          setMessages(data);
-        }
-      }
-    };
     return () => {
       supabase.removeChannel(rideChannel);
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(vehicleChannel);
     };
-  }, [driverStatus, vehicleNumber]);
+   }, [refreshTrigger]); // Re-run when refresh is triggered
+
+  // Auto-refresh ride data every 30 seconds
+  useEffect(() => {
+    if (!vehicleNumber) return;
+
+    const refreshInterval = setInterval(async () => {
+      try {
+        console.log('Auto-refreshing ride data...');
+        await refreshVehicleData();
+      } catch (err) {
+        console.warn('Error auto-refreshing ride data:', err);
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, [vehicleNumber, refreshVehicleData]);
+
+
 
   // Load messages when vehicle number is available
   useEffect(() => {
@@ -340,7 +410,7 @@ const Dashboard: React.FC = () => {
       }
     );
 
-    // Send location every 15 seconds
+    // Send location every 30 seconds
     locationInterval = setInterval(async () => {
       if (currentPosition && vehicleNumber) {
         const locationData = {
@@ -403,7 +473,7 @@ const Dashboard: React.FC = () => {
       } else {
         console.log('Not sending location - currentPosition:', !!currentPosition, 'vehicleNumber:', vehicleNumber);
       }
-    }, 15000); // Send every 15 seconds
+    }, 30000); // Send every 30 seconds
 
     return () => {
       console.log('Stopping GPS tracking');
@@ -447,55 +517,7 @@ const Dashboard: React.FC = () => {
    }, [vehicleNumber, messages]);
 
    // Auto-refresh ride data every 15 seconds (for local mode without real-time)
-   useEffect(() => {
-     if (!vehicleNumber) return;
 
-     const refreshInterval = setInterval(async () => {
-       try {
-         console.log('Auto-refreshing ride data...');
-         const pending = await supabaseService.getRideLogsByVehicle(vehicleNum, 'pending');
-         const acceptedRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'accepted');
-         const inProgressRides = await supabaseService.getRideLogsByVehicle(vehicleNum, 'in_progress');
-         const activeRides = [...acceptedRides, ...inProgressRides];
-
-          // Check if pending rides changed
-          const currentPendingIds = pendingRides.map(r => r.id).sort();
-          const newPendingIds = pending.map(r => r.id).sort();
-          if (JSON.stringify(currentPendingIds) !== JSON.stringify(newPendingIds)) {
-            // Don't override local state if we just accepted a ride (within last 5 seconds)
-            const timeSinceLastAccept = Date.now() - lastAcceptTime;
-            const shouldUpdatePending = timeSinceLastAccept > 5000 ||
-                                       !lastAcceptedRideId ||
-                                       !pending.some(r => r.id === lastAcceptedRideId);
-
-            if (shouldUpdatePending) {
-              console.log('Pending rides updated:', pending);
-              setPendingRides(pending);
-              // Notify if new rides were added
-              if (pending.length > pendingRides.length) {
-                notifyUser('ride');
-              }
-            } else {
-              console.log('Skipping pending rides update due to recent acceptance');
-            }
-          }
-
-         // Check if current ride changed
-         if (activeRides.length > 0 && (!currentRide || currentRide.id !== activeRides[0].id)) {
-           console.log('Current ride updated:', activeRides[0]);
-           setCurrentRide(activeRides[0]);
-         } else if (activeRides.length === 0 && currentRide) {
-           console.log('No active rides');
-           setCurrentRide(null);
-         }
-
-       } catch (err) {
-         console.warn('Error auto-refreshing ride data:', err);
-       }
-     }, 15000); // Refresh every 15 seconds
-
-     return () => clearInterval(refreshInterval);
-    }, [vehicleNumber, pendingRides, currentRide]);
 
   // Save preferred navigation app to localStorage
   useEffect(() => {

@@ -190,6 +190,7 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     if (!SUPABASE_ENABLED) return;
 
+    console.log('Setting up dispatcher ride updates subscription');
     const rideChannel = supabase
       .channel('dispatcher_ride_updates')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
@@ -233,9 +234,10 @@ const AppContent: React.FC = () => {
       .subscribe();
 
     return () => {
+      console.log('Cleaning up dispatcher ride updates subscription');
       supabase.removeChannel(rideChannel);
     };
-  }, [rideLog, sendStatusChangeMessageToDriver]);
+  }, []); // Remove dependencies to prevent re-subscription on every state change
 
   // Layout and widget visibility remain local-only. Load persisted values but merge with defaults
   const [layout, setLayout] = useState<LayoutConfig>(() => {
@@ -275,7 +277,7 @@ const AppContent: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
   const [routeToPreview, setRouteToPreview] = useState<string[] | null>(null);
-  const [showCompletedRides, setShowCompletedRides] = useState(false);
+  const [showCompletedRides, setShowCompletedRides] = useState(true); // Show completed rides by default for debugging
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('all');
   const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
@@ -802,34 +804,34 @@ const AppContent: React.FC = () => {
        const generatedCustomerSms = generateCustomerSms(vehicle, eta, driverName);
        setCustomerSms(generatedCustomerSms);
 
-      const updatedVehicles = vehicles.map(v => v.id === vehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt, location: destination } : v);
+       const updatedVehicles = vehicles.map(v => v.id === vehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt } : v); // Don't overwrite location with destination - keep real GPS position
       setVehicles(updatedVehicles);
 
       // Ensure vehicle update is saved to database immediately
       supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
 
-          const newLog: RideLog = {
-          id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        vehicleName: vehicle.name,
-        vehicleLicensePlate: vehicle.licensePlate,
-        driverName: getDriverName(vehicle.driverId),
-        vehicleType: vehicle.type,
-        rideType: RideType.BUSINESS, // Default to business ride
-        customerName: rideRequest.customerName,
-        customerPhone: rideRequest.customerPhone,
-        stops: finalStops,
-        passengers: rideRequest.passengers,
-        pickupTime: rideRequest.pickupTime,
-         status: RideStatus.InProgress,
-         vehicleId: vehicle.id,
-         notes: rideRequest.notes,
-        estimatedPrice: estimatedPrice,
-          estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
-          estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
-         fuelCost: fuelCost,
-         distance: totalDistance,
-      };
+       const newLog: RideLog = {
+           id: crypto.randomUUID(),
+         timestamp: Date.now(),
+         vehicleName: vehicle.name,
+         vehicleLicensePlate: vehicle.licensePlate,
+         driverName: getDriverName(vehicle.driverId),
+         vehicleType: vehicle.type,
+         rideType: RideType.BUSINESS, // Default to business ride
+         customerName: rideRequest.customerName,
+         customerPhone: rideRequest.customerPhone,
+         stops: finalStops,
+         passengers: rideRequest.passengers,
+         pickupTime: rideRequest.pickupTime,
+          status: RideStatus.Pending, // Start as pending, driver will accept
+          vehicleId: vehicle.id,
+          notes: rideRequest.notes,
+         estimatedPrice: estimatedPrice,
+           estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
+           estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
+          fuelCost: fuelCost,
+          distance: totalDistance,
+       };
 
       setRideLog(prev => [newLog, ...prev]);
       setAssignmentResult(null);
@@ -958,8 +960,8 @@ const AppContent: React.FC = () => {
     // Update ride log state
     setRideLog(prev => prev.map(log => log.id === updatedLog.id ? updatedLog : log));
 
-    // Update vehicle status
-    if (updatedLog.vehicleId) {
+    // Update vehicle status only if the ride is now in progress
+    if (updatedLog.vehicleId && updatedLog.status === RideStatus.InProgress) {
         setVehicles(prev => prev.map(v => v.id === updatedLog.vehicleId ? { ...v, status: VehicleStatus.Busy, freeAt: updatedLog.estimatedCompletionTimestamp } : v));
     }
     // Do NOT auto-send SMS; open preview and let dispatcher confirm send if desired
