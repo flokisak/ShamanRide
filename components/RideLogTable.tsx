@@ -17,6 +17,7 @@ interface RideLogTableProps {
     onDelete: (logId: string) => void;
     onEdit: (logId: string) => void;
     onSendSms: (logId: string) => void;
+    onResendRide?: (logId: string) => void;
     showCompleted: boolean;
     onToggleShowCompleted: () => void;
     dateFilter: string;
@@ -54,7 +55,7 @@ const SortableHeader: React.FC<{
 };
 
 
-export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onStatusChange, onDelete, onEdit, onSendSms, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange }) => {
+export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onStatusChange, onDelete, onEdit, onSendSms, onResendRide, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange }) => {
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -422,6 +423,18 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                         >
                           <MessageIcon size={18} />
                         </button>
+                        {onResendRide && log.status === RideStatus.Pending && (Date.now() - log.timestamp) > (5 * 60 * 1000) && (
+                          <button
+                            onClick={() => onResendRide(log.id)}
+                            className="text-gray-500 hover:text-orange-500 transition-colors p-2 -m-2 rounded-full"
+                            aria-label={`Re-send ride for ${log.customerName}`}
+                            title="Re-send ride assignment to driver"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                        )}
                         <button
                           onClick={() => onDelete(log.id)}
                           className="text-gray-500 hover:text-red-500 transition-colors p-2 -m-2 rounded-full"

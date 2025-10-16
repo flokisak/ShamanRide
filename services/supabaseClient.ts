@@ -224,34 +224,40 @@ export const supabaseService = SUPABASE_ENABLED
         },
 
          _toDbRideLog(r: any) {
-           return {
-             id: r.id,
-             timestamp: new Date(r.timestamp).toISOString(),
-             vehicle_name: r.vehicleName ?? null,
-             vehicle_license_plate: r.vehicleLicensePlate ?? null,
-             driver_name: r.driverName ?? null,
-             vehicle_type: r.vehicleType ?? null,
-             customer_name: r.customerName,
-             ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
-             customer_phone: r.customerPhone,
-             stops: r.stops,
-             passengers: r.passengers,
-             pickup_time: r.pickupTime,
-              status: r.status.toLowerCase().replace(/_/g, '_'),
-             vehicle_id: r.vehicleId ?? null,
-             notes: r.notes ?? null,
-             estimated_price: r.estimatedPrice ?? null,
-             estimated_pickup_timestamp: r.estimatedPickupTimestamp ? new Date(r.estimatedPickupTimestamp).toISOString() : null,
-             estimated_completion_timestamp: r.estimatedCompletionTimestamp ? new Date(r.estimatedCompletionTimestamp).toISOString() : null,
-              fuel_cost: r.fuelCost ?? null,
-             distance: r.distance ?? null,
-             navigation_url: r.navigationUrl ?? null,
+            const result: any = {
+              id: r.id,
+              timestamp: r.timestamp,
+              vehicle_name: r.vehicleName ?? null,
+              vehicle_license_plate: r.vehicleLicensePlate ?? null,
+              driver_name: r.driverName ?? null,
+              vehicle_type: r.vehicleType ?? null,
+              customer_name: r.customerName,
+              ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
+              customer_phone: r.customerPhone,
+              stops: r.stops,
+              passengers: r.passengers,
+              pickup_time: r.pickupTime,
+               status: r.status.toLowerCase().replace(/_/g, '_'),
+              vehicle_id: r.vehicleId ?? null,
+              notes: r.notes ?? null,
+              estimated_price: r.estimatedPrice ?? null,
+              estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
+              estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
+               fuel_cost: r.fuelCost ?? null,
+              distance: r.distance ?? null,
             };
+
+            // Only include navigation_url if it exists (to avoid schema errors)
+            if (r.navigationUrl) {
+              result.navigation_url = r.navigationUrl;
+            }
+
+            return result;
          },
           _fromDbRideLog(db: any) {
-           return {
-             id: db.id,
-             timestamp: db.timestamp ? new Date(db.timestamp).getTime() : null,
+            return {
+              id: db.id,
+              timestamp: db.timestamp,
              vehicleName: db.vehicle_name ?? null,
             vehicleLicensePlate: db.vehicle_license_plate ?? null,
             driverName: db.driver_name ?? null,
@@ -266,8 +272,8 @@ export const supabaseService = SUPABASE_ENABLED
             vehicleId: db.vehicle_id ?? null,
             notes: db.notes ?? null,
             estimatedPrice: db.estimated_price ?? null,
-             estimatedPickupTimestamp: db.estimated_pickup_timestamp ? new Date(db.estimated_pickup_timestamp).getTime() : null,
-             estimatedCompletionTimestamp: db.estimated_completion_timestamp ? new Date(db.estimated_completion_timestamp).getTime() : null,
+              estimatedPickupTimestamp: db.estimated_pickup_timestamp,
+              estimatedCompletionTimestamp: db.estimated_completion_timestamp,
              fuelCost: db.fuel_cost ?? null,
             distance: db.distance ?? null,
             navigationUrl: db.navigation_url ?? null,

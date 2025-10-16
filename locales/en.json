@@ -282,6 +282,11 @@
       "title": "New message from vehicle",
       "message": "{vehicleName}: {message}"
     },
+    "rideTimeoutWarning": {
+      "title": "Ride Not Accepted",
+      "message": "Ride for {customerName} (driver: {driverName}) has not been accepted for 5 minutes. You can re-send it or cancel manually."
+    },
+    "rideResent": "Ride has been re-sent to the driver.",
     "rideScheduled": "The ride has been scheduled and added to the list.",
     "noRidesToExport": "Ride history is empty, nothing to export.",
     "dataLoadedSuccess": "Data was loaded successfully.",

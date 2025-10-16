@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase, supabaseService } from '../supabaseClient';
+import { supabase, supabaseService, geocodeAddress } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications } from '../utils/notifications';
@@ -643,24 +643,57 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const navigateToDestination = (ride?: RideLog, navApp?: 'google' | 'mapy') => {
+  const navigateToDestination = async (ride?: RideLog, navApp?: 'google' | 'mapy') => {
     const targetRide = ride || currentRide;
     if (targetRide) {
       // Use provided navApp or fall back to preferred navigation app
       const appToUse = navApp || preferredNavApp;
       let url: string;
 
-      if (appToUse === 'mapy') {
-        // For Mapy.cz, use a simple destination search
-        const destination = targetRide.stops[targetRide.stops.length - 1];
-        url = `https://mapy.cz/zakladni?q=${encodeURIComponent(destination)}`;
-      } else {
-        // Use Google Maps - either the stored navigation URL or fallback
-        if (targetRide.navigationUrl) {
-          url = targetRide.navigationUrl;
+      try {
+        // Geocode all stops
+        const stopsCoords = await Promise.all(targetRide.stops.map(stop => geocodeAddress(stop, 'cs')));
+
+        if (appToUse === 'mapy') {
+          // For Mapy.cz, use the destination with waypoints (pickup as first waypoint)
+          const destination = stopsCoords[stopsCoords.length - 1];
+          const waypoints = stopsCoords.slice(0, -1); // All stops except destination
+
+          let mapyUrl = `https://mapy.cz/zakladni?x=${destination.lon}&y=${destination.lat}&z=15`;
+          if (waypoints.length > 0) {
+            const routePoints = waypoints.map((wp, index) => `&rl${index + 1}=${wp.lon}%2C${wp.lat}`);
+            mapyUrl += routePoints.join('');
+          }
+          url = mapyUrl;
         } else {
+          // Use Google Maps - let app use current location as origin
+          const destination = `${stopsCoords[stopsCoords.length - 1].lat},${stopsCoords[stopsCoords.length - 1].lon}`;
+          const waypoints = stopsCoords.slice(0, -1).map(coord => `${coord.lat},${coord.lon}`); // All stops except destination
+
+          const params = new URLSearchParams();
+          params.append('api', '1');
+          params.append('destination', destination);
+
+          if (waypoints.length > 0) {
+            params.append('waypoints', waypoints.join('|'));
+          }
+
+          params.append('travelmode', 'driving');
+          url = `https://www.google.com/maps/dir/?${params.toString()}`;
+        }
+      } catch (error) {
+        console.error('Error generating navigation URL:', error);
+        // Fallback to simple destination navigation
+        if (appToUse === 'mapy') {
           const destination = targetRide.stops[targetRide.stops.length - 1];
-          url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+          url = `https://mapy.cz/zakladni?q=${encodeURIComponent(destination)}`;
+        } else {
+          if (targetRide.navigationUrl) {
+            url = targetRide.navigationUrl;
+          } else {
+            const destination = targetRide.stops[targetRide.stops.length - 1];
+            url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+          }
         }
       }
 

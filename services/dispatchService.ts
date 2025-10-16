@@ -232,15 +232,14 @@ export function generateNavigationUrl(
 // Simple in-memory cache for geocoding results
 const geocodeCache = new Map<string, { lat: number; lon: number }>();
 // Bounding box for South Moravia to prioritize local search results
+const SOUTH_MORAVIA_BOUNDS = { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax: 49.3 };
 // Expanded bounds to include Czech Republic, Austria, Slovakia, and nearby areas
-// Original South Moravia bounds for preference: { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax: 49.3 }
 const EXPANDED_SEARCH_BOUNDS = { lonMin: 12.0, latMin: 46.0, lonMax: 24.0, latMax: 52.0 };
 
 /**
  * Checks if coordinates are within South Moravia bounds.
  */
 function isInSouthMoravia(lat: number, lon: number): boolean {
-    const SOUTH_MORAVIA_BOUNDS = { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax: 49.3 };
     return lon >= SOUTH_MORAVIA_BOUNDS.lonMin && lon <= SOUTH_MORAVIA_BOUNDS.lonMax &&
            lat >= SOUTH_MORAVIA_BOUNDS.latMin && lat <= SOUTH_MORAVIA_BOUNDS.latMax;
 }
@@ -254,19 +253,27 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
  * Converts an address to geographic coordinates using Google Maps Geocoding API.
  */
 export async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
-    const cacheKey = `${address}_${language}`;
+    // Clean up malformed addresses that might have timestamps or other data appended
+    const cleanAddress = address.split('|')[0].trim();
+
+    // Log if address was cleaned
+    if (cleanAddress !== address) {
+        console.warn('Cleaned malformed address:', address, '->', cleanAddress);
+    }
+
+    const cacheKey = `${cleanAddress}_${language}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
     const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
     if (!googleMapsApiKey) {
         console.warn('Google Maps API key not configured, falling back to Nominatim');
         // Fallback to Nominatim for now
-        return await geocodeWithNominatim(address);
+        return await geocodeWithNominatim(cleanAddress);
     }
 
     try {
         const proxyUrl = 'https://corsproxy.io/?';
-        const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+        const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
 
         const response = await fetch(geocodingUrl);
         if (!response.ok) {
@@ -284,13 +291,14 @@ export async function geocodeAddress(address: string, language: string): Promise
             return coords;
         } else {
             console.warn('Google Maps geocoding failed:', data.status, data.error_message);
+
             // Fallback to Nominatim
-            return await geocodeWithNominatim(address);
+            return await geocodeWithNominatim(cleanAddress);
         }
     } catch (error) {
         console.error("Google Maps geocoding error:", error);
         // Fallback to Nominatim
-        return await geocodeWithNominatim(address);
+        return await geocodeWithNominatim(cleanAddress);
     }
 }
 
@@ -327,7 +335,7 @@ async function geocodeWithNominatim(address: string): Promise<{ lat: number; lon
             const result = data[0];
             return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
         }
-        throw new Error(`Address not found: ${address}`);
+        throw new Error(`Address not found: ${cleanAddress}`);
     } catch (error) {
         console.error("Nominatim geocoding error:", error);
         throw new Error(`Could not find coordinates for address: ${address}.`);

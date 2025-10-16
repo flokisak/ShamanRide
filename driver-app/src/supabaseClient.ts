@@ -143,6 +143,109 @@ async function runWithFallback<T>(
   }
 }
 
+// Geocoding constants and cache
+const geocodeCache = new Map<string, { lat: number; lon: number }>();
+const SOUTH_MORAVIA_BOUNDS = { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax: 49.3 };
+const EXPANDED_SEARCH_BOUNDS = { lonMin: 12.0, latMin: 46.0, lonMax: 24.0, latMax: 52.0 };
+
+// Geocoding functions
+async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
+    // Clean up malformed addresses that might have timestamps or other data appended
+    const cleanAddress = address.split('|')[0].trim();
+
+    // Log if address was cleaned
+    if (cleanAddress !== address) {
+        console.warn('Cleaned malformed address:', address, '->', cleanAddress);
+    }
+
+    const cacheKey = `${cleanAddress}_${language}`;
+    if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
+
+    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!googleMapsApiKey) {
+        console.warn('Google Maps API key not configured, falling back to Nominatim');
+        // Fallback to Nominatim for now
+        return await geocodeWithNominatim(cleanAddress);
+    }
+
+    try {
+        const proxyUrl = 'https://corsproxy.io/?';
+        const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+
+        const response = await fetch(geocodingUrl);
+        if (!response.ok) {
+            throw new Error(`Geocoding API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'OK' && data.results && data.results.length > 0) {
+            const result = data.results[0];
+            const location = result.geometry.location;
+            const coords = { lat: location.lat, lon: location.lng };
+
+            geocodeCache.set(cacheKey, coords);
+            return coords;
+        } else {
+            console.warn('Google Maps geocoding failed:', data.status, data.error_message);
+
+            // Fallback to Nominatim
+            return await geocodeWithNominatim(cleanAddress);
+        }
+    } catch (error) {
+        console.error("Google Maps geocoding error:", error);
+        // Fallback to Nominatim
+        return await geocodeWithNominatim(cleanAddress);
+    }
+}
+
+async function geocodeWithNominatim(address: string): Promise<{ lat: number; lon: number }> {
+    try {
+        const proxyUrl = 'https://corsproxy.io/?';
+        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=10&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+
+        const response = await fetch(nominatimUrl);
+        if (!response.ok) throw new Error(`Nominatim API error: ${response.status}`);
+        const data = await response.json();
+
+        if (data && Array.isArray(data) && data.length > 0) {
+            // First priority: results within South Moravia bounds
+            for (const result of data) {
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
+                if (isInSouthMoravia(lat, lon)) {
+                    return { lat, lon };
+                }
+            }
+            // Second priority: results within Czech Republic
+            for (const result of data) {
+                const lat = parseFloat(result.lat);
+                const lon = parseFloat(result.lon);
+                if (isInCzechRepublic(lat, lon)) {
+                    return { lat, lon };
+                }
+            }
+            // Third priority: any result
+            const result = data[0];
+            return { lat: parseFloat(result.lat), lon: parseFloat(result.lon) };
+        }
+        throw new Error(`Address not found: ${address}.`);
+    } catch (error) {
+        console.error("Nominatim geocoding error:", error);
+        throw new Error(`Could not find coordinates for address: ${address}.`);
+    }
+}
+
+function isInSouthMoravia(lat: number, lon: number): boolean {
+    return lon >= SOUTH_MORAVIA_BOUNDS.lonMin && lon <= SOUTH_MORAVIA_BOUNDS.lonMax &&
+           lat >= SOUTH_MORAVIA_BOUNDS.latMin && lat <= SOUTH_MORAVIA_BOUNDS.latMax;
+}
+
+function isInCzechRepublic(lat: number, lon: number): boolean {
+    // Approximate bounds for Czech Republic
+    return lon >= 12.0 && lon <= 18.9 && lat >= 48.5 && lat <= 51.1;
+}
+
 // Helper functions for data operations (real supabase or local fallback)
 const supabaseService: any = SUPABASE_ENABLED ? {
       // --- Helpers to map between app's camelCase and DB snake_case ---
@@ -221,33 +324,33 @@ const supabaseService: any = SUPABASE_ENABLED ? {
         },
 
          _toDbRideLog(r: any) {
-           return {
-             id: r.id,
-             timestamp: new Date(r.timestamp).toISOString(),
-             vehicle_name: r.vehicleName ?? null,
-             vehicle_license_plate: r.vehicleLicensePlate ?? null,
-             driver_name: r.driverName ?? null,
-             vehicle_type: r.vehicleType ?? null,
-             customer_name: r.customerName,
-             ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
-             customer_phone: r.customerPhone,
-             stops: r.stops,
-             passengers: r.passengers,
-             pickup_time: r.pickupTime,
-              status: r.status.toLowerCase().replace(/_/g, '_'),
-             vehicle_id: r.vehicleId ?? null,
-             notes: r.notes ?? null,
-             estimated_price: r.estimatedPrice ?? null,
-             estimated_pickup_timestamp: r.estimatedPickupTimestamp ? new Date(r.estimatedPickupTimestamp).toISOString() : null,
-             estimated_completion_timestamp: r.estimatedCompletionTimestamp ? new Date(r.estimatedCompletionTimestamp).toISOString() : null,
-             fuel_cost: r.fuelCost ?? null,
-            distance: r.distance ?? null,
-           };
+            return {
+              id: r.id,
+              timestamp: r.timestamp,
+              vehicle_name: r.vehicleName ?? null,
+              vehicle_license_plate: r.vehicleLicensePlate ?? null,
+              driver_name: r.driverName ?? null,
+              vehicle_type: r.vehicleType ?? null,
+              customer_name: r.customerName,
+              ride_type: (r.rideType ?? 'BUSINESS').toLowerCase(),
+              customer_phone: r.customerPhone,
+              stops: r.stops,
+              passengers: r.passengers,
+              pickup_time: r.pickupTime,
+               status: r.status.toLowerCase().replace(/_/g, '_'),
+              vehicle_id: r.vehicleId ?? null,
+              notes: r.notes ?? null,
+              estimated_price: r.estimatedPrice ?? null,
+              estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
+              estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
+              fuel_cost: r.fuelCost ?? null,
+             distance: r.distance ?? null,
+            };
          },
         _fromDbRideLog(db: any) {
-           return {
-             id: db.id,
-             timestamp: db.timestamp ? new Date(db.timestamp).getTime() : null,
+            return {
+              id: db.id,
+              timestamp: db.timestamp,
              vehicleName: db.vehicle_name ?? null,
             vehicleLicensePlate: db.vehicle_license_plate ?? null,
             driverName: db.driver_name ?? null,
@@ -262,8 +365,8 @@ const supabaseService: any = SUPABASE_ENABLED ? {
             vehicleId: db.vehicle_id ?? null,
             notes: db.notes ?? null,
             estimatedPrice: db.estimated_price ?? null,
-             estimatedPickupTimestamp: db.estimated_pickup_timestamp ? new Date(db.estimated_pickup_timestamp).getTime() : null,
-             estimatedCompletionTimestamp: db.estimated_completion_timestamp ? new Date(db.estimated_completion_timestamp).getTime() : null,
+              estimatedPickupTimestamp: db.estimated_pickup_timestamp,
+              estimatedCompletionTimestamp: db.estimated_completion_timestamp,
             fuelCost: db.fuel_cost ?? null,
            distance: db.distance ?? null,
          };
@@ -708,4 +811,4 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       },
     };
 
-export { supabaseService };
+export { supabaseService, geocodeAddress };

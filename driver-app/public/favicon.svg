@@ -1,39 +1,53 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <!-- Background circle with Nord polar gradient -->
+  <!-- Background circle with racing gradient -->
   <defs>
-    <linearGradient id="nordBg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:rgb(46, 52, 64);stop-opacity:1" />
-      <stop offset="100%" style="stop-color:rgb(59, 66, 82);stop-opacity:1" />
+    <linearGradient id="racingBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:rgb(30, 30, 46);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgb(15, 23, 42);stop-opacity:1" />
     </linearGradient>
     <linearGradient id="carBody" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:rgb(129, 161, 193);stop-opacity:1" />
-      <stop offset="100%" style="stop-color:rgb(94, 129, 172);stop-opacity:1" />
+      <stop offset="0%" style="stop-color:rgb(239, 68, 68);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgb(220, 38, 38);stop-opacity:1" />
     </linearGradient>
+    <radialGradient id="flame" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:rgb(251, 191, 36);stop-opacity:1" />
+      <stop offset="100%" style="stop-color:rgb(239, 68, 68);stop-opacity:1" />
+    </radialGradient>
   </defs>
 
   <!-- Background -->
-  <circle cx="50" cy="50" r="48" fill="url(#nordBg)" stroke="rgb(67, 76, 94)" stroke-width="2"/>
+  <circle cx="50" cy="50" r="48" fill="url(#racingBg)" stroke="rgb(59, 130, 246)" stroke-width="2"/>
 
-  <!-- Car body -->
-  <rect x="20" y="35" width="60" height="25" rx="8" fill="url(#carBody)" stroke="rgb(136, 192, 208)" stroke-width="1"/>
+  <!-- Speed lines -->
+  <path d="M8 50 L16 50 M84 50 L92 50" stroke="rgb(59, 130, 246)" stroke-width="1" opacity="0.6"/>
+
+  <!-- Car body (racing style) -->
+  <rect x="20" y="35" width="60" height="25" rx="10" fill="url(#carBody)" stroke="rgb(251, 191, 36)" stroke-width="2"/>
+
+  <!-- Racing stripe -->
+  <rect x="20" y="42" width="60" height="4" fill="rgb(251, 191, 36)"/>
 
   <!-- Car roof -->
-  <rect x="25" y="25" width="40" height="15" rx="6" fill="url(#carBody)" stroke="rgb(136, 192, 208)" stroke-width="1"/>
+  <rect x="25" y="25" width="40" height="15" rx="7" fill="url(#carBody)" stroke="rgb(251, 191, 36)" stroke-width="1"/>
 
   <!-- Windows -->
-  <rect x="28" y="28" width="34" height="10" rx="4" fill="rgb(216, 222, 233)" opacity="0.8" stroke="rgb(229, 233, 240)" stroke-width="0.5"/>
+  <rect x="28" y="28" width="34" height="10" rx="5" fill="rgb(30, 30, 46)" opacity="0.8" stroke="rgb(251, 191, 36)" stroke-width="0.5"/>
 
-  <!-- Wheels -->
-  <circle cx="30" cy="65" r="6" fill="rgb(59, 66, 82)" stroke="rgb(67, 76, 94)" stroke-width="1"/>
-  <circle cx="70" cy="65" r="6" fill="rgb(59, 66, 82)" stroke="rgb(67, 76, 94)" stroke-width="1"/>
-  <circle cx="30" cy="65" r="3" fill="rgb(76, 86, 106)"/>
-  <circle cx="70" cy="65" r="3" fill="rgb(76, 86, 106)"/>
+  <!-- Wheels (racing style) -->
+  <circle cx="30" cy="65" r="7" fill="rgb(30, 30, 46)" stroke="rgb(251, 191, 36)" stroke-width="1"/>
+  <circle cx="70" cy="65" r="7" fill="rgb(30, 30, 46)" stroke="rgb(251, 191, 36)" stroke-width="1"/>
+  <circle cx="30" cy="65" r="4" fill="rgb(59, 130, 246)"/>
+  <circle cx="70" cy="65" r="4" fill="rgb(59, 130, 246)"/>
+  <circle cx="30" cy="65" r="2" fill="rgb(251, 191, 36)"/>
+  <circle cx="70" cy="65" r="2" fill="rgb(251, 191, 36)"/>
 
   <!-- Headlights -->
-  <circle cx="75" cy="45" r="2" fill="rgb(235, 203, 139)" opacity="0.9"/>
-  <circle cx="25" cy="45" r="2" fill="rgb(235, 203, 139)" opacity="0.9"/>
+  <circle cx="75" cy="45" r="3" fill="rgb(251, 191, 36)" opacity="1"/>
+  <circle cx="25" cy="45" r="3" fill="rgb(251, 191, 36)" opacity="1"/>
+  <circle cx="75" cy="45" r="1.5" fill="white"/>
+  <circle cx="25" cy="45" r="1.5" fill="white"/>
 
-  <!-- Grill -->
-  <rect x="18" y="42" width="4" height="6" fill="rgb(59, 66, 82)"/>
-  <rect x="78" y="42" width="4" height="6" fill="rgb(59, 66, 82)"/>
+  <!-- Exhaust flames -->
+  <ellipse cx="16" cy="58" rx="4" ry="2" fill="url(#flame)" opacity="0.8"/>
+  <ellipse cx="84" cy="58" rx="4" ry="2" fill="url(#flame)" opacity="0.8"/>
 </svg>

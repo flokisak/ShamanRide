@@ -304,6 +304,11 @@
       "title": "Nová zpráva od vozidla",
       "message": "{vehicleName}: {message}"
     },
+    "rideTimeoutWarning": {
+      "title": "Jízda nebyla přijata",
+      "message": "Jízda pro {customerName} (řidič: {driverName}) nebyla přijata po dobu 5 minut. Můžete ji znovu odeslat nebo ručně zrušit."
+    },
+    "rideResent": "Jízda byla znovu odeslána řidiči.",
     "rideScheduled": "Jízda byla naplánována a přidána do seznamu.",
     "noRidesToExport": "Historie jízd je prázdná, není co exportovat.",
     "dataLoadedSuccess": "Data byla úspěšně načtena.",

@@ -582,23 +582,22 @@ const AppContent: React.FC = () => {
 
 
 
-             // Timeout for unaccepted pending rides
-             if (log.status === RideStatus.Pending) {
-                 const minutesSinceAssignment = (now - log.timestamp) / (1000 * 60);
-                 if (minutesSinceAssignment >= 5) {
-                     // Auto-cancel the ride
-                     handleUpdateRideLog({ ...log, status: RideStatus.Cancelled });
-                     newNotifications.push({
-                         id: `timeout-${log.id}`,
-                         type: 'delay',
-                         titleKey: 'notifications.rideTimeout.title',
-                         messageKey: 'notifications.rideTimeout.message',
-                         messageParams: { customerName: log.customerName, driverName: log.driverName || 'N/A' },
-                         timestamp: now,
-                         rideLogId: log.id
-                     });
-                 }
-             }
+              // Timeout warning for unaccepted pending rides
+              if (log.status === RideStatus.Pending) {
+                  const minutesSinceAssignment = (now - log.timestamp) / (1000 * 60);
+                  if (minutesSinceAssignment >= 5) {
+                      // Send timeout warning notification (no auto-cancellation)
+                      newNotifications.push({
+                          id: `timeout-warning-${log.id}`,
+                          type: 'delay',
+                          titleKey: 'notifications.rideTimeoutWarning.title',
+                          messageKey: 'notifications.rideTimeoutWarning.message',
+                          messageParams: { customerName: log.customerName, driverName: log.driverName || 'N/A' },
+                          timestamp: now,
+                          rideLogId: log.id
+                      });
+                  }
+              }
          });
 
          if (newNotifications.length > 0) {
@@ -702,12 +701,12 @@ const AppContent: React.FC = () => {
 
         // Don't change vehicle status yet - wait for driver to accept
 
-
+        let navigationUrl = '';
          try {
              const vehicleLocationCoords = await geocodeAddress(chosenVehicle.location, language);
              const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
              const longNavigationUrl = generateNavigationUrl(vehicleLocationCoords, stopCoords);
-             const navigationUrl = longNavigationUrl;
+             navigationUrl = longNavigationUrl;
 
              setManualAssignmentDetails({
                  rideRequest: assignmentResult!.rideRequest,
@@ -1292,12 +1291,22 @@ const AppContent: React.FC = () => {
     }
   };
   
-  const handleRideStatusChange = (logId: string, newStatus: RideStatus) => {
-    const logToUpdate = rideLog.find(log => log.id === logId);
-    if (logToUpdate) {
-      handleUpdateRideLog({ ...logToUpdate, status: newStatus });
-    }
-  };
+   const handleRideStatusChange = (logId: string, newStatus: RideStatus) => {
+     const logToUpdate = rideLog.find(log => log.id === logId);
+     if (logToUpdate) {
+       handleUpdateRideLog({ ...logToUpdate, status: newStatus });
+     }
+   };
+
+   const handleResendRide = async (logId: string) => {
+     const logToUpdate = rideLog.find(log => log.id === logId);
+     if (logToUpdate && logToUpdate.status === RideStatus.Pending) {
+       // Update the timestamp to reset the 5-minute timer and re-send notification
+       const updatedLog = { ...logToUpdate, timestamp: Date.now() };
+       await handleUpdateRideLog(updatedLog);
+       alert(t('notifications.rideResent'));
+     }
+   };
 
 
   
@@ -1619,7 +1628,7 @@ const AppContent: React.FC = () => {
     dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
     vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} locations={locations} />,
     map: <OpenStreetMap vehicles={vehicles} people={people} locations={locations} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
-      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} />,
+      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} onResendRide={handleResendRide} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,

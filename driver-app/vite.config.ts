@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'ShamanRide Driver',
-        short_name: 'DriverApp',
-        description: 'Driver application for ShamanRide',
+        name: 'Need For Taxi',
+        short_name: 'NFTaxi',
+        description: 'Fast and furious taxi driver app',
         theme_color: '#2e3440', // Nord polar-1
         background_color: '#2e3440', // Nord polar-1
         display: 'standalone',
