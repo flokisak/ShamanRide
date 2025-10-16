@@ -2,7 +2,7 @@
  * Service for fetching real-time GPS positions from Supabase locations table.
  */
 
-import { supabase } from './supabaseClient';
+import { supabase } from '../driver-app/src/supabaseClient';
 
 export interface GpsVehicle {
     id: string;
@@ -54,7 +54,7 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
         }
 
         // Create vehicle lookup map
-        const vehicleMap = new Map(vehicles?.map(v => [v.id, v]) || []);
+        const vehicleMap = new Map((vehicles as any[])?.map((v: any) => [v.id, v]) || []);
 
         // Group by vehicle_id and get the most recent location for each vehicle
         const vehiclePositions = new Map<string, GpsVehicle>();

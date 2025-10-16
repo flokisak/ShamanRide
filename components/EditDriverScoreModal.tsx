@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Person, DriverScore } from '../types';
-import { supabaseService } from '../services/supabaseClient';
+import { supabaseService } from '../driver-app/src/supabaseClient';
 import { CloseIcon, EditIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 

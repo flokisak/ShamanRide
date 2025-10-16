@@ -6,7 +6,7 @@ import { ManualEntryModal } from './ManualEntryModal';
 import { EditDriverScoreModal } from './EditDriverScoreModal';
 import { TrophyIcon, CloseIcon, PlusIcon, EditIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
-import { supabaseService } from '../services/supabaseClient';
+import { supabaseService } from '../driver-app/src/supabaseClient';
 
 interface GamificationModalProps {
   isOpen: boolean;

@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
-import { authService } from '../services/supabaseClient';
+import { authService } from '../driver-app/src/supabaseClient';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 // Define the shape of the context

@@ -1,7 +1,7 @@
 import type { RideRequest, Vehicle, RideLog, Person, Tariff, FuelPrices, MessagingApp } from '../types';
 import { RideStatus, VehicleStatus, RideType, DEFAULT_TARIFF, DEFAULT_FUEL_PRICES } from '../types';
 import { findBestVehicle, generateSms, generateShareLink } from './dispatchService';
-import { SUPABASE_ENABLED, supabaseService } from './supabaseClient';
+import { SUPABASE_ENABLED, supabaseService } from '../driver-app/src/supabaseClient';
 
 
 export interface OrderResult {
@@ -59,7 +59,7 @@ export async function processCustomerOrder(rideRequest: RideRequest): Promise<Or
 
         // 2. Find the best vehicle using existing logic. We force AI mode for best result.
         // We also force optimize=true because a customer always wants the fastest route.
-        const result = await findBestVehicle(rideRequest, vehicles, true, tariff, language, true);
+        const result = await findBestVehicle(rideRequest, vehicles, tariff, language, true);
 
         if ('messageKey' in result) {
             // Translate error key for customer

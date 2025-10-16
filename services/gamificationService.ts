@@ -1,4 +1,4 @@
-import { supabaseService } from './supabaseClient';
+import { supabaseService } from '../driver-app/src/supabaseClient';
 import { AchievementType, DriverScore, Achievement, DriverStats, ManualEntry, ManualEntryType } from '../types';
 
 export class GamificationService {

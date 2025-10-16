@@ -4,7 +4,7 @@ import { VehicleStatus, VehicleType, RideStatus } from '../types';
 import { CarIcon, EditIcon, WrenchIcon, AlertTriangleIcon, FuelIcon, TrophyIcon, StarIcon, DeerIcon } from './icons';
 import { Countdown } from './Countdown';
 import { useTranslation } from '../contexts/LanguageContext';
-import { supabaseService } from '../services/supabaseClient';
+import { supabaseService } from '../driver-app/src/supabaseClient';
 import { fetchVehiclePositions, GpsVehicle } from '../services/gpsService';
 
 interface VehicleStatusTableProps {

@@ -4,7 +4,7 @@ import { VehicleStatusTable } from './components/VehicleStatusTable';
 import { AssignmentResult } from './components/AssignmentResult';
 import { Vehicle, RideRequest, AssignmentResultData, VehicleStatus, VehicleType, ErrorResult, RideLog, RideStatus, LayoutConfig, LayoutItem, Notification, Person, PersonRole, WidgetId, Tariff, FlatRateRule, AssignmentAlternative, MessagingApp, FuelType, FuelPrices, RideType, CompanyInfo, DEFAULT_COMPANY_INFO } from './types';
 import { findBestVehicle, generateSms, generateCustomerSms, generateNavigationUrl, geocodeAddress, updateFrequentAddress } from './services/dispatchService';
-import { SUPABASE_ENABLED, supabase, supabaseService } from './services/supabaseClient';
+import { SUPABASE_ENABLED, supabase, supabaseService } from './driver-app/src/supabaseClient';
 import type { SmsMessageRecord } from './services/smsService';
 import { sendSms, isSmsGateConfigured } from './services/messagingService';
 
@@ -828,7 +828,7 @@ const AppContent: React.FC = () => {
         // Ride is automatically sent to driver app via real-time subscription
 
         // Automatically open SMS modal for the customer
-       handleSendSms(newLog.id);
+       // Note: newLog will be created in handleManualAssignmentConfirm
     }, [assignmentResult, people, t, language, calculateFuelCost]);
   
   const handleManualAssignmentConfirm = async (durationInMinutes: number) => {
