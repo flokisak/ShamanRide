@@ -84,7 +84,8 @@ const Dashboard: React.FC = () => {
     const [showManualRideModal, setShowManualRideModal] = useState(false);
      const [showCompletionModal, setShowCompletionModal] = useState(false);
     const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
-    const [showRideHistory, setShowRideHistory] = useState(true);
+    const [showRideHistory, setShowRideHistory] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'2days' | 'week' | 'month' | 'all'>('2days');
     const [lastRefreshTime, setLastRefreshTime] = useState(0);
     const [lastSubscriptionRefresh, setLastSubscriptionRefresh] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -696,7 +697,31 @@ const Dashboard: React.FC = () => {
      };
    }, [driverStatus, currentRide, wakeLockActive]);
 
-   // Update shift cash when ride history changes
+   // Filter ride history based on selected time period
+  const filteredRideHistory = rideHistory.filter(ride => {
+    const rideDate = new Date(ride.timestamp);
+    const now = new Date();
+
+    switch (historyFilter) {
+      case '2days':
+        const twoDaysAgo = new Date(now);
+        twoDaysAgo.setDate(now.getDate() - 2);
+        return rideDate >= twoDaysAgo;
+      case 'week':
+        const oneWeekAgo = new Date(now);
+        oneWeekAgo.setDate(now.getDate() - 7);
+        return rideDate >= oneWeekAgo;
+      case 'month':
+        const oneMonthAgo = new Date(now);
+        oneMonthAgo.setMonth(now.getMonth() - 1);
+        return rideDate >= oneMonthAgo;
+      case 'all':
+      default:
+        return true;
+    }
+  });
+
+  // Update shift cash when ride history changes
    useEffect(() => {
      if ((shiftStartTime || (useCustomShift && customShiftStart && customShiftEnd && customShiftDate)) && rideHistory.length > 0) {
        const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime || undefined);
@@ -1465,10 +1490,55 @@ const Dashboard: React.FC = () => {
                      </svg>
                    </button>
                  </div>
-               </div>
-            {rideHistory.length > 0 ? (
-              <ul className="space-y-2">
-                {rideHistory.map((ride) => (
+                </div>
+
+                {/* History Filters */}
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <button
+                    onClick={() => setHistoryFilter('2days')}
+                    className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                      historyFilter === '2days'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    2 dny
+                  </button>
+                  <button
+                    onClick={() => setHistoryFilter('week')}
+                    className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                      historyFilter === 'week'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    Týden
+                  </button>
+                  <button
+                    onClick={() => setHistoryFilter('month')}
+                    className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                      historyFilter === 'month'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    Měsíc
+                  </button>
+                  <button
+                    onClick={() => setHistoryFilter('all')}
+                    className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                      historyFilter === 'all'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    Vše
+                  </button>
+                </div>
+
+             {filteredRideHistory.length > 0 ? (
+               <ul className="space-y-2">
+                 {filteredRideHistory.map((ride) => (
                   <li key={ride.id} className="text-sm text-slate-300 bg-slate-800/30 rounded-lg p-2">
                     <div className="flex justify-between items-start">
                       <div>
@@ -1487,7 +1557,12 @@ const Dashboard: React.FC = () => {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-slate-400 italic">{t('dashboard.noCompletedRides')}</p>
+              <p className="text-sm text-slate-400 italic">
+                {historyFilter === '2days' && 'Žádné jízdy za poslední 2 dny'}
+                {historyFilter === 'week' && 'Žádné jízdy za poslední týden'}
+                {historyFilter === 'month' && 'Žádné jízdy za poslední měsíc'}
+                {historyFilter === 'all' && 'Žádné jízdy'}
+              </p>
             )}
           </div>
         )}
