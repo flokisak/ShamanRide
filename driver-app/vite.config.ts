@@ -39,5 +39,13 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
     }
+  },
+  build: {
+    rollupOptions: {
+      external: ['@supabase/supabase-js']
+    }
+  },
+  optimizeDeps: {
+    exclude: ['@supabase/supabase-js']
   }
 });
