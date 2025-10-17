@@ -196,20 +196,45 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 return (
                     <form onSubmit={handleSubmit}>
                         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Odkud</label>
-                                <input
-                                    type="text"
-                                    value={stops[0]}
-                                    onChange={(e) => handleStopChange(0, e.target.value)}
-                                    placeholder="Adresa vyzvednutí"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                    required
-                                />
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odkud</label>
+                                 <input
+                                     type="text"
+                                     value={stops[0]}
+                                     onChange={(e) => handleStopChange(0, e.target.value)}
+                                     placeholder="Adresa vyzvednutí"
+                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                     required
+                                 />
                              </div>
 
                              <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná vzdálenost (km)</label>
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">Kam</label>
+                                 <input
+                                     type="text"
+                                     value={stops[1]}
+                                     onChange={(e) => handleStopChange(1, e.target.value)}
+                                     placeholder="Adresa cíle"
+                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                     required
+                                 />
+                             </div>
+
+                             {/* Navigation Button */}
+                             {stops[0] && stops[1] && onNavigateToDestination && (
+                                 <div className="mt-2">
+                                     <button
+                                         type="button"
+                                         onClick={() => onNavigateToDestination(stops, preferredNavApp)}
+                                         className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium text-sm"
+                                     >
+                                         🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
+                                     </button>
+                                 </div>
+                             )}
+
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná vzdálenost (km) - volitelné</label>
                                  <input
                                      type="number"
                                      value={estimatedDistance || ''}
@@ -219,9 +244,9 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                                      step="0.1"
                                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
                                  />
-                                 <p className="text-xs text-gray-400 mt-1">
-                                     Cena se automaticky vypočítá podle tarifů (základní sazba + cena za km)
-                                 </p>
+                                  <p className="text-xs text-gray-400 mt-1">
+                                      Volitelné - slouží pouze pro automatický výpočet ceny podle tarifů
+                                  </p>
                              </div>
 
                              <div>
@@ -260,13 +285,13 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
 
                              <div>
                                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                                     Odhadovaná cena {estimatedDistance ? '(automaticky vypočítáno)' : '(volitelné)'}
+                                     Odhadovaná cena {estimatedDistance ? '(vypočítáno z vzdálenosti)' : '(volitelné)'}
                                  </label>
                                  <input
                                      type="number"
                                      value={estimatedPrice || ''}
                                      onChange={(e) => setEstimatedPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                                     placeholder={estimatedDistance ? `${calculatePrice(estimatedDistance)} Kč` : "Kč"}
+                                     placeholder={estimatedDistance ? `${calculatePrice(estimatedDistance)} Kč` : "Zadejte částku v Kč"}
                                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
                                  />
                                  {estimatedDistance && estimatedPrice && (
