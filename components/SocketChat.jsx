@@ -42,18 +42,23 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
 
     const initSocket = async () => {
       const token = await getToken();
+      const socketUrl = import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+      console.log('SocketChat connecting to:', socketUrl);
 
-      const socketInstance = io(import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
+      const socketInstance = io(socketUrl, {
         auth: { token },
         transports: ['websocket', 'polling']
       });
 
       socketInstance.on('connect', () => {
-        console.log('Connected to chat server');
+        console.log('SocketChat: Connected to chat server');
+        console.log('SocketChat: currentUser:', currentUser);
+        console.log('SocketChat: chatType:', chatType, 'shiftId:', shiftId, 'targetId:', targetId);
         setIsConnected(true);
 
         // Join appropriate room
         const room = getRoomName();
+        console.log('SocketChat: Joining room:', room);
         if (room) {
           if (chatType === 'dispatcher_driver') {
             socketInstance.emit('join_chat_dispatcher_driver', {
@@ -71,8 +76,13 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
         }
       });
 
-      socketInstance.on('disconnect', () => {
-        console.log('Disconnected from chat server');
+      socketInstance.on('disconnect', (reason) => {
+        console.log('SocketChat: Disconnected from chat server, reason:', reason);
+        setIsConnected(false);
+      });
+
+      socketInstance.on('connect_error', (error) => {
+        console.error('SocketChat: Connection error:', error);
         setIsConnected(false);
       });
 
