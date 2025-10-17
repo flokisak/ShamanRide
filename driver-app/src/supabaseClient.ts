@@ -196,10 +196,17 @@ const supabaseService: any = SUPABASE_ENABLED ? {
     const dbData = this._toDbRideLog(rideLog);
     console.log('addRideLog: sending to database:', dbData);
     if (SUPABASE_ENABLED) {
-      const { error } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
-      if (error) {
-        console.error('addRideLog error:', error);
-        throw error;
+      // Try update first (for existing rides), then upsert if it fails
+      const { data: updateData, error: updateError } = await supabase.from('ride_logs').update(dbData).eq('id', rideLog.id);
+      console.log('addRideLog update result:', { data: updateData, error: updateError });
+      if (updateError) {
+        console.warn('Update failed, trying upsert:', updateError);
+        const { data: upsertData, error: upsertError } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
+        console.log('addRideLog upsert result:', { data: upsertData, error: upsertError });
+        if (upsertError) {
+          console.error('addRideLog upsert error:', upsertError);
+          throw upsertError;
+        }
       }
       console.log('addRideLog: successfully saved to Supabase');
       // Notify other apps of the update

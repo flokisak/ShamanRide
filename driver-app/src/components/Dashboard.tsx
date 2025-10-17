@@ -908,8 +908,18 @@ const Dashboard: React.FC = () => {
           console.log('acceptRideSpecific: Updated ride object:', updatedRide);
           try {
             console.log('acceptRideSpecific: Calling supabaseService.addRideLog...');
+            console.log('acceptRideSpecific: SUPABASE_ENABLED =', supabaseService.SUPABASE_ENABLED);
             await supabaseService.addRideLog(updatedRide);
             console.log('acceptRideSpecific: Ride successfully saved to database');
+
+            // Verify the update by fetching the ride back
+            try {
+              const rides = await supabaseService.getRideLogsByVehicle(vehicleNumber, undefined, 10);
+              const updatedRideFromDb = rides.find(r => r.id === ride.id);
+              console.log('acceptRideSpecific: Ride status after update:', updatedRideFromDb?.status);
+            } catch (verifyError) {
+              console.warn('acceptRideSpecific: Could not verify ride update:', verifyError);
+            }
           } catch (rideError) {
             console.error('acceptRideSpecific: Failed to accept ride:', rideError);
             alert('Failed to accept ride. Please try again.');

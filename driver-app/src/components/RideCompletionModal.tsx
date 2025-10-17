@@ -44,8 +44,18 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
             console.log('completeRide: Completing ride:', ride.id, 'with status:', updatedRide.status, 'price:', finalPrice);
             console.log('completeRide: Updated ride object:', updatedRide);
             console.log('completeRide: Calling supabaseService.addRideLog...');
+            console.log('completeRide: SUPABASE_ENABLED =', supabaseService.SUPABASE_ENABLED);
             await supabaseService.addRideLog(updatedRide);
             console.log('completeRide: Ride completion database update completed successfully');
+
+            // Verify the update by fetching the ride back
+            try {
+              const rides = await supabaseService.getRideLogsByVehicle(updatedRide.vehicleId, undefined, 10);
+              const completedRideFromDb = rides.find(r => r.id === ride.id);
+              console.log('completeRide: Ride status after completion:', completedRideFromDb?.status);
+            } catch (verifyError) {
+              console.warn('completeRide: Could not verify ride completion:', verifyError);
+            }
 
             // Notify dispatcher of ride update
             supabase.channel('ride_updates').send({

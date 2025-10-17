@@ -347,10 +347,14 @@ export const supabaseService = SUPABASE_ENABLED
           let query = supabase.from('ride_logs').select('*');
           if (options) {
             if (options.dateFrom) {
-              query = query.gte('timestamp', options.dateFrom);
+              // Convert ISO string to Unix timestamp (milliseconds)
+              const dateFromTimestamp = new Date(options.dateFrom).getTime();
+              query = query.gte('timestamp', dateFromTimestamp);
             }
             if (options.dateTo) {
-              query = query.lte('timestamp', options.dateTo);
+              // Convert ISO string to Unix timestamp (milliseconds)
+              const dateToTimestamp = new Date(options.dateTo).getTime();
+              query = query.lte('timestamp', dateToTimestamp);
             }
           } // if no options, fetch all
           const { data, error } = await query;
