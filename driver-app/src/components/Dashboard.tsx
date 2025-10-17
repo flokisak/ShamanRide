@@ -421,21 +421,22 @@ const Dashboard: React.FC = () => {
          setSocketConnected(false);
        });
 
-         // Listen for new messages
-         socketInstance.on('new_message', (messageData) => {
-           console.log('Driver app received message:', messageData);
-           setMessages(prev => {
-             // Check if message already exists
-             const exists = prev.some(m => m.id === messageData.id);
-             console.log('Message exists in current state:', exists, 'Current messages count:', prev.length);
-             if (!exists) {
-               // Save to localStorage for persistence
-               supabaseService.addDriverMessage(messageData);
-               console.log('Added new message to state. New count:', prev.length + 1);
-               return [messageData, ...prev];
-             }
-             return prev;
-           });
+          // Listen for new messages
+          socketInstance.on('new_message', (messageData) => {
+            console.log('Driver app received message:', messageData);
+            setMessages(prev => {
+              // Check if message already exists
+              const exists = prev.some(m => m.id === messageData.id);
+              console.log('Message exists in current state:', exists, 'Current messages count:', prev.length);
+              if (!exists) {
+                // Save to localStorage for persistence
+                supabaseService.addDriverMessage(messageData);
+                console.log('Added new message to state. New count:', prev.length + 1);
+                // Add to end since we sort oldest first
+                return [...prev, messageData];
+              }
+              return prev;
+            });
 
           // Notify user for new messages from dispatcher or other drivers
           if (messageData.sender_id !== `driver_${vehicleNumber}`) {
@@ -640,8 +641,8 @@ const Dashboard: React.FC = () => {
                 isRelevant
               });
               return isRelevant;
-            }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-              .slice(0, 50); // Limit to 50 most recent messages
+            }).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+              .slice(-50); // Keep 50 most recent messages (oldest first)
             console.log('Filtered messages for vehicle', vehicleNumber, ':', filtered.length);
             setMessages(filtered);
           } catch (err) {
@@ -669,7 +670,8 @@ const Dashboard: React.FC = () => {
                (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
                (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString()) ||
                (m.sender_id === 'dispatcher' && m.receiver_id === 'general')
-             ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+             ).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+               .slice(-50); // Keep 50 most recent messages (oldest first)
 
             // Only update if we have new messages or different data
             const currentMessageIds = messages.map(m => m.id).sort();
@@ -1069,17 +1071,17 @@ const Dashboard: React.FC = () => {
          socket.emit('message', messageData);
          console.log('Message sent successfully via Socket.io');
 
-         // Save sent message locally for immediate UI update
-         const localMessageData = {
-           id: `temp-${Date.now()}`,
-           sender_id: `driver_${vehicleNumber}`,
-           receiver_id: receiverId,
-           message: newMessage.trim(),
-           timestamp: new Date().toISOString(),
-           read: true
-         };
-         setMessages(prev => [localMessageData, ...prev]);
-         supabaseService.addDriverMessage(localMessageData);
+          // Save sent message locally for immediate UI update
+          const localMessageData = {
+            id: `temp-${Date.now()}`,
+            sender_id: `driver_${vehicleNumber}`,
+            receiver_id: receiverId,
+            message: newMessage.trim(),
+            timestamp: new Date().toISOString(),
+            read: true
+          };
+          setMessages(prev => [...prev, localMessageData]); // Add to end since we sort oldest first
+          supabaseService.addDriverMessage(localMessageData);
 
          setNewMessage('');
        } catch (error) {
@@ -1349,71 +1351,7 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Location */}
-        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-          <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.currentLocation')}</label>
-          <p className="text-slate-300">
-            {location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : t('dashboard.locationNotAvailable')}
-          </p>
-          {location && (
-            <p className="text-xs text-slate-400 mt-1">
-              Last updated: {new Date().toLocaleTimeString()}
-            </p>
-          )}
 
-            {/* Network Status Indicator */}
-            <div className="flex items-center gap-2 mt-2">
-              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
-              <span className="text-xs text-slate-400">
-                {isOnline ? 'Online' : 'Offline'}
-              </span>
-            </div>
-
-            {/* Real-time Connection Status Indicator */}
-            <div className="flex items-center gap-2 mt-2">
-              <div className={`w-3 h-3 rounded-full ${
-                realtimeConnectionStatus === 'connected' ? 'bg-blue-400' :
-                realtimeConnectionStatus === 'connecting' ? 'bg-yellow-400' :
-                'bg-red-400'
-              }`}></div>
-              <span className="text-xs text-slate-400">
-                Real-time: {
-                  realtimeConnectionStatus === 'connected' ? 'Connected' :
-                  realtimeConnectionStatus === 'connecting' ? 'Connecting...' :
-                  'Disconnected'
-                }
-              </span>
-            </div>
-
-            {/* Notification Permission Indicator */}
-            {notificationPermission !== 'granted' && (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                <span className="text-xs text-yellow-400">
-                  Upozornění: Povolte notifikace pro lepší zážitek
-                </span>
-                <button
-                  onClick={async () => {
-                    const granted = await initializeNotifications(userId || undefined);
-                    setNotificationPermission(Notification.permission as NotificationPermission);
-                  }}
-                  className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
-                >
-                  Povolit
-                </button>
-              </div>
-            )}
-
-            {/* Screen Wake Lock Indicator */}
-            {isWakeLockSupported() && (
-              <div className="flex items-center gap-2 mt-2">
-                <div className={`w-3 h-3 rounded-full ${wakeLockActive ? 'bg-green-400' : 'bg-gray-400'}`}></div>
-                <span className="text-xs text-slate-400">
-                  {wakeLockActive ? 'Obrazovka zůstane zapnutá' : 'Obrazovka se může vypnout'}
-                </span>
-              </div>
-            )}
-        </div>
 
 
 
@@ -1737,13 +1675,81 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-           {/* Logout */}
-          <button
-           onClick={() => supabase.auth.signOut()}
-           className="w-full bg-danger hover:bg-red-700 py-3 rounded-2xl btn-modern text-white font-medium shadow-frost"
-         >
-           {t('dashboard.logout')}
-         </button>
+        {/* Location widget - positioned at bottom right */}
+        <div className="fixed bottom-4 right-4 z-10">
+          <div className="glass card-hover p-3 rounded-2xl border border-slate-700/50 w-64">
+            <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.currentLocation')}</label>
+            <p className="text-slate-300 text-sm">
+              {location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : t('dashboard.locationNotAvailable')}
+            </p>
+            {location && (
+              <p className="text-xs text-slate-400 mt-1">
+                Last updated: {new Date().toLocaleTimeString()}
+              </p>
+            )}
+
+              {/* Network Status Indicator */}
+              <div className="flex items-center gap-2 mt-2">
+                <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                <span className="text-xs text-slate-400">
+                  {isOnline ? 'Online' : 'Offline'}
+                </span>
+              </div>
+
+              {/* Real-time Connection Status Indicator */}
+              <div className="flex items-center gap-2 mt-2">
+                <div className={`w-3 h-3 rounded-full ${
+                  realtimeConnectionStatus === 'connected' ? 'bg-blue-400' :
+                  realtimeConnectionStatus === 'connecting' ? 'bg-yellow-400' :
+                  'bg-red-400'
+                }`}></div>
+                <span className="text-xs text-slate-400">
+                  Real-time: {
+                    realtimeConnectionStatus === 'connected' ? 'Connected' :
+                    realtimeConnectionStatus === 'connecting' ? 'Connecting...' :
+                    'Disconnected'
+                  }
+                </span>
+              </div>
+
+              {/* Notification Permission Indicator */}
+              {notificationPermission !== 'granted' && (
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                  <span className="text-xs text-yellow-400">
+                    Upozornění: Povolte notifikace pro lepší zážitek
+                  </span>
+                  <button
+                    onClick={async () => {
+                      const granted = await initializeNotifications(userId || undefined);
+                      setNotificationPermission(Notification.permission as NotificationPermission);
+                    }}
+                    className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white ml-2"
+                  >
+                    Povolit
+                  </button>
+                </div>
+              )}
+
+              {/* Screen Wake Lock Indicator */}
+              {isWakeLockSupported() && (
+                <div className="flex items-center gap-2 mt-2">
+                  <div className={`w-3 h-3 rounded-full ${wakeLockActive ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+                  <span className="text-xs text-slate-400">
+                    {wakeLockActive ? 'Obrazovka zůstane zapnutá' : 'Obrazovka se může vypnout'}
+                  </span>
+                </div>
+              )}
+          </div>
+        </div>
+
+        {/* Logout button - full width at bottom */}
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="w-full bg-danger hover:bg-red-700 py-3 rounded-2xl btn-modern text-white font-medium shadow-frost"
+        >
+          {t('dashboard.logout')}
+        </button>
        </div>
 
        {/* Manual Ride Modal */}

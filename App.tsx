@@ -65,15 +65,15 @@ type SortKey = 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'd
 type SortDirection = 'asc' | 'desc';
 
 const DEFAULT_LAYOUT: LayoutConfig = [
-  // Row 1: dispatch (left), map (top right), driverChat (bottom right)
-  { id: 'dispatch', colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 2 },
-  { id: 'map', colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1 },
-  { id: 'driverChat', colStart: 2, colSpan: 1, rowStart: 2, rowSpan: 1 },
+  // Row 1: dispatch, driverChat, map (3 columns)
+  { id: 'dispatch', colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 1 },
+  { id: 'driverChat', colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1 },
+  { id: 'map', colStart: 3, colSpan: 1, rowStart: 1, rowSpan: 1 },
   // Row 2: rideLog (left 2/3), vehicles (right 1/3)
-  { id: 'rideLog', colStart: 1, colSpan: 2, rowStart: 3, rowSpan: 1 },
-  { id: 'vehicles', colStart: 3, colSpan: 1, rowStart: 3, rowSpan: 1 },
+  { id: 'rideLog', colStart: 1, colSpan: 2, rowStart: 2, rowSpan: 1 },
+  { id: 'vehicles', colStart: 3, colSpan: 1, rowStart: 2, rowSpan: 1 },
   // Row 3: socketRides (full width)
-  { id: 'socketRides', colStart: 1, colSpan: 3, rowStart: 4, rowSpan: 1 },
+  { id: 'socketRides', colStart: 1, colSpan: 3, rowStart: 3, rowSpan: 1 },
 ];
 
 const DEFAULT_WIDGET_VISIBILITY: Record<WidgetId, boolean> = {
@@ -1913,21 +1913,9 @@ const AppContent: React.FC = () => {
 
 
 
-              {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-3 gap-6">
-                {(() => {
-                  const mapColStart = widgetVisibility.dispatch ? 2 : 1;
-                  const mapColSpan = widgetVisibility.dispatch ? 2 : 3;
-                  const smsColStart = widgetVisibility.dispatch ? 2 : 1;
-                  const smsColSpan = widgetVisibility.dispatch ? 2 : 3;
-                  const smsRowStart = widgetVisibility.map ? 2 : 1;
-                  const rideLogColSpan = widgetVisibility.vehicles ? 2 : 3;
-                  const vehiclesColStart = widgetVisibility.rideLog ? 3 : 1;
-                  const vehiclesColSpan = widgetVisibility.rideLog ? 1 : 3;
-
-                  return (
-                    <>
-                      {/* Dispatch Widget - Column 1, Rows 1-2 */}
+               {/* Main Dashboard Grid */}
+               <div className="grid grid-cols-3 gap-6">
+                 {/* Dispatch Widget - Column 1, Row 1 */}
                       {widgetVisibility.dispatch && (
                         <div className="col-start-1 row-start-1 row-span-2">
                            <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
@@ -2032,14 +2020,11 @@ const AppContent: React.FC = () => {
                              </div>
                            </div>
                          </div>
-                      )}
-                    </>
-                  );
-                })()}
+                       )}
 
-                {/* Dispatch Widget - Column 1, Rows 1-2 */}
+                 {/* Dispatch Widget - Column 1, Row 1 */}
                 {widgetVisibility.dispatch && (
-                  <div className="col-start-1 row-start-1 row-span-2">
+                  <div className="col-start-1 row-start-1">
                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
                       <div className="p-4">
                         {widgetMap.dispatch}
@@ -2048,9 +2033,9 @@ const AppContent: React.FC = () => {
                   </div>
                 )}
 
-                {/* Map Widget - Columns 2-3, Row 1 */}
+                {/* Map Widget - Column 3, Row 1 */}
                 {widgetVisibility.map && (
-                  <div className="col-start-2 row-start-1 col-span-2">
+                  <div className="col-start-3 row-start-1">
                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
                        <div className="p-3 border-b border-slate-700">
                          <h3 className="text-sm font-semibold text-white flex items-center">
@@ -2071,10 +2056,10 @@ const AppContent: React.FC = () => {
                    </div>
                 )}
 
-                 {/* Driver Chat - Columns 2-3, Row 2 */}
+                 {/* Driver Chat - Column 2, Row 1 */}
                  {widgetVisibility.driverChat && (
-                   <div className="col-start-2 row-start-2 col-span-2">
-                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
+                   <div className="col-start-2 row-start-1">
+                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
                         <div className="p-4 h-full">
                          {widgetMap.driverChat}
                        </div>
@@ -2082,9 +2067,9 @@ const AppContent: React.FC = () => {
                    </div>
                  )}
 
-                {/* Ride History - Column 1-2, Row 3 */}
+                {/* Ride History - Column 1-2, Row 2 */}
                 {widgetVisibility.rideLog && (
-                  <div className="col-start-1 row-start-3 col-span-2">
+                  <div className="col-start-1 row-start-2 col-span-2">
                   <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
                     <div className="p-3 border-b border-slate-700">
                       <div className="flex justify-between items-center">
@@ -2123,9 +2108,9 @@ const AppContent: React.FC = () => {
                   </div>
                 )}
 
-                {/* Vehicles Status - Column 3, Row 3 */}
+                {/* Vehicles Status - Column 3, Row 2 */}
                 {widgetVisibility.vehicles && (
-                  <div className="col-start-3 row-start-3">
+                  <div className="col-start-3 row-start-2">
                   <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
                     <div className="p-3 border-b border-slate-700">
                       <h3 className="text-sm font-semibold text-white flex items-center">
@@ -2144,7 +2129,18 @@ const AppContent: React.FC = () => {
                   </div>
                 )}
 
-             </div>
+                {/* Socket Rides - Full width, Row 3 */}
+                {widgetVisibility.socketRides && (
+                  <div className="col-start-1 row-start-3 col-span-3">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
+                       <div className="p-4">
+                         {widgetMap.socketRides}
+                       </div>
+                     </div>
+                   </div>
+                )}
+
+              </div>
           </div>
         </main>
       
