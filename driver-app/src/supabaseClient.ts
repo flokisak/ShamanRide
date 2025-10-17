@@ -125,7 +125,9 @@ const isSchemaError = (err: any) => {
     code === 'PGRST205' ||
     /Could not find/i.test(msg) ||
     /schema cache/i.test(msg) ||
-    /Could not find the table/i.test(msg)
+    /Could not find the table/i.test(msg) ||
+    /NetworkError/i.test(msg) ||
+    /fetch resource/i.test(msg)
   );
 };
 
@@ -136,7 +138,9 @@ async function runWithFallback<T>(
 ) {
   if (!SUPABASE_ENABLED || !supabaseHealthy) return fallbackCall();
   try {
-    return await remoteCall();
+    const result = await remoteCall();
+    supabaseHealthy = true; // Reset to healthy on success
+    return result;
   } catch (err) {
     if (isSchemaError(err)) {
       console.warn(`${label} failed due to missing schema/table; switching to local fallback`, err);
@@ -247,13 +251,13 @@ const supabaseService: any = SUPABASE_ENABLED ? {
         const { error } = await supabase.from('driver_messages').insert(message);
         if (error) throw error;
       },
-      async () => {
-        const existing = readTable('driver-messages');
-        existing.unshift(message);
-        writeTable('driver-messages', existing);
-      },
+      async () => {},
       'Supabase addDriverMessage'
     );
+    // Always save to local
+    const existing = readTable('driver-messages');
+    existing.unshift(message);
+    writeTable('driver-messages', existing);
   },
 
   // Mapping helpers

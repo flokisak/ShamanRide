@@ -186,109 +186,103 @@ const AppContent: React.FC = () => {
     return () => clearInterval(interval);
   }, [reloadSmsMessages]);
 
-    // Subscribe to real-time ride updates from drivers
-    useEffect(() => {
-      if (!SUPABASE_ENABLED) return;
+  // Subscribe to real-time ride updates from drivers with improved error handling
+     useEffect(() => {
+       if (!SUPABASE_ENABLED) return;
 
-      console.log('Setting up dispatcher ride updates subscription');
-      const rideChannel = supabase
-        .channel('dispatcher_ride_updates')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-          console.log('New ride inserted:', payload);
-          const newRide = payload.new;
-          const statusLower = newRide.status.toLowerCase();
+       console.log('Setting up dispatcher ride updates subscription');
+       const rideChannel = supabase
+         .channel('dispatcher_ride_updates')
+         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
+           console.log('New ride inserted:', payload);
+           const newRide = payload.new;
+           const statusLower = newRide.status.toLowerCase();
 
-          // Map from DB format to app format
-          const mappedRide = {
-            id: newRide.id,
-            timestamp: newRide.timestamp,
-            vehicleName: newRide.vehicle_name ?? null,
-            vehicleLicensePlate: newRide.vehicle_license_plate ?? null,
-            driverName: newRide.driver_name ?? null,
-            vehicleType: newRide.vehicle_type ?? null,
-            customerName: newRide.customer_name,
-            rideType: (newRide.ride_type ?? 'business').toUpperCase(),
-            customerPhone: newRide.customer_phone,
-            stops: newRide.stops,
-            passengers: newRide.passengers,
-            pickupTime: newRide.pickup_time,
-             status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                     statusLower === 'completed' ? RideStatus.Completed :
-                     statusLower === 'cancelled' ? RideStatus.Cancelled :
-                     RideStatus.Pending,
-            vehicleId: newRide.vehicle_id ?? null,
-            notes: newRide.notes ?? null,
-            estimatedPrice: newRide.estimated_price ?? null,
-            estimatedPickupTimestamp: newRide.estimated_pickup_timestamp,
-            estimatedCompletionTimestamp: newRide.estimated_completion_timestamp,
-            fuelCost: newRide.fuel_cost ?? null,
-            distance: newRide.distance ?? null,
-            acceptedAt: newRide.accepted_at ?? null,
-            startedAt: newRide.started_at ?? null,
-            completedAt: newRide.completed_at ?? null,
-          };
+           // Map from DB format to app format
+           const mappedRide = {
+             id: newRide.id,
+             timestamp: newRide.timestamp,
+             vehicleName: newRide.vehicle_name ?? null,
+             vehicleLicensePlate: newRide.vehicle_license_plate ?? null,
+             driverName: newRide.driver_name ?? null,
+             vehicleType: newRide.vehicle_type ?? null,
+             customerName: newRide.customer_name,
+             rideType: (newRide.ride_type ?? 'business').toUpperCase(),
+             customerPhone: newRide.customer_phone,
+             stops: newRide.stops,
+             passengers: newRide.passengers,
+             pickupTime: newRide.pickup_time,
+              status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                      statusLower === 'completed' ? RideStatus.Completed :
+                      statusLower === 'cancelled' ? RideStatus.Cancelled :
+                      RideStatus.Pending,
+             vehicleId: newRide.vehicle_id ?? null,
+             notes: newRide.notes ?? null,
+             estimatedPrice: newRide.estimated_price ?? null,
+             estimatedPickupTimestamp: newRide.estimated_pickup_timestamp,
+             estimatedCompletionTimestamp: newRide.estimated_completion_timestamp,
+             fuelCost: newRide.fuel_cost ?? null,
+             distance: newRide.distance ?? null,
+             acceptedAt: newRide.accepted_at ?? null,
+             startedAt: newRide.started_at ?? null,
+             completedAt: newRide.completed_at ?? null,
+           };
 
-          // Add new ride to local ride log
-          setRideLog(prev => [mappedRide, ...prev]);
-        })
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-          console.log('Ride updated by driver:', payload);
-          const updatedRide = payload.new;
+           // Add new ride to local ride log
+           setRideLog(prev => [mappedRide, ...prev]);
+         })
+         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+           console.log('Ride updated by driver:', payload);
+           const updatedRide = payload.new;
 
-          // Update local ride log
-          const statusLower = updatedRide.status.toLowerCase();
-          setRideLog(prev => prev.map(ride =>
-            ride.id === updatedRide.id
-              ? {
-                  ...ride,
-                  status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                          statusLower === 'completed' ? RideStatus.Completed :
-                          statusLower === 'cancelled' ? RideStatus.Cancelled :
-                          ride.status,
-                  completedAt: updatedRide.completed_at || ride.completedAt
-                }
-              : ride
-          ));
+           // Update local ride log
+           const statusLower = updatedRide.status.toLowerCase();
+           setRideLog(prev => prev.map(ride =>
+             ride.id === updatedRide.id
+               ? {
+                   ...ride,
+                   status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                           statusLower === 'completed' ? RideStatus.Completed :
+                           statusLower === 'cancelled' ? RideStatus.Cancelled :
+                           ride.status,
+                   completedAt: updatedRide.completed_at || ride.completedAt
+                 }
+               : ride
+           ));
 
-          // Send status change message to driver if this is a status change
-          if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
-            // Find the ride in our local state to get full details
-            const localRide = rideLog.find(r => r.id === updatedRide.id);
-            if (localRide) {
-              const oldStatusLower = payload.old.status.toLowerCase();
-              const oldStatus = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
-                                oldStatusLower === 'completed' ? RideStatus.Completed :
-                                oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
-                                RideStatus.Pending;
-              const newStatus = statusLower === 'in_progress' ? RideStatus.InProgress :
-                                statusLower === 'completed' ? RideStatus.Completed :
-                                statusLower === 'cancelled' ? RideStatus.Cancelled :
-                                localRide.status;
-              const updatedRideForMessage = { ...localRide, status: newStatus };
-              sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatus);
-            }
-          }
-        })
-        .subscribe();
+           // Send status change message to driver if this is a status change
+           if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
+             // Find the ride in our local state to get full details
+             const localRide = rideLog.find(r => r.id === updatedRide.id);
+             if (localRide) {
+               const oldStatusLower = payload.old.status.toLowerCase();
+               const oldStatus = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
+                                 oldStatusLower === 'completed' ? RideStatus.Completed :
+                                 oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
+                                 RideStatus.Pending;
+               const newStatus = statusLower === 'in_progress' ? RideStatus.InProgress :
+                                 statusLower === 'completed' ? RideStatus.Completed :
+                                 statusLower === 'cancelled' ? RideStatus.Cancelled :
+                                 localRide.status;
+               const updatedRideForMessage = { ...localRide, status: newStatus };
+               sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatus);
+             }
+           }
+         })
+         .subscribe((status) => {
+           console.log('Dispatcher ride updates channel status:', status);
+           if (status === 'SUBSCRIBED') {
+             console.log('Successfully subscribed to dispatcher ride updates');
+           } else if (status === 'CHANNEL_ERROR') {
+             console.error('Failed to subscribe to dispatcher ride updates, falling back to polling');
+           }
+         });
 
-      // Subscribe to ride update notifications from driver app
-      const updateChannel = supabase
-        .channel('ride_updates')
-        .on('broadcast', { event: 'ride_updated' }, (payload) => {
-          console.log('Received ride update notification from driver:', payload);
-          // Reload ride logs to get the latest status
-          supabaseService.getRideLogs().then(rl => {
-            setRideLog(Array.isArray(rl) ? rl : []);
-          }).catch(err => console.error('Error reloading ride logs:', err));
-        })
-        .subscribe();
-
-      return () => {
-        console.log('Cleaning up dispatcher ride updates subscription');
-        supabase.removeChannel(rideChannel);
-        supabase.removeChannel(updateChannel);
-      };
-    }, []); // Remove dependencies to prevent re-subscription on every state change
+   return () => {
+     console.log('Cleaning up dispatcher ride updates subscription');
+     supabase.removeChannel(rideChannel);
+   };
+     }, []); // Remove dependencies to prevent re-subscription on every state change
 
   // Layout and widget visibility remain local-only. Load persisted values but merge with defaults
   const [layout, setLayout] = useState<LayoutConfig>(() => {
@@ -329,7 +323,7 @@ const AppContent: React.FC = () => {
   
   const [routeToPreview, setRouteToPreview] = useState<string[] | null>(null);
   const [showCompletedRides, setShowCompletedRides] = useState(true); // Show completed rides by default for debugging
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('today');
   const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
@@ -381,10 +375,9 @@ const AppContent: React.FC = () => {
     const loadData = async () => {
       try {
         console.log('📥 Loading data via supabaseService (cloud or local fallback)');
-        const [ppl, veh, rl, notif, tf, fp, ci, ms, us, loc] = await Promise.all([
+        const results = await Promise.all([
           supabaseService.getPeople().catch(() => []),
           supabaseService.getVehicles().catch(() => []),
-          supabaseService.getRideLogs().catch(() => []),
           supabaseService.getNotifications().catch(() => []),
           supabaseService.getTariff().catch(() => DEFAULT_TARIFF),
           supabaseService.getFuelPrices().catch(() => DEFAULT_FUEL_PRICES),
@@ -393,6 +386,7 @@ const AppContent: React.FC = () => {
           supabaseService.getUserSettings((user as any)?.id || 'local').catch(() => ({ preferred_nav: 'google' })),
           supabaseService.getLocations().catch(() => []),
         ]);
+        const [ppl, veh, notif, tf, fp, ci, ms, us, loc] = results;
 
         const normalizeRole = (role: string | null | undefined): PersonRole => {
           if (!role || typeof role !== 'string') return PersonRole.Driver;
@@ -401,7 +395,6 @@ const AppContent: React.FC = () => {
         const normalizedPeople = (Array.isArray(ppl) && ppl.length > 0 ? ppl : initialPeople).map((p: Person) => ({ ...p, role: normalizeRole((p as any).role) }));
         setPeople(normalizedPeople);
         setVehicles(Array.isArray(veh) && veh.length > 0 ? veh : initialVehicles);
-        setRideLog(Array.isArray(rl) ? rl : []);
         setNotifications(Array.isArray(notif) ? notif : []);
         setTariff(tf || DEFAULT_TARIFF);
         setFuelPrices(fp || DEFAULT_FUEL_PRICES);
@@ -453,7 +446,57 @@ const AppContent: React.FC = () => {
       }
     };
     loadData();
+  }, []);
 
+  // Load ride logs based on dateFilter
+  useEffect(() => {
+    const loadRideLogs = async () => {
+      try {
+        let options: { dateFrom?: string; dateTo?: string } | undefined;
+        if (dateFilter === 'all') {
+          options = undefined; // fetch all
+        } else if (dateFilter === 'today') {
+          const today = new Date();
+          options = {
+            dateFrom: new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString(),
+            dateTo: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString()
+          };
+        } else if (dateFilter === 'week') {
+          const now = new Date();
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay());
+          weekStart.setHours(0, 0, 0, 0);
+          options = {
+            dateFrom: weekStart.toISOString(),
+            dateTo: new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          };
+        } else if (dateFilter === 'month') {
+          const now = new Date();
+          options = {
+            dateFrom: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+            dateTo: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()
+          };
+        } else if (dateFilter.startsWith('custom-')) {
+          const dateStr = dateFilter.split('-')[1];
+          const customDate = new Date(dateStr);
+          options = {
+            dateFrom: new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate()).toISOString(),
+            dateTo: new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate() + 1).toISOString()
+          };
+        }
+        const rl = await supabaseService.getRideLogs(options);
+        setRideLog(Array.isArray(rl) ? rl : []);
+      } catch (err) {
+        console.warn('Could not load ride logs', err);
+        setRideLog([]);
+      }
+    };
+
+    loadRideLogs();
+  }, [dateFilter]);
+
+  // Auto-update vehicle statuses
+  useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
       setVehicles(prevVehicles => {
@@ -472,56 +515,70 @@ const AppContent: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Real-time subscription for vehicle status changes (from driver app)
-  useEffect(() => {
-    if (!SUPABASE_ENABLED) return;
+  // Real-time subscription for vehicle status changes (from driver app) with improved error handling
+   useEffect(() => {
+     if (!SUPABASE_ENABLED) return;
 
-    const vehicleChannel = supabase
-      .channel('vehicle_status_changes')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'vehicles'
-      }, (payload) => {
-        const updatedVehicle = payload.new;
-        console.log('Vehicle status changed:', updatedVehicle);
+     const vehicleChannel = supabase
+       .channel('vehicle_status_changes')
+       .on('postgres_changes', {
+         event: 'UPDATE',
+         schema: 'public',
+         table: 'vehicles'
+       }, (payload) => {
+         const updatedVehicle = payload.new;
+         console.log('Vehicle status changed:', updatedVehicle);
 
-        setVehicles(prevVehicles =>
-          prevVehicles.map(v =>
-            v.id === updatedVehicle.id
-              ? {
-                  ...v,
-                  status: updatedVehicle.status,
-                  location: updatedVehicle.location || v.location,
-                  updated_at: updatedVehicle.updated_at
-                }
-              : v
-          )
-        );
-      })
-      .subscribe();
+         setVehicles(prevVehicles =>
+           prevVehicles.map(v =>
+             v.id === updatedVehicle.id
+               ? {
+                   ...v,
+                   status: updatedVehicle.status,
+                   location: updatedVehicle.location || v.location,
+                   updated_at: updatedVehicle.updated_at
+                 }
+               : v
+           )
+         );
+       })
+       .subscribe((status) => {
+         console.log('Vehicle status changes channel status:', status);
+         if (status === 'SUBSCRIBED') {
+           console.log('Successfully subscribed to vehicle status changes');
+         } else if (status === 'CHANNEL_ERROR') {
+           console.error('Failed to subscribe to vehicle status changes');
+         }
+       });
 
-    // Real-time subscription for location updates
-    const locationsChannel = supabase
-      .channel('locations_changes')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'locations'
-      }, (payload) => {
-        const newLocation = payload.new;
-        setLocations(prev => ({
-          ...prev,
-          [newLocation.vehicle_id]: newLocation
-        }));
-      })
-      .subscribe();
+     // Real-time subscription for location updates
+     const locationsChannel = supabase
+       .channel('locations_changes')
+       .on('postgres_changes', {
+         event: 'INSERT',
+         schema: 'public',
+         table: 'locations'
+       }, (payload) => {
+         const newLocation = payload.new;
+         setLocations(prev => ({
+           ...prev,
+           [newLocation.vehicle_id]: newLocation
+         }));
+       })
+       .subscribe((status) => {
+         console.log('Locations changes channel status:', status);
+         if (status === 'SUBSCRIBED') {
+           console.log('Successfully subscribed to location updates');
+         } else if (status === 'CHANNEL_ERROR') {
+           console.error('Failed to subscribe to location updates');
+         }
+       });
 
-    return () => {
-      supabase.removeChannel(vehicleChannel);
-      supabase.removeChannel(locationsChannel);
-    };
-  }, []);
+     return () => {
+       supabase.removeChannel(vehicleChannel);
+       supabase.removeChannel(locationsChannel);
+     };
+   }, []);
 
       // --- Sync state changes to Supabase when enabled, otherwise keep localStorage ---
 

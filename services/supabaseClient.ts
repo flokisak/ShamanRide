@@ -125,7 +125,9 @@ const isSchemaError = (err: any) => {
     code === 'PGRST205' ||
     /Could not find/i.test(msg) ||
     /schema cache/i.test(msg) ||
-    /Could not find the table/i.test(msg)
+    /Could not find the table/i.test(msg) ||
+    /NetworkError/i.test(msg) ||
+    /fetch resource/i.test(msg)
   );
 };
 
@@ -136,7 +138,9 @@ async function runWithFallback<T>(
 ) {
   if (!SUPABASE_ENABLED || !supabaseHealthy) return fallbackCall();
   try {
-    return await remoteCall();
+    const result = await remoteCall();
+    supabaseHealthy = true; // Reset to healthy on success
+    return result;
   } catch (err) {
     if (isSchemaError(err)) {
       console.warn(`${label} failed due to missing schema/table; switching to local fallback`, err);
@@ -339,11 +343,20 @@ export const supabaseService = SUPABASE_ENABLED
       },
 
        // Ride Logs
-       async getRideLogs() {
-         const { data, error } = await supabase.from('ride_logs').select('*');
-         if (error) throw error;
-         return (data || []).map((d: any) => this._fromDbRideLog(d));
-       },
+        async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
+          let query = supabase.from('ride_logs').select('*');
+          if (options) {
+            if (options.dateFrom) {
+              query = query.gte('timestamp', options.dateFrom);
+            }
+            if (options.dateTo) {
+              query = query.lte('timestamp', options.dateTo);
+            }
+          } // if no options, fetch all
+          const { data, error } = await query;
+          if (error) throw error;
+          return (data || []).map((d: any) => this._fromDbRideLog(d));
+        },
           async addRideLog(rideLog: any) {
             if (SUPABASE_ENABLED) {
               const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });
@@ -357,18 +370,18 @@ export const supabaseService = SUPABASE_ENABLED
             }
             upsertLocal('ride-log', rideLog);
           },
-        async updateRideLogs(rideLogs: any[]) {
-          if (SUPABASE_ENABLED) {
-            try {
-              const dbRows = rideLogs.map(r => this._toDbRideLog(r));
-              const { error } = await supabase.from('ride_logs').upsert(dbRows, { onConflict: 'id' });
-              if (error) throw error;
-            } catch (err) {
-              console.warn('Failed to update ride logs in supabase, updating local:', err);
-            }
-          }
-          writeTable('ride-log', rideLogs);
-        },
+         async updateRideLogs(rideLogs: any[]) {
+           await runWithFallback(
+             async () => {
+               const dbRows = rideLogs.map(r => this._toDbRideLog(r));
+               const { error } = await supabase.from('ride_logs').upsert(dbRows, { onConflict: 'id' });
+               if (error) throw error;
+             },
+             async () => {}, // no-op
+             'updateRideLogs'
+           );
+           writeTable('ride-log', rideLogs);
+         },
         async deleteRideLog(rideLogId: string) {
           if (SUPABASE_ENABLED) {
             try {
@@ -607,10 +620,20 @@ export const supabaseService = SUPABASE_ENABLED
         deleteLocal('people', personId);
       },
 
-      // Ride Logs
-      async getRideLogs() {
-        return readTable('ride-log');
-      },
+       // Ride Logs
+       async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
+         const all = readTable('ride-log');
+         let filtered = all;
+         if (options) {
+           if (options.dateFrom) {
+             filtered = filtered.filter((r: any) => new Date(r.timestamp) >= new Date(options.dateFrom));
+           }
+           if (options.dateTo) {
+             filtered = filtered.filter((r: any) => new Date(r.timestamp) <= new Date(options.dateTo));
+           }
+         } // if no options, return all
+         return filtered;
+       },
           async addRideLog(rideLog: any) {
             const dbData = this._toDbRideLog(rideLog);
             console.log('addRideLog: sending to database:', dbData);

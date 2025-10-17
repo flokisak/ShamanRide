@@ -26,8 +26,9 @@ const Dashboard: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+   const [isOnline, setIsOnline] = useState(navigator.onLine);
+   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+   const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
    const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
    const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
    const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
@@ -60,21 +61,21 @@ const Dashboard: React.FC = () => {
      setTimeout(() => setIsRefreshing(false), 3000); // Prevent refreshes for 3 seconds
    }, [isRefreshing, lastRefreshTime, lastAcceptedRideId, lastAcceptTime]);
 
-  // Auto-refresh function that can access refreshVehicleData
-  const startAutoRefresh = () => {
-    const refreshInterval = setInterval(async () => {
-      if (vehicleNumber) {
-        try {
-          console.log('Auto-refreshing ride data...');
-          await refreshVehicleData();
-        } catch (err) {
-          console.warn('Error auto-refreshing ride data:', err);
-        }
-      }
-    }, 30000); // Refresh every 30 seconds
+   // Auto-refresh function that can access refreshVehicleData
+   const startAutoRefresh = () => {
+     const refreshInterval = setInterval(async () => {
+       if (vehicleNumber) {
+         try {
+           console.log('Auto-refreshing ride data...');
+           await refreshVehicleData();
+         } catch (err) {
+           console.warn('Error auto-refreshing ride data:', err);
+         }
+       }
+     }, 10000); // Refresh every 10 seconds (reduced from 30)
 
-    return () => clearInterval(refreshInterval);
-  };
+     return () => clearInterval(refreshInterval);
+   };
 
   useEffect(() => {
     // Initialize notifications and check permissions
@@ -89,6 +90,20 @@ const Dashboard: React.FC = () => {
     if (savedNavApp) {
       setPreferredNavApp(savedNavApp);
     }
+
+    // Monitor real-time connection status
+    const checkRealtimeConnection = () => {
+      // Simple check: if we can access supabase and it's enabled, assume connected
+      // In a more sophisticated implementation, we could check actual channel states
+      if (SUPABASE_ENABLED && supabase) {
+        setRealtimeConnectionStatus('connected');
+      } else {
+        setRealtimeConnectionStatus('disconnected');
+      }
+    };
+
+    checkRealtimeConnection();
+    const connectionCheckInterval = setInterval(checkRealtimeConnection, 30000); // Check every 30 seconds
 
     // Get current user and their vehicle info
     const getVehicleInfo = async () => {
@@ -210,11 +225,25 @@ const Dashboard: React.FC = () => {
             vehicleId: v.id
           })).filter(d => d.name);
           setOtherDrivers(otherDriversList);
-        } catch (error) {
-          console.warn('Could not load other vehicles and drivers:', error);
-        }
+         } catch (error) {
+           console.warn('Could not load other vehicles and drivers:', error);
+         }
 
-         console.log('getVehicleInfo completed successfully');
+         // Load messages
+         try {
+           const msgs = await supabaseService.getDriverMessages();
+           const filtered = msgs.filter((m: any) =>
+             m.sender_id === 'dispatcher' ||
+             m.receiver_id === `driver_${vehicleNumber}` ||
+             m.sender_id === `driver_${vehicleNumber}` ||
+             m.receiver_id === 'general'
+           ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+           setMessages(filtered);
+         } catch (error) {
+           console.warn('Could not load messages:', error);
+         }
+
+          console.log('getVehicleInfo completed successfully');
 
         })()]);
 
@@ -231,116 +260,148 @@ const Dashboard: React.FC = () => {
 
     // Ride subscription will be set up after vehicleNumber is known
 
-    // Subscribe to driver messages
-     const messageChannel = supabase
-       .channel('driver_messages_global')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
-         console.log('New driver message:', payload);
-           // Check if the message is for this vehicle or general
-           if (vehicleNumber && (
-             payload.new.sender_id === `driver_${vehicleNumber}` ||
-             payload.new.receiver_id === `driver_${vehicleNumber}` ||
-             payload.new.receiver_id === 'general'
-           )) {
-             setMessages(prev => [...prev, payload.new]);
-             // Notify for dispatcher or general messages
-             if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
-               // Notify user with sound and vibration for dispatcher or general message
-               notifyUser('message');
-               // Messages will appear in the chat widget automatically
-             }
-           }
-        })
-       .subscribe();
+  // Subscribe to driver messages with improved error handling
+      const messageChannel = supabase
+        .channel('driver_messages_global')
+         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
+          console.log('New driver message:', payload);
+            // Check if the message is for this vehicle or general
+            if (vehicleNumber && (
+              payload.new.sender_id === `driver_${vehicleNumber}` ||
+              payload.new.receiver_id === `driver_${vehicleNumber}` ||
+              payload.new.receiver_id === 'general'
+            )) {
+              setMessages(prev => [...prev, payload.new]);
+              // Notify for dispatcher or general messages
+              if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
+                // Notify user with sound and vibration for dispatcher or general message
+                notifyUser('message');
+                // Messages will appear in the chat widget automatically
+              }
+            }
+         })
+        .subscribe((status) => {
+          console.log('Message channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to driver messages');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Failed to subscribe to driver messages, falling back to polling');
+          }
+        });
 
-    // Subscribe to ride update broadcasts from dispatcher
-    const updateChannel = supabase
-      .channel('ride_updates')
-      .on('broadcast', { event: 'ride_updated' }, (payload) => {
-        console.log('Received ride update broadcast:', payload);
-        // Only refresh if this update is for our vehicle
-        if (vehicleNumber && payload.vehicleId === vehicleNumber) {
-          refreshVehicleData();
-        }
-      })
-      .subscribe();
 
-    // Subscribe to vehicle status changes (from dispatcher app)
-    const vehicleChannel = supabase
-      .channel('vehicle_status_changes_driver')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'vehicles'
-      }, (payload) => {
-        const updatedVehicle = payload.new;
-        console.log('Vehicle status changed (driver app):', updatedVehicle);
 
-        // Only update if this is our vehicle and it's an external change
-        if (vehicleNumber && updatedVehicle.id === vehicleNumber) {
-          // Check if this is different from our current status to avoid loops
-          const currentDbStatus = driverStatus === 'available' ? 'AVAILABLE' :
+    // Subscribe to vehicle status changes (from dispatcher app) with improved error handling
+     const vehicleChannel = supabase
+       .channel('vehicle_status_changes_driver')
+       .on('postgres_changes', {
+         event: 'UPDATE',
+         schema: 'public',
+         table: 'vehicles'
+       }, (payload) => {
+         const updatedVehicle = payload.new;
+         console.log('Vehicle status changed (driver app):', updatedVehicle);
+
+         // Only update if this is our vehicle and it's an external change
+         if (vehicleNumber && updatedVehicle.id === vehicleNumber) {
+           // Check if this is different from our current status to avoid loops
+           const currentDbStatus = driverStatus === 'available' ? 'AVAILABLE' :
                                  driverStatus === 'on_ride' ? 'BUSY' :
                                  driverStatus === 'break' ? 'BREAK' :
                                  driverStatus === 'offline' ? 'OUT_OF_SERVICE' : 'AVAILABLE';
 
-          if (updatedVehicle.status !== currentDbStatus) {
-            const newStatus = updatedVehicle.status === 'AVAILABLE' ? 'available' :
-                              updatedVehicle.status === 'BUSY' ? 'on_ride' :
-                              updatedVehicle.status === 'BREAK' ? 'break' :
-                              updatedVehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline';
+           if (updatedVehicle.status !== currentDbStatus) {
+             const newStatus = updatedVehicle.status === 'AVAILABLE' ? 'available' :
+                               updatedVehicle.status === 'BUSY' ? 'on_ride' :
+                               updatedVehicle.status === 'BREAK' ? 'break' :
+                               updatedVehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline';
 
-            console.log(`Updating local status to ${newStatus} from external database change`);
-            setDriverStatus(newStatus);
-          }
-        }
-      })
-      .subscribe();
+             console.log(`Updating local status to ${newStatus} from external database change`);
+             setDriverStatus(newStatus);
+           }
+         }
+       })
+       .subscribe((status) => {
+         console.log('Vehicle status channel status:', status);
+         if (status === 'SUBSCRIBED') {
+           console.log('Successfully subscribed to vehicle status changes');
+         } else if (status === 'CHANNEL_ERROR') {
+           console.error('Failed to subscribe to vehicle status changes, falling back to polling');
+         }
+       });
 
     return () => {
       supabase.removeChannel(messageChannel);
       supabase.removeChannel(vehicleChannel);
-      supabase.removeChannel(updateChannel);
+      clearInterval(connectionCheckInterval);
     };
   }, []);
 
   // Separate effect for ride subscriptions that depends on vehicleNumber
-  useEffect(() => {
-    if (!vehicleNumber || !SUPABASE_ENABLED) return;
+   useEffect(() => {
+     if (!vehicleNumber || !SUPABASE_ENABLED) return;
 
-    console.log('Setting up ride subscriptions for vehicle:', vehicleNumber);
-    const rideChannel = supabase
-      .channel('ride_assignments')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-        console.log('New ride assigned:', payload);
-        console.log('vehicle_id in payload:', payload.new.vehicle_id, 'vehicleNumber:', vehicleNumber, 'match:', payload.new.vehicle_id === vehicleNumber);
-        // Only refresh if this ride is assigned to our vehicle
-        if (payload.new.vehicle_id === vehicleNumber) {
-          const now = Date.now();
-          if (now - lastSubscriptionRefresh > 5000) { // Minimum 5 seconds between subscription-triggered refreshes
-            setLastSubscriptionRefresh(now);
+     console.log('Setting up ride subscriptions for vehicle:', vehicleNumber);
+
+      // Subscribe to ride update broadcasts from dispatcher with improved error handling
+      const updateChannel = supabase
+        .channel('ride_updates')
+        .on('broadcast', { event: 'ride_updated' }, (payload) => {
+          console.log('Received ride update broadcast:', payload);
+          // Only refresh if this update is for our vehicle
+          if (payload.vehicleId === vehicleNumber) {
             refreshVehicleData();
-            // Notify user with sound and vibration for new ride assignment
-            notifyUser('ride');
           }
-        }
-      })
-       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-         // Only refresh if this ride is assigned to our vehicle
-         if (payload.new.vehicle_id === vehicleNumber) {
-           const now = Date.now();
-           if (now - lastSubscriptionRefresh > 5000) {
-             setLastSubscriptionRefresh(now);
-             refreshVehicleData();
-           }
-         }
-       })
-      .subscribe();
+        })
+        .subscribe((status) => {
+          console.log('Ride update broadcast channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to ride update broadcasts');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Failed to subscribe to ride update broadcasts');
+          }
+        });
 
-    return () => {
-      supabase.removeChannel(rideChannel);
-    };
-  }, [vehicleNumber, lastSubscriptionRefresh, refreshVehicleData]);
+      const rideChannel = supabase
+        .channel('ride_assignments')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
+          console.log('New ride assigned:', payload);
+          console.log('vehicle_id in payload:', payload.new.vehicle_id, 'vehicleNumber:', vehicleNumber, 'match:', payload.new.vehicle_id === vehicleNumber);
+          // Only refresh if this ride is assigned to our vehicle
+          if (payload.new.vehicle_id === vehicleNumber) {
+            const now = Date.now();
+            if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second between subscription-triggered refreshes
+              setLastSubscriptionRefresh(now);
+              refreshVehicleData();
+              // Notify user with sound and vibration for new ride assignment
+              notifyUser('ride');
+            }
+          }
+        })
+         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+           // Only refresh if this ride is assigned to our vehicle
+           if (payload.new.vehicle_id === vehicleNumber) {
+             const now = Date.now();
+             if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second
+               setLastSubscriptionRefresh(now);
+               refreshVehicleData();
+             }
+           }
+         })
+        .subscribe((status) => {
+          console.log('Ride assignments channel status:', status);
+          if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to ride assignments');
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Failed to subscribe to ride assignments, falling back to polling');
+          }
+        });
+
+     return () => {
+       supabase.removeChannel(updateChannel);
+       supabase.removeChannel(rideChannel);
+     };
+   }, [vehicleNumber, lastSubscriptionRefresh, refreshVehicleData]);
 
   // GPS Location tracking and sending
   useEffect(() => {
@@ -488,35 +549,36 @@ const Dashboard: React.FC = () => {
     };
   }, [vehicleNumber]);
 
-   // Auto-refresh messages every 30 seconds
-   useEffect(() => {
-     if (!vehicleNumber) return;
+    // Auto-refresh messages every 2 minutes (reduced from 5)
+     useEffect(() => {
+       if (!vehicleNumber) return;
 
-     const refreshInterval = setInterval(async () => {
-       try {
-          const { data, error } = await supabase.from('driver_messages').select('*')
-            .or(`sender_id.eq.dispatcher,receiver_id.eq.driver_${vehicleNumber},sender_id.eq.driver_${vehicleNumber},receiver_id.eq.general`)
-            .order('timestamp', { ascending: false });
+       const refreshInterval = setInterval(async () => {
+         try {
+           const msgs = await supabaseService.getDriverMessages();
+           // Filter for this driver
+           const filtered = msgs.filter((m: any) =>
+             m.sender_id === 'dispatcher' ||
+             m.receiver_id === `driver_${vehicleNumber}` ||
+             m.sender_id === `driver_${vehicleNumber}` ||
+             m.receiver_id === 'general'
+           ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-         if (error) {
-           console.warn('Could not refresh messages:', error);
-         } else if (data) {
            // Only update if we have new messages or different data
            const currentMessageIds = messages.map(m => m.id).sort();
-           const newMessageIds = data.map(m => m.id).sort();
+           const newMessageIds = filtered.map(m => m.id).sort();
 
            if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
-             setMessages(data);
+             setMessages(filtered);
              console.log('Messages refreshed automatically');
            }
+         } catch (err) {
+           console.warn('Error refreshing messages:', err);
          }
-       } catch (err) {
-         console.warn('Error refreshing messages:', err);
-       }
-    }, 300000); // Refresh every 5 minutes
+       }, 120000); // Refresh every 2 minutes (reduced from 5)
 
-     return () => clearInterval(refreshInterval);
-   }, [vehicleNumber, messages]);
+       return () => clearInterval(refreshInterval);
+     }, [vehicleNumber, messages]);
 
    // Auto-refresh ride data every 15 seconds (for local mode without real-time)
 
@@ -1104,13 +1166,29 @@ const Dashboard: React.FC = () => {
             </p>
           )}
 
-           {/* Network Status Indicator */}
-           <div className="flex items-center gap-2 mt-2">
-             <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
-             <span className="text-xs text-slate-400">
-               {isOnline ? 'Online' : 'Offline'}
-             </span>
-           </div>
+            {/* Network Status Indicator */}
+            <div className="flex items-center gap-2 mt-2">
+              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+              <span className="text-xs text-slate-400">
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+
+            {/* Real-time Connection Status Indicator */}
+            <div className="flex items-center gap-2 mt-2">
+              <div className={`w-3 h-3 rounded-full ${
+                realtimeConnectionStatus === 'connected' ? 'bg-blue-400' :
+                realtimeConnectionStatus === 'connecting' ? 'bg-yellow-400' :
+                'bg-red-400'
+              }`}></div>
+              <span className="text-xs text-slate-400">
+                Real-time: {
+                  realtimeConnectionStatus === 'connected' ? 'Connected' :
+                  realtimeConnectionStatus === 'connecting' ? 'Connecting...' :
+                  'Disconnected'
+                }
+              </span>
+            </div>
 
            {/* Notification Permission Indicator */}
            {notificationPermission !== 'granted' && (

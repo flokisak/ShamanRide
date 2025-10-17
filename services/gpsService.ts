@@ -2,7 +2,7 @@
  * Service for fetching real-time GPS positions from Supabase locations table.
  */
 
-import { supabase } from './supabaseClient';
+import { supabase, SUPABASE_ENABLED } from './supabaseClient';
 
 export interface GpsVehicle {
     id: string;
