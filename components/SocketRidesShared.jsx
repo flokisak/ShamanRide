@@ -300,7 +300,9 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
                            changeStatus(ride.id, newStatus, currentUser.id);
                          }
                        }}
-                       className={`w-full px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(ride.status)} border-0`}
+                       className={`w-full px-2 py-1 rounded text-xs font-medium text-white ${
+                         ride.status === 'completed' ? 'bg-green-600' : getStatusColor(ride.status)
+                       } border-0`}
                      >
                        <option value="pending">Pending</option>
                        <option value="assigned">Assigned</option>

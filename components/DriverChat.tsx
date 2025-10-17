@@ -772,42 +772,44 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                 </div>
               </div>
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-3 min-h-0">
-                {messages.length === 0 ? (
-                  <p className="text-sm text-slate-400 italic text-center">
-                    {selectedVehicleId === 'general'
-                      ? 'Žádné zprávy ve všeobecném chatu'
-                      : 'Žádné zprávy s tímto vozidlem'
-                    }
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {messages
-                      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                      .map((msg) => (
-                        <div
-                          key={msg.id}
-                          className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                              msg.sender_id === currentUserId
-                                ? 'bg-primary text-slate-900'
-                                : 'bg-slate-700 text-white'
-                            }`}
-                          >
-                            <div className="text-xs opacity-75 mb-1">
-                              {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
-                            </div>
-                            <div>{msg.message}</div>
-                          </div>
-                        </div>
-                      ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                )}
-              </div>
+               {/* Messages */}
+               <div className="flex-1 overflow-hidden flex flex-col min-h-0 max-h-96">
+                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                   {messages.length === 0 ? (
+                     <p className="text-sm text-slate-400 italic text-center py-4">
+                       {selectedVehicleId === 'general'
+                         ? 'Žádné zprávy ve všeobecném chatu'
+                         : 'Žádné zprávy s tímto vozidlem'
+                       }
+                     </p>
+                   ) : (
+                     <>
+                       {messages
+                         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                         .map((msg) => (
+                           <div
+                             key={msg.id}
+                             className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
+                           >
+                             <div
+                               className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                                 msg.sender_id === currentUserId
+                                   ? 'bg-primary text-slate-900'
+                                   : 'bg-slate-700 text-white'
+                               }`}
+                             >
+                               <div className="text-xs opacity-75 mb-1">
+                                 {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
+                               </div>
+                               <div className="break-words">{msg.message}</div>
+                             </div>
+                           </div>
+                         ))}
+                       <div ref={messagesEndRef} />
+                     </>
+                   )}
+                 </div>
+               </div>
 
               {/* Message input */}
               <div className="flex-shrink-0 p-3 border-t border-slate-600">
