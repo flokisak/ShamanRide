@@ -20,7 +20,7 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
     const initSocket = async () => {
       const token = await getToken();
 
-      const socketInstance = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
+      const socketInstance = io(import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
         auth: { token },
         transports: ['websocket', 'polling']
       });
