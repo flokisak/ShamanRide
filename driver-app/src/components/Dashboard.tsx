@@ -287,20 +287,20 @@ const Dashboard: React.FC = () => {
           console.warn('Could not load active rides:', error);
         }
 
-        // Get recent rides for this vehicle (exclude completed/cancelled to reduce data)
-         try {
-           const recentRides = await supabaseService.getRideLogsByVehicle(vehicleNum, undefined, 10);
-           // Filter out completed and cancelled rides to focus on active/recent ones
-           const activeHistory = recentRides.filter(ride =>
-             ride.status !== RideStatus.Completed && ride.status !== 'CANCELLED'
-           );
-           setRideHistory(activeHistory);
+         // Get recent rides for this vehicle (include completed rides for history and revenue)
+          try {
+            const recentRides = await supabaseService.getRideLogsByVehicle(vehicleNum, undefined, 20);
+            console.log('📊 Loaded rides for history:', recentRides.length, 'rides');
+            console.log('📊 Ride statuses:', recentRides.map(r => ({ id: r.id, status: r.status, price: r.estimatedPrice })));
+            // Include completed rides for history display and revenue calculation
+            setRideHistory(recentRides);
 
-          // Calculate shift cash from completed rides since shift start
-          if (shiftStartTime) {
-            const shiftCashAmount = calculateShiftCash(history, shiftStartTime);
-            setShiftCash(shiftCashAmount);
-          }
+           // Calculate shift cash from completed rides since shift start
+           if (shiftStartTime) {
+             const shiftCashAmount = calculateShiftCash(recentRides, shiftStartTime);
+             console.log('💰 Calculated shift cash:', shiftCashAmount, 'Kč from', recentRides.filter(r => r.status === RideStatus.Completed).length, 'completed rides');
+             setShiftCash(shiftCashAmount);
+           }
         } catch (error) {
           console.warn('Could not load ride history:', error);
           setRideHistory([]);
@@ -653,29 +653,35 @@ const Dashboard: React.FC = () => {
      };
    }, [driverStatus, currentRide, wakeLockActive]);
 
-   // Filter ride history based on selected time period
-  const filteredRideHistory = rideHistory.filter(ride => {
-    const rideDate = new Date(ride.timestamp);
-    const now = new Date();
+   // Filter ride history based on selected time period (only completed rides)
+   const filteredRideHistory = rideHistory.filter(ride => {
+     // Only show completed rides in history
+     if (ride.status !== RideStatus.Completed) return false;
 
-    switch (historyFilter) {
-      case '2days':
-        const twoDaysAgo = new Date(now);
-        twoDaysAgo.setDate(now.getDate() - 2);
-        return rideDate >= twoDaysAgo;
-      case 'week':
-        const oneWeekAgo = new Date(now);
-        oneWeekAgo.setDate(now.getDate() - 7);
-        return rideDate >= oneWeekAgo;
-      case 'month':
-        const oneMonthAgo = new Date(now);
-        oneMonthAgo.setMonth(now.getMonth() - 1);
-        return rideDate >= oneMonthAgo;
-      case 'all':
-      default:
-        return true;
-    }
-  });
+     const rideDate = new Date(ride.timestamp);
+     const now = new Date();
+
+     switch (historyFilter) {
+       case '2days':
+         const twoDaysAgo = new Date(now);
+         twoDaysAgo.setDate(now.getDate() - 2);
+         return rideDate >= twoDaysAgo;
+       case 'week':
+         const oneWeekAgo = new Date(now);
+         oneWeekAgo.setDate(now.getDate() - 7);
+         return rideDate >= oneWeekAgo;
+       case 'month':
+         const oneMonthAgo = new Date(now);
+         oneMonthAgo.setMonth(now.getMonth() - 1);
+         return rideDate >= oneMonthAgo;
+       case 'all':
+       default:
+         return true;
+     }
+   });
+
+   // Debug logging for filtered history
+   console.log('📋 Filtered ride history for display:', filteredRideHistory.length, 'rides with filter:', historyFilter);
 
   // Update shift cash when ride history changes
    useEffect(() => {

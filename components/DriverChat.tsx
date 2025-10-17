@@ -620,13 +620,10 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
               {socketConnected ? 'Online' : 'Offline'}
             </span>
           </div>
+          </div>
         </div>
-      </div>
-          Chat s vozidly
-        </h3>
-      </div>
 
-      {/* Simplified chat selection */}
+       {/* Simplified chat selection */}
       <div className="flex-1 overflow-y-auto">
         <div className="mb-4">
           <h4 className="text-sm font-medium text-white mb-2">Vyberte chat:</h4>
