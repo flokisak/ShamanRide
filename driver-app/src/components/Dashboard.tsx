@@ -253,13 +253,12 @@ const Dashboard: React.FC = () => {
 
          // Load messages
          try {
-           const msgs = await supabaseService.getDriverMessages();
-           const filtered = msgs.filter((m: any) =>
-             m.sender_id === 'dispatcher' ||
-             m.receiver_id === `driver_${vehicleNumber}` ||
-             m.sender_id === `driver_${vehicleNumber}` ||
-             m.receiver_id === 'general'
-           ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            const msgs = await supabaseService.getDriverMessages();
+            const filtered = msgs.filter((m: any) =>
+              m.receiver_id === `driver_${vehicleNumber}` ||
+              m.sender_id === `driver_${vehicleNumber}` ||
+              m.receiver_id === 'general'
+            ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
            setMessages(filtered);
          } catch (error) {
            console.warn('Could not load messages:', error);
@@ -577,14 +576,13 @@ const Dashboard: React.FC = () => {
 
        const refreshInterval = setInterval(async () => {
          try {
-           const msgs = await supabaseService.getDriverMessages();
-           // Filter for this driver
-           const filtered = msgs.filter((m: any) =>
-             m.sender_id === 'dispatcher' ||
-             m.receiver_id === `driver_${vehicleNumber}` ||
-             m.sender_id === `driver_${vehicleNumber}` ||
-             m.receiver_id === 'general'
-           ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            const msgs = await supabaseService.getDriverMessages();
+            // Filter for this driver
+            const filtered = msgs.filter((m: any) =>
+              m.receiver_id === `driver_${vehicleNumber}` ||
+              m.sender_id === `driver_${vehicleNumber}` ||
+              m.receiver_id === 'general'
+            ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
            // Only update if we have new messages or different data
            const currentMessageIds = messages.map(m => m.id).sort();
