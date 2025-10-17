@@ -824,31 +824,43 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !vehicleNumber) return;
-    const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' :
-                      selectedRecipient === 'general' ? 'general' :
-                      `driver_${selectedRecipient}`;
-    if (SUPABASE_ENABLED && supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('driver_messages')
-          .insert({
-            sender_id: `driver_${vehicleNumber}`,
-            receiver_id: receiverId,
-            message: newMessage,
-            read: false
-          })
-          .select()
-          .single();
+   const sendMessage = async () => {
+     if (!newMessage.trim() || !vehicleNumber) return;
+     const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' :
+                       selectedRecipient === 'general' ? 'general' :
+                       `driver_${selectedRecipient}`;
 
-        if (error) throw error;
-      } catch (error) {
-        console.error('Failed to send message:', error);
-      }
-    }
-    setNewMessage('');
-  };
+     const messageData = {
+       id: `msg-${Date.now()}`,
+       sender_id: `driver_${vehicleNumber}`,
+       receiver_id: receiverId,
+       message: newMessage,
+       timestamp: new Date().toISOString(),
+       read: false
+     };
+
+     // Immediately add to local state for instant UI update
+     setMessages(prev => [messageData, ...prev]);
+
+     if (SUPABASE_ENABLED && supabase) {
+       try {
+         const { data, error } = await supabase
+           .from('driver_messages')
+           .insert(messageData)
+           .select()
+           .single();
+
+         if (error) throw error;
+       } catch (error) {
+         console.error('Failed to send message:', error);
+         // Remove from local state if sending failed
+         setMessages(prev => prev.filter(m => m.id !== messageData.id));
+         alert('Failed to send message. Please try again.');
+         return; // Don't clear input if failed
+       }
+     }
+     setNewMessage('');
+   };
 
   const getSenderName = (senderId: string) => {
     if (senderId === 'dispatcher') return 'Dispečer';
@@ -864,10 +876,16 @@ const Dashboard: React.FC = () => {
      });
    };
 
-   const handleManualRideAdded = () => {
-     // Refresh the vehicle data to show the new ride
-     refreshVehicleData();
-   };
+    const handleManualRideAdded = (ride?: RideLog) => {
+      if (ride) {
+        // Immediately set the current ride for instant UI update
+        setCurrentRide(ride);
+        setDriverStatus('on_ride');
+      } else {
+        // Fallback: refresh vehicle data
+        refreshVehicleData();
+      }
+    };
 
    const handleRideCompleted = async () => {
      console.log('handleRideCompleted called, clearing current ride');

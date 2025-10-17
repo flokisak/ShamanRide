@@ -8,7 +8,7 @@ interface ManualRideModalProps {
     onClose: () => void;
     vehicleNumber: number;
     licensePlate: string;
-    onRideAdded: () => void;
+    onRideAdded: (ride?: RideLog) => void;
     onNavigateToDestination?: (stops: string[], navApp?: 'google' | 'mapy') => void;
     preferredNavApp?: 'google' | 'mapy';
 }
@@ -132,7 +132,7 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
 
             // Notify parent component to refresh data
             setTimeout(() => {
-                onRideAdded();
+                onRideAdded(acceptedRide);
                 onClose();
             }, 2000);
 
