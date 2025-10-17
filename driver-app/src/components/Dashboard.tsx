@@ -364,39 +364,7 @@ const Dashboard: React.FC = () => {
 
     // Ride subscription will be set up after vehicleNumber is known
 
-  // Subscribe to driver messages with improved error handling
-      const messageChannel = supabase
-        .channel('driver_messages_global')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
-           console.log('New driver message:', payload);
-             // Check if the message is for this vehicle or general (more flexible filtering)
-             if (vehicleNumber && (
-               payload.new.sender_id === `driver_${vehicleNumber}` ||
-               payload.new.receiver_id === `driver_${vehicleNumber}` ||
-               payload.new.receiver_id === vehicleNumber?.toString() ||
-               payload.new.receiver_id === 'general' ||
-               (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === `driver_${vehicleNumber}`) ||
-               (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === vehicleNumber?.toString())
-             )) {
-               console.log('Message accepted for driver', vehicleNumber);
-               setMessages(prev => [...prev, payload.new]);
-               // Notify for dispatcher or general messages
-               if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
-                 notifyUser('message');
-                 // Messages will appear in the chat widget automatically
-               }
-             } else {
-               console.log('Message rejected for driver', vehicleNumber, '- sender:', payload.new.sender_id, 'receiver:', payload.new.receiver_id);
-             }
-          })
-        .subscribe((status) => {
-          console.log('Message channel status:', status);
-          if (status === 'SUBSCRIBED') {
-            console.log('Successfully subscribed to driver messages');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('Failed to subscribe to driver messages, falling back to polling');
-          }
-        });
+
 
 
 
@@ -440,7 +408,6 @@ const Dashboard: React.FC = () => {
        });
 
     return () => {
-      supabase.removeChannel(messageChannel);
       supabase.removeChannel(vehicleChannel);
       clearInterval(connectionCheckInterval);
     };
@@ -506,11 +473,64 @@ const Dashboard: React.FC = () => {
           }
         });
 
-     return () => {
-       supabase.removeChannel(updateChannel);
-       supabase.removeChannel(rideChannel);
-     };
-   }, [vehicleNumber, lastSubscriptionRefresh, refreshVehicleData]);
+      return () => {
+        supabase.removeChannel(updateChannel);
+        supabase.removeChannel(rideChannel);
+      };
+    }, [vehicleNumber, lastSubscriptionRefresh, refreshVehicleData]);
+
+    // Subscribe to driver messages - separate effect to ensure vehicleNumber is available
+    useEffect(() => {
+      if (!vehicleNumber || !SUPABASE_ENABLED) return;
+
+      console.log('Setting up message subscription for vehicle:', vehicleNumber);
+      const messageChannel = supabase
+        .channel(`driver_messages_${vehicleNumber}`)  // Unique channel per driver
+         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
+          console.log('New driver message received:', payload);
+          console.log('Vehicle number:', vehicleNumber, 'Message sender:', payload.new.sender_id, 'receiver:', payload.new.receiver_id);
+
+            // Check if the message is for this vehicle or general (more flexible filtering)
+            const shouldAccept = vehicleNumber && (
+              payload.new.sender_id === `driver_${vehicleNumber}` ||
+              payload.new.receiver_id === `driver_${vehicleNumber}` ||
+              payload.new.receiver_id === vehicleNumber?.toString() ||
+              payload.new.receiver_id === 'general' ||
+              (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === `driver_${vehicleNumber}`) ||
+              (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === vehicleNumber?.toString())
+            );
+
+            console.log('Should accept message:', shouldAccept);
+
+            if (shouldAccept) {
+              console.log('Message accepted, adding to UI');
+              setMessages(prev => [...prev, payload.new]);
+              // Notify for dispatcher or general messages
+              if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
+                notifyUser('message');
+                // Messages will appear in the chat widget automatically
+              }
+            } else {
+              console.log('Message rejected - not for this driver');
+            }
+         })
+        .subscribe((status, err) => {
+          console.log('Message channel status:', status, err);
+          if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to driver messages for vehicle', vehicleNumber);
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error('Failed to subscribe to driver messages:', err);
+          } else if (status === 'TIMED_OUT') {
+            console.warn('Message subscription timed out');
+          } else if (status === 'CLOSED') {
+            console.warn('Message subscription closed');
+          }
+        });
+
+      return () => {
+        supabase.removeChannel(messageChannel);
+      };
+    }, [vehicleNumber]);
 
   // GPS Location tracking and sending
   useEffect(() => {
@@ -1019,42 +1039,53 @@ const Dashboard: React.FC = () => {
     }
   };
 
-   const sendMessage = async () => {
-     if (!newMessage.trim() || !vehicleNumber) return;
-     const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' :
-                       selectedRecipient === 'general' ? 'general' :
-                       `driver_${selectedRecipient}`;
+    const sendMessage = async () => {
+      if (!newMessage.trim() || !vehicleNumber) {
+        console.warn('Cannot send message: empty message or no vehicle number');
+        return;
+      }
 
-     const messageData = {
-       id: `msg-${Date.now()}`,
-       sender_id: `driver_${vehicleNumber}`,
-       receiver_id: receiverId,
-       message: newMessage,
-       timestamp: new Date().toISOString(),
-       read: false
-     };
+      const receiverId = selectedRecipient === 'dispatcher' ? 'dispatcher' :
+                        selectedRecipient === 'general' ? 'general' :
+                        `driver_${selectedRecipient}`;
 
-     // Immediately add to local state for instant UI update
-     setMessages(prev => [messageData, ...prev]);
+      const messageData = {
+        sender_id: `driver_${vehicleNumber}`,
+        receiver_id: receiverId,
+        message: newMessage,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
 
-     if (SUPABASE_ENABLED && supabase) {
-       try {
-         const { data, error } = await supabase
-           .from('driver_messages')
-           .insert(messageData)
-           .select()
-           .single();
+      console.log('Sending message:', messageData);
 
-         if (error) throw error;
-       } catch (error) {
-         console.error('Failed to send message:', error);
-         // Remove from local state if sending failed
-         setMessages(prev => prev.filter(m => m.id !== messageData.id));
-         alert('Failed to send message. Please try again.');
-         return; // Don't clear input if failed
-       }
-     }
-     setNewMessage('');
+      if (SUPABASE_ENABLED && supabase) {
+        try {
+          console.log('Inserting message to Supabase...');
+          const { data, error } = await supabase
+            .from('driver_messages')
+            .insert(messageData)
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Supabase insert error:', error);
+            throw error;
+          }
+          console.log('Message sent successfully:', data);
+          // The real-time subscription will handle adding it to the UI
+        } catch (error) {
+          console.error('Failed to send message:', error);
+          alert('Failed to send message. Please try again.');
+          return; // Don't clear input if failed
+        }
+      } else {
+        console.warn('Supabase not enabled, message saved locally');
+        // For local mode, add directly to state
+        const localMessage = { ...messageData, id: `local-${Date.now()}` };
+        setMessages(prev => [localMessage, ...prev]);
+      }
+      setNewMessage('');
    };
 
   const getSenderName = (senderId: string) => {
