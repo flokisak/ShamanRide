@@ -50,10 +50,12 @@ interface ChatHistoryItem {
 
 export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }) => {
   const { t } = useTranslation();
+
+  console.log('DriverChat component mounted with', vehicles.length, 'vehicles');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]); // Store messages from all chats
   const [newMessage, setNewMessage] = useState('');
-  const [selectedVehicleId, setSelectedVehicleId] = useState<number | 'general' | null>(null);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<number | 'general' | null>('general');
   const [sending, setSending] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -98,6 +100,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
         // Join group chat for shift messages
         socketInstance.emit('join_group_chat', 'dispatcher_shift');
+        console.log('Dispatcher chat joined group chat: dispatcher_shift');
       });
 
       socketInstance.on('disconnect', () => {
@@ -118,12 +121,25 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           return prev;
         });
 
+        // Add to allMessages for chat history
+        setAllMessages(prev => {
+          const exists = prev.some(m => m.id === messageData.id);
+          if (!exists) {
+            return [messageData, ...prev];
+          }
+          return prev;
+        });
+
         // Add to local state if it's relevant to current chat
         if (selectedVehicleId) {
-          const isRelevant = (messageData.sender_id === 'dispatcher' && messageData.receiver_id === 'dispatcher') ||
-                            (messageData.sender_id === `driver_${selectedVehicleId}` && messageData.receiver_id === 'dispatcher') ||
-                            (messageData.sender_id === 'dispatcher' && messageData.receiver_id === `driver_${selectedVehicleId}`) ||
-                            (selectedVehicleId === 'general' && messageData.receiver_id === 'general');
+          let isRelevant = false;
+
+          if (selectedVehicleId === 'general') {
+            isRelevant = messageData.receiver_id === 'general';
+          } else {
+            isRelevant = (messageData.sender_id === `driver_${selectedVehicleId}` && messageData.receiver_id === 'dispatcher') ||
+                        (messageData.sender_id === 'dispatcher' && messageData.receiver_id === `driver_${selectedVehicleId}`);
+          }
 
           if (isRelevant) {
             setMessages(prev => {
@@ -133,20 +149,6 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
               }
               return prev;
             });
-
-            // Update chat history
-            setChatHistory(prev => prev.map(chat => {
-              if ((selectedVehicleId === 'general' && chat.vehicleId === 'general') ||
-                  (chat.vehicleId === selectedVehicleId)) {
-                return {
-                  ...chat,
-                  lastMessage: messageData.message,
-                  timestamp: messageData.timestamp,
-                  unreadCount: chat.vehicleId === selectedVehicleId ? 0 : chat.unreadCount + 1
-                };
-              }
-              return chat;
-            }));
           }
         }
 
@@ -172,6 +174,21 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     };
   }, [currentUserId, selectedVehicleId, onNewMessage]);
 
+  // Join chat rooms for all vehicles when they load
+  useEffect(() => {
+    if (!socket || !socketConnected || vehicles.length === 0) return;
+
+    console.log('Dispatcher chat joining rooms for', vehicles.length, 'vehicles');
+    vehicles.forEach(vehicle => {
+      const roomName = `chat:Ddispatcher_R${vehicle.id}`;
+      socket.emit('join_chat_dispatcher_driver', {
+        dispatcherId: 'dispatcher',
+        driverId: vehicle.id
+      });
+      console.log(`Dispatcher chat joined room: ${roomName}`);
+    });
+  }, [socket, socketConnected, vehicles]);
+
   // Join appropriate chat room when recipient changes
   useEffect(() => {
     if (!socket || !socketConnected || !selectedVehicleId) return;
@@ -186,17 +203,43 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
   // Load all messages for all vehicles (for chat history) - runs on mount and when vehicles change
   useEffect(() => {
-    if (!currentUserId || vehicles.length === 0) return;
+    console.log('DriverChat: Loading messages, currentUserId:', currentUserId, 'vehicles:', vehicles.length);
+    if (!currentUserId || vehicles.length === 0) {
+      console.log('DriverChat: Skipping load - no userId or vehicles');
+      return;
+    }
 
     const loadAllMessages = async () => {
       try {
         console.log('Loading all messages for chat history...');
 
         if (SUPABASE_ENABLED) {
-          // Load messages from Supabase
-          const { data, error } = await supabase.from('driver_messages').select('*')
-            .or(`receiver_id.eq.${currentUserId},sender_id.eq.${currentUserId}`)
+          // Load messages from Supabase - get all messages involving dispatcher
+          // Get messages sent by dispatcher, received by dispatcher, or general messages
+          const { data: sentMessages, error: sentError } = await supabase.from('driver_messages').select('*')
+            .eq('sender_id', 'dispatcher')
             .order('timestamp', { ascending: false });
+
+          const { data: receivedMessages, error: receivedError } = await supabase.from('driver_messages').select('*')
+            .eq('receiver_id', 'dispatcher')
+            .order('timestamp', { ascending: false });
+
+          const { data: generalMessages, error: generalError } = await supabase.from('driver_messages').select('*')
+            .eq('receiver_id', 'general')
+            .order('timestamp', { ascending: false });
+
+          if (sentError || receivedError || generalError) {
+            console.warn('Error loading messages:', { sentError, receivedError, generalError });
+            // Continue with partial data
+          }
+
+          // Combine all messages and remove duplicates
+          const allMessages = [...(sentMessages || []), ...(receivedMessages || []), ...(generalMessages || [])];
+          const uniqueMessages = allMessages.filter((msg, index, self) =>
+            index === self.findIndex(m => m.id === msg.id)
+          );
+
+          data = uniqueMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
           if (error) {
             console.warn('Could not load all messages from Supabase:', error);
@@ -206,12 +249,15 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
             return;
           }
 
-          if (data) {
+          if (data && data.length > 0) {
             console.log(`Loaded ${data.length} messages from Supabase`);
             setAllMessages(data);
 
             // Also save to localStorage as backup
             saveDriverMessages(data);
+          } else {
+            console.log('No messages found in Supabase');
+            setAllMessages([]);
           }
         } else {
           // Load from localStorage only
@@ -232,6 +278,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
   // Calculate chat history and unread counts
   useEffect(() => {
+    console.log('DriverChat: Building chat history, vehicles:', vehicles.length, 'allMessages:', allMessages.length);
     if (!currentUserId) return;
 
     const historyMap = new Map<number | 'general', ChatHistoryItem>();
@@ -303,6 +350,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
       new Date(b.timestamp || '1970-01-01').getTime() - new Date(a.timestamp || '1970-01-01').getTime()
     );
 
+    console.log('DriverChat: Setting chatHistory with', history.length, 'items:', history.map(h => ({ id: h.vehicleId, name: h.vehicleName })));
     setChatHistory(history);
   }, [vehicles, allMessages, currentUserId]);
 
@@ -408,7 +456,11 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   // }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedVehicleId || sending || !socket || !socketConnected) return;
+    console.log('DriverChat sendMessage called:', { newMessage: newMessage.trim(), selectedVehicleId, sending, socket: !!socket, socketConnected });
+    if (!newMessage.trim() || !selectedVehicleId || sending || !socket || !socketConnected) {
+      console.log('DriverChat sendMessage blocked:', { noMessage: !newMessage.trim(), noVehicle: !selectedVehicleId, sending, noSocket: !socket, notConnected: !socketConnected });
+      return;
+    }
 
     setSending(true);
     try {
@@ -534,6 +586,22 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     return 'Neznámý';
   };
 
+  // Debug info
+  console.log('DriverChat render:', { vehicles: vehicles.length, chatHistory: chatHistory.length, selectedVehicleId, socketConnected });
+
+  if (vehicles.length === 0) {
+    return (
+      <div className="bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full" tabIndex={-1}>
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center text-slate-400">
+            <p>Načítání vozidel...</p>
+            <p className="text-xs mt-2">Pokud se nezobrazí, zkontrolujte konzoli prohlížeče</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full" tabIndex={-1}>
       <div className="flex-shrink-0 mb-4">
@@ -544,7 +612,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03 8 9-8s9 3.582 9 8z" />
               </svg>
             </div>
-            Chat s vozidly
+            Chat s vozidly ({vehicles.length} vozidel, {chatHistory.length} chatů)
           </h3>
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-400' : 'bg-red-400'}`}></div>
@@ -558,24 +626,58 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         </h3>
       </div>
 
-      {/* Two-column layout */}
-      <div className="flex-1 flex gap-3 overflow-hidden">
-        {/* Left column: Chat History */}
-        <div className="w-1/3 bg-slate-900/50 rounded-lg overflow-hidden flex flex-col">
-          <div className="flex-shrink-0 p-3 border-b border-slate-600">
-            <h4 className="text-sm font-medium text-white flex items-center">
-              <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2z m0 7a1 1 0 110-2 1 1 0 010 2z m0 7a1 1 0 110-2 1 1 0 010 2z" />
-              </svg>
-              Historie chatů
-            </h4>
+      {/* Simplified chat selection */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mb-4">
+          <h4 className="text-sm font-medium text-white mb-2">Vyberte chat:</h4>
+          <div className="space-y-2">
+            <button
+              onClick={() => {
+                console.log('Selected general chat');
+                setSelectedVehicleId('general');
+              }}
+              className={`w-full p-2 text-left rounded ${selectedVehicleId === 'general' ? 'bg-primary text-slate-900' : 'bg-slate-700 text-white'}`}
+            >
+              Všeobecný chat (celá směna)
+            </button>
+            {vehicles.map(vehicle => (
+              <button
+                key={vehicle.id}
+                onClick={() => {
+                  console.log('Selected vehicle chat:', vehicle.id, vehicle.name);
+                  setSelectedVehicleId(vehicle.id);
+                }}
+                className={`w-full p-2 text-left rounded ${selectedVehicleId === vehicle.id ? 'bg-primary text-slate-900' : 'bg-slate-700 text-white'}`}
+              >
+                Chat s {vehicle.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-4">
+          <button
+            onClick={() => {
+              console.log('Test message send');
+              const testMessage = "Test zpráva - " + new Date().toLocaleTimeString();
+              setNewMessage(testMessage);
+              setTimeout(() => sendMessage(), 100);
+            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+          >
+            Odeslat test zprávu
+          </button>
+        </div>
           </div>
 
           <div className="flex-1 overflow-y-auto">
             {chatHistory.map(chat => (
               <div
                 key={chat.vehicleId}
-                onClick={() => setSelectedVehicleId(chat.vehicleId)}
+                onClick={() => {
+                  console.log('Clicked on chat:', chat.vehicleId, chat.vehicleName);
+                  setSelectedVehicleId(chat.vehicleId);
+                }}
                 className={`p-3 border-b border-slate-700 cursor-pointer hover:bg-slate-700/50 transition-colors ${
                   selectedVehicleId === chat.vehicleId ? 'bg-slate-700 border-l-4 border-primary' : ''
                 }`}
@@ -615,16 +717,74 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           </div>
         </div>
 
-        {/* Right column: Active Chat */}
-        <div className="flex-1 bg-slate-900/50 rounded-lg overflow-hidden flex flex-col">
-          <div className="flex-shrink-0 p-3 border-b border-slate-600">
-            {selectedVehicleId ? (
-              <div className="flex items-center">
-                <div className="w-6 h-6 bg-[#8FBCBB]/80 rounded-lg flex items-center justify-center mr-2">
-                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03 8 9-8s9 3.582 9 8z" />
-                  </svg>
+        {/* Active Chat */}
+        {selectedVehicleId ? (
+          <div className="bg-slate-900/50 rounded-lg p-4">
+            <h4 className="text-sm font-medium text-white mb-3">
+              {selectedVehicleId === 'general'
+                ? 'Všeobecný chat (celá směna)'
+                : `Chat s ${vehicles.find(v => v.id === selectedVehicleId)?.name || 'vozidlem'}`
+              }
+            </h4>
+
+            {/* Messages */}
+            <div className="mb-4 max-h-60 overflow-y-auto">
+              {messages.length === 0 ? (
+                <p className="text-sm text-slate-400 italic">
+                  Žádné zprávy
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {messages
+                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                    .map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={`flex ${msg.sender_id === 'dispatcher' ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                            msg.sender_id === 'dispatcher'
+                              ? 'bg-primary text-slate-900'
+                              : 'bg-slate-700 text-white'
+                          }`}
+                        >
+                          <div className="text-xs opacity-75 mb-1">
+                            {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
+                          </div>
+                          {msg.message}
+                        </div>
+                      </div>
+                    ))}
                 </div>
+              )}
+            </div>
+
+            {/* Message input */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Napište zprávu..."
+                className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                disabled={sending}
+              />
+              <button
+                onClick={sendMessage}
+                disabled={!newMessage.trim() || sending || !socketConnected}
+                className="px-4 py-2 bg-primary hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-slate-900 font-medium text-sm"
+              >
+                {sending ? 'Odesílání...' : 'Odeslat'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-900/50 rounded-lg p-4 text-center text-slate-400">
+            <p>Vyberte chat výše</p>
+          </div>
+        )}
                 <h4 className="text-sm font-medium text-white">
                   {selectedVehicleId === 'general'
                     ? 'Všeobecný chat (celá směna)'
