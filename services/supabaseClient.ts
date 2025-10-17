@@ -342,25 +342,38 @@ export const supabaseService = SUPABASE_ENABLED
         if (error) throw error;
       },
 
-       // Ride Logs
-        async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
-          let query = supabase.from('ride_logs').select('*');
-          if (options) {
-            if (options.dateFrom) {
-              // Convert ISO string to Unix timestamp (milliseconds)
-              const dateFromTimestamp = new Date(options.dateFrom).getTime();
-              query = query.gte('timestamp', dateFromTimestamp);
-            }
-            if (options.dateTo) {
-              // Convert ISO string to Unix timestamp (milliseconds)
-              const dateToTimestamp = new Date(options.dateTo).getTime();
-              query = query.lte('timestamp', dateToTimestamp);
-            }
-          } // if no options, fetch all
-          const { data, error } = await query;
-          if (error) throw error;
-          return (data || []).map((d: any) => this._fromDbRideLog(d));
-        },
+        // Ride Logs
+         async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
+           let query = supabase.from('ride_logs').select('*');
+           if (options) {
+             if (options.dateFrom) {
+               // Convert ISO string to Unix timestamp (milliseconds)
+               const dateFromTimestamp = new Date(options.dateFrom).getTime();
+               query = query.gte('timestamp', dateFromTimestamp);
+             }
+             if (options.dateTo) {
+               // Convert ISO string to Unix timestamp (milliseconds)
+               const dateToTimestamp = new Date(options.dateTo).getTime();
+               query = query.lte('timestamp', dateToTimestamp);
+             }
+           } // if no options, fetch all
+           const { data, error } = await query;
+           if (error) throw error;
+           return (data || []).map((d: any) => this._fromDbRideLog(d));
+         },
+         async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
+           let query = supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleId);
+           if (status) {
+             query = query.eq('status', status.toLowerCase());
+           }
+           if (limit) {
+             query = query.limit(limit);
+           }
+           query = query.order('timestamp', { ascending: false });
+           const { data, error } = await query;
+           if (error) throw error;
+           return (data || []).map((d: any) => this._fromDbRideLog(d));
+         },
           async addRideLog(rideLog: any) {
             if (SUPABASE_ENABLED) {
               const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });
@@ -564,22 +577,29 @@ export const supabaseService = SUPABASE_ENABLED
          return data || [];
        },
 
-       // User Settings
-       async getUserSettings(userId: string) {
-         return runWithFallback(
-           async () => {
-             const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', userId).single();
-             if (error && error.code !== 'PGRST116') throw error;
-             return data;
-           },
-           async () => {
-             // fallback: read from local user-settings table
-             const all = readTable('user-settings');
-             return all.find((s: any) => String(s.user_id) === String(userId)) || null;
-           },
-           'Supabase user_settings'
-         );
+       // Driver Messages
+       async getDriverMessages() {
+         const { data, error } = await supabase.from('driver_messages').select('*').order('timestamp', { ascending: false });
+         if (error) throw error;
+         return data || [];
        },
+
+       // User Settings
+        async getUserSettings(userId: string) {
+          return runWithFallback(
+            async () => {
+              const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', userId).single();
+              if (error && error.code !== 'PGRST116') throw error;
+              return data;
+            },
+            async () => {
+              // fallback: read from local user-settings table
+              const all = readTable('user-settings');
+              return all.find((s: any) => String(s.user_id) === String(userId)) || null;
+            },
+            'Supabase user_settings'
+          );
+        },
        async updateUserSettings(userId: string, settings: any) {
          return runWithFallback(
            async () => {
@@ -620,20 +640,31 @@ export const supabaseService = SUPABASE_ENABLED
         deleteLocal('people', personId);
       },
 
-       // Ride Logs
-       async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
-         const all = readTable('ride-log');
-         let filtered = all;
-         if (options) {
-           if (options.dateFrom) {
-             filtered = filtered.filter((r: any) => new Date(r.timestamp) >= new Date(options.dateFrom));
-           }
-           if (options.dateTo) {
-             filtered = filtered.filter((r: any) => new Date(r.timestamp) <= new Date(options.dateTo));
-           }
-         } // if no options, return all
-         return filtered;
-       },
+        // Ride Logs
+        async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
+          const all = readTable('ride-log');
+          let filtered = all;
+          if (options) {
+            if (options.dateFrom) {
+              filtered = filtered.filter((r: any) => new Date(r.timestamp) >= new Date(options.dateFrom));
+            }
+            if (options.dateTo) {
+              filtered = filtered.filter((r: any) => new Date(r.timestamp) <= new Date(options.dateTo));
+            }
+          } // if no options, return all
+          return filtered;
+        },
+        async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
+          const all = readTable('ride-log');
+          let filtered = all.filter((r: any) => r.vehicleId === vehicleId);
+          if (status) {
+            filtered = filtered.filter((r: any) => r.status?.toLowerCase() === status.toLowerCase());
+          }
+          if (limit) {
+            filtered = filtered.slice(0, limit);
+          }
+          return filtered.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        },
            async addRideLog(rideLog: any) {
              const dbData = this._toDbRideLog(rideLog);
              console.log('🚗 addRideLog: sending to database:', {
@@ -779,11 +810,16 @@ export const supabaseService = SUPABASE_ENABLED
         writeTable('manual-entries', existing);
       },
 
-      // User Settings
-      async getUserSettings(userId: string) {
-        const settings = readTable('user-settings').find((s: any) => s.user_id === userId) || null;
-        return settings;
-      },
+       // Driver Messages
+       async getDriverMessages() {
+         return readTable('driver-messages');
+       },
+
+       // User Settings
+       async getUserSettings(userId: string) {
+         const settings = readTable('user-settings').find((s: any) => s.user_id === userId) || null;
+         return settings;
+       },
       async updateUserSettings(userId: string, settings: any) {
         upsertLocal('user-settings', { user_id: userId, ...settings }, 'user_id');
       },

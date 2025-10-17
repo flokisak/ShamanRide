@@ -5,7 +5,7 @@ import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
-import SocketRides from './SocketRides';
+
 import io from 'socket.io-client';
 
 const Dashboard: React.FC = () => {
@@ -377,65 +377,112 @@ const Dashboard: React.FC = () => {
     };
   }, []);
 
-  // Socket.io connection for real-time messaging
-  useEffect(() => {
-    if (!userId || !vehicleNumber) return;
+  // Socket.io connection for real-time messaging and ride updates
+   useEffect(() => {
+     if (!userId || !vehicleNumber) return;
 
-    const getToken = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      return session?.access_token;
-    };
+     const getToken = async () => {
+       const { data: { session } } = await supabase.auth.getSession();
+       return session?.access_token;
+     };
 
-    const initSocket = async () => {
-      const token = await getToken();
+     const initSocket = async () => {
+       const token = await getToken();
 
-       const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000', {
-        auth: { token },
-        transports: ['websocket', 'polling']
-      });
+        const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000', {
+         auth: { token },
+         transports: ['websocket', 'polling']
+       });
 
-      socketInstance.on('connect', () => {
-        console.log('Driver app connected to chat server');
-        setSocketConnected(true);
+       socketInstance.on('connect', () => {
+         console.log('Driver app connected to server');
+         setSocketConnected(true);
 
-        // Join shift chat for group messages
-        socketInstance.emit('join_group_chat', `driver_shift_${vehicleNumber}`);
-      });
+         // Join shift room for ride updates
+         socketInstance.emit('join_shift', `driver_shift_${vehicleNumber}`);
 
-      socketInstance.on('disconnect', () => {
-        console.log('Driver app disconnected from chat server');
-        setSocketConnected(false);
-      });
+         // Join group chat for shift messages
+         socketInstance.emit('join_group_chat', `driver_shift_${vehicleNumber}`);
 
-      // Listen for new messages
-      socketInstance.on('new_message', (messageData) => {
-        console.log('Driver app received message:', messageData);
-        setMessages(prev => {
-          // Check if message already exists
-          const exists = prev.some(m => m.id === messageData.id);
-          if (!exists) {
-            return [messageData, ...prev];
-          }
-          return prev;
-        });
+         // Join dispatcher chat room
+         socketInstance.emit('join_chat_dispatcher_driver', {
+           dispatcherId: 'dispatcher', // Assuming dispatcher ID is 'dispatcher'
+           driverId: vehicleNumber
+         });
+       });
 
-        // Notify user for new messages
-        if (messageData.sender_id !== `driver_${vehicleNumber}`) {
-          notifyUser('message');
-        }
-      });
+       socketInstance.on('disconnect', () => {
+         console.log('Driver app disconnected from server');
+         setSocketConnected(false);
+       });
 
-      setSocket(socketInstance);
-    };
+       // Listen for new messages
+       socketInstance.on('new_message', (messageData) => {
+         console.log('Driver app received message:', messageData);
+         setMessages(prev => {
+           // Check if message already exists
+           const exists = prev.some(m => m.id === messageData.id);
+           if (!exists) {
+             return [messageData, ...prev];
+           }
+           return prev;
+         });
 
-    initSocket();
+         // Notify user for new messages
+         if (messageData.sender_id !== `driver_${vehicleNumber}`) {
+           notifyUser('message');
+         }
+       });
 
-    return () => {
-      if (socket) {
-        socket.disconnect();
-      }
-    };
-  }, [userId, vehicleNumber]);
+       // Listen for ride updates
+       socketInstance.on('ride_updated', (rideData) => {
+         console.log('Driver app received ride update:', rideData);
+         if (rideData.vehicleId === vehicleNumber) {
+           refreshVehicleData();
+         }
+       });
+
+       // Listen for status changes
+       socketInstance.on('status_changed', (data) => {
+         console.log('Driver app received status change:', data);
+         refreshVehicleData();
+       });
+
+       // Listen for ride cancellations
+       socketInstance.on('ride_cancelled', (data) => {
+         console.log('Driver app received ride cancellation:', data);
+         refreshVehicleData();
+       });
+
+       setSocket(socketInstance);
+     };
+
+     initSocket();
+
+     return () => {
+       if (socket) {
+         socket.disconnect();
+       }
+     };
+   }, [userId, vehicleNumber]);
+
+   // Join appropriate chat room when recipient changes
+   useEffect(() => {
+     if (!socket || !socketConnected || !vehicleNumber) return;
+
+     if (selectedRecipient === 'dispatcher') {
+       socket.emit('join_chat_dispatcher_driver', {
+         dispatcherId: 'dispatcher',
+         driverId: vehicleNumber
+       });
+     } else if (selectedRecipient !== 'general' && selectedRecipient !== 'dispatcher') {
+       // Join driver-to-driver chat room
+       socket.emit('join_chat_driver_driver', {
+         driverId1: vehicleNumber,
+         driverId2: parseInt(selectedRecipient)
+       });
+     }
+   }, [selectedRecipient, socket, socketConnected, vehicleNumber]);
 
   // GPS Location tracking and sending
   useEffect(() => {
@@ -490,27 +537,7 @@ const Dashboard: React.FC = () => {
       }
     );
 
-    // Check locations table if Supabase is enabled
-    if (SUPABASE_ENABLED && supabase) {
-      (async () => {
-        try {
-          const { error: tableCheckError } = await supabase
-            .from('locations')
-            .select('count', { count: 'exact', head: true });
-
-          if (tableCheckError) {
-            console.error('Locations table check failed:', tableCheckError);
-            console.error('Error code:', tableCheckError.code);
-            console.error('Error message:', tableCheckError.message);
-
-            if (tableCheckError.code === 'PGRST116' || tableCheckError.message.includes('relation "locations" does not exist')) {
-              console.error('LOCATIONS TABLE DOES NOT EXIST IN SUPABASE!');
-              console.error('Please create the locations table using the SQL script in create-locations-table.sql');
-              alert('Locations table missing! Please create it in Supabase using the SQL script.');
-            } else {
-              console.error('Locations table exists but has issues. Current error:', tableCheckError);
-              console.error('This might be a permissions issue or column mismatch.');
-            }
+    // Location updates are now handled via socket.io - no need to check Supabase table
           } else {
             console.log('Locations table exists and is accessible');
           }
@@ -520,55 +547,26 @@ const Dashboard: React.FC = () => {
       })();
     }
 
-    // Send location every minute for better tracking
-    locationIntervalRef.current = setInterval(async () => {
-      if (currentPosition && vehicleNumber) {
-        const locationData = {
-          vehicle_id: vehicleNumber,
+    // Send real-time location updates via socket.io
+    locationIntervalRef.current = setInterval(() => {
+      if (currentPosition && vehicleNumber && socket && socketConnected) {
+        console.log('Sending real-time location via socket:', {
+          shiftId: `driver_shift_${vehicleNumber}`,
+          vehicleId: vehicleNumber,
           latitude: currentPosition.lat,
-          longitude: currentPosition.lng,
-          timestamp: new Date().toISOString(),
-        };
+          longitude: currentPosition.lng
+        });
 
-        console.log('Sending location:', locationData);
-
-        if (SUPABASE_ENABLED && supabase) {
-          try {
-            const { data, error } = await supabase.from('locations').insert(locationData);
-
-            if (error) {
-              console.error('Failed to send location to Supabase:', error);
-              console.error('Error details:', {
-                message: error.message,
-                details: error.details,
-                hint: error.hint,
-                code: error.code
-              });
-              // Store in localStorage as fallback
-              const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
-              queued.push(locationData);
-              localStorage.setItem('queued_locations', JSON.stringify(queued));
-            } else {
-              console.log('Location sent successfully:', data);
-            }
-          } catch (err) {
-            console.error('Exception sending location:', err);
-            // Store in localStorage as fallback
-            const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
-            queued.push(locationData);
-            localStorage.setItem('queued_locations', JSON.stringify(queued));
-          }
-        } else {
-          console.log('Supabase not enabled, storing location locally');
-          // Store in localStorage when Supabase is not available
-          const queued = JSON.parse(localStorage.getItem('queued_locations') || '[]');
-          queued.push(locationData);
-          localStorage.setItem('queued_locations', JSON.stringify(queued));
-        }
+        socket.emit('position_update', {
+          shiftId: `driver_shift_${vehicleNumber}`,
+          vehicleId: vehicleNumber,
+          latitude: currentPosition.lat,
+          longitude: currentPosition.lng
+        });
       } else {
-        console.log('Not sending location - currentPosition:', !!currentPosition, 'vehicleNumber:', vehicleNumber);
+        console.log('Not sending location - position:', !!currentPosition, 'vehicle:', vehicleNumber, 'socket:', !!socket, 'connected:', socketConnected);
       }
-    }, 300000); // Send every 5 minutes to reduce data transfer
+    }, 30000); // Send every 30 seconds for real-time tracking
 
     return () => {
       console.log('Stopping GPS tracking');
@@ -581,9 +579,9 @@ const Dashboard: React.FC = () => {
         locationIntervalRef.current = null;
       }
     };
-  }, [vehicleNumber]);
+   }, [vehicleNumber, socket, socketConnected]);
 
-    // Auto-refresh messages every 2 minutes (reduced from 5)
+     // Auto-refresh messages every 2 minutes (reduced from 5)
      useEffect(() => {
        if (!vehicleNumber) return;
 
@@ -1079,48 +1077,7 @@ const Dashboard: React.FC = () => {
      }, 1000);
    };
 
-  // Test function to check and create locations table
-  const testLocationsTable = async () => {
-    console.log('Testing locations table...');
 
-    if (!SUPABASE_ENABLED || !supabase) {
-      console.log('Supabase not enabled, skipping locations table test');
-      return true;
-    }
-
-    try {
-      // Try to query the locations table
-      const { data, error } = await supabase.from('locations').select('*').limit(1);
-
-      if (error) {
-        console.error('Locations table test failed:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-
-        if (error.code === 'PGRST116' || error.message.includes('relation "locations" does not exist')) {
-          console.log('Locations table does not exist. You need to create it in Supabase.');
-          console.log('Go to: https://supabase.com/dashboard/project/dmxkqofoecqdjbigxoon/editor');
-          console.log('Run the SQL script from: create-locations-table.sql');
-          alert('Locations table missing! Please create it in Supabase using the SQL script from create-locations-table.sql');
-          return false;
-        } else {
-          console.error('Locations table exists but has issues. Current error:', error);
-          console.error('This might be a permissions issue or column mismatch.');
-          console.error('Please check the table structure in Supabase dashboard');
-        }
-        return false;
-      }
-
-      console.log('Locations table exists and is accessible');
-      console.log('Sample data:', data);
-      console.log('Table structure appears to be working');
-      return true;
-
-    } catch (err) {
-      console.error('Error testing locations table:', err);
-      return false;
-    }
-  };
 
   // Function to check current table structure
   const checkTableStructure = async () => {
@@ -1146,15 +1103,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Add a button to test the locations table (for debugging)
-  useEffect(() => {
-    if (vehicleNumber) {
-      // Test the locations table after vehicle is loaded
-      setTimeout(() => {
-        testLocationsTable();
-      }, 2000);
-    }
-  }, [vehicleNumber]);
+
 
   // Show loading state
   if (isLoading) {
@@ -1734,30 +1683,7 @@ const Dashboard: React.FC = () => {
          />
         )}
 
-        {/* Socket.io Real-time Updates (Hidden) */}
-        <SocketRides
-          currentUser={{ id: userId }}
-          shiftId={`driver_shift_${vehicleNumber}`}
-          isDispatcher={false}
-          onRideUpdate={(rideData) => {
-            // Handle ride updates from Socket.io
-            console.log('Driver app received ride update:', rideData);
-            // Refresh data when new rides are assigned
-            if (rideData.vehicleId === vehicleNumber) {
-              refreshVehicleData();
-            }
-          }}
-          onStatusChange={(rideId, newStatus) => {
-            // Handle status changes from Socket.io
-            console.log('Driver app received status change:', rideId, newStatus);
-            refreshVehicleData();
-          }}
-          onRideCancel={(rideId) => {
-            // Handle ride cancellations from Socket.io
-            console.log('Driver app received ride cancellation:', rideId);
-            refreshVehicleData();
-          }}
-        />
+
       </div>
     );
   };

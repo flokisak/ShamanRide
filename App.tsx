@@ -26,7 +26,7 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { SmsPreviewModal } from './components/SmsPreviewModal';
 import SmsGate from './components/SmsGate';
 import SocketRides from './components/SocketRides';
-import SocketChat from './components/SocketChat';
+import { DriverChat } from './components/DriverChat';
 import { useTranslation } from './contexts/LanguageContext';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -1618,7 +1618,10 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-      driverChat: <SocketChat currentUser={user} shiftId="dispatcher_shift" chatType="group" targetId="dispatcher" />,
+      driverChat: <DriverChat vehicles={vehicles} onNewMessage={(vehicleId, message) => {
+        // Handle new message notifications if needed
+        console.log(`New message from vehicle ${vehicleId}: ${message}`);
+      }} />,
       socketRides: <SocketRides
         currentUser={user}
         shiftId="dispatcher_shift"

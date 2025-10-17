@@ -60,11 +60,11 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
         const room = getRoomName();
         console.log('SocketChat: Joining room:', room);
         if (room) {
-          if (chatType === 'dispatcher_driver') {
-            socketInstance.emit('join_chat_dispatcher_driver', {
-              dispatcherId: currentUser.id,
-              driverId: targetId
-            });
+           if (chatType === 'dispatcher_driver') {
+             socketInstance.emit('join_chat_dispatcher_driver', {
+               dispatcherId: 'dispatcher',
+               driverId: targetId
+             });
           } else if (chatType === 'driver_driver') {
             socketInstance.emit('join_chat_driver_driver', {
               driverId1: currentUser.id,
@@ -119,7 +119,7 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
           .limit(50);
 
         if (chatType === 'dispatcher_driver') {
-          query = query.or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.driver_${targetId}),and(sender_id.eq.driver_${targetId},receiver_id.eq.${currentUser.id})`);
+          query = query.or(`and(sender_id.eq.dispatcher,receiver_id.eq.driver_${targetId}),and(sender_id.eq.driver_${targetId},receiver_id.eq.dispatcher)`);
         } else if (chatType === 'driver_driver') {
           query = query.or(`and(sender_id.eq.driver_${currentUser.id},receiver_id.eq.driver_${targetId}),and(sender_id.eq.driver_${targetId},receiver_id.eq.driver_${currentUser.id})`);
         } else if (chatType === 'group') {
@@ -152,7 +152,7 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
     const messageData = {
       room,
       message: newMessage.trim(),
-      senderId: chatType === 'dispatcher_driver' ? currentUser.id : `driver_${currentUser.id}`,
+       senderId: chatType === 'dispatcher_driver' ? 'dispatcher' : `driver_${currentUser.id}`,
       receiverId: room,
       type: chatType
     };
@@ -193,11 +193,11 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
         {messages.map((msg, index) => (
           <div
             key={msg.id || index}
-            className={`flex ${msg.sender_id === (chatType === 'dispatcher_driver' ? currentUser.id : `driver_${currentUser.id}`) ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${msg.sender_id === (chatType === 'dispatcher_driver' ? 'dispatcher' : `driver_${currentUser.id}`) ? 'justify-end' : 'justify-start'}`}
           >
             <div
               className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                msg.sender_id === (chatType === 'dispatcher_driver' ? currentUser.id : `driver_${currentUser.id}`)
+                msg.sender_id === (chatType === 'dispatcher_driver' ? 'dispatcher' : `driver_${currentUser.id}`)
                   ? 'bg-blue-600 text-white'
                   : 'bg-slate-700 text-slate-200'
               }`}

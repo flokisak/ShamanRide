@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Person, Vehicle } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { supabase, SUPABASE_ENABLED } from '../services/supabaseClient';
+import io from 'socket.io-client';
 
 interface DriverChatProps {
   vehicles: Vehicle[];
@@ -56,6 +57,8 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   const [sending, setSending] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [socket, setSocket] = useState<any>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -71,6 +74,115 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     };
     getCurrentUser();
   }, []);
+
+  // Socket.io connection for real-time messaging
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const getToken = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token;
+    };
+
+    const initSocket = async () => {
+      const token = await getToken();
+
+      const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000', {
+        auth: { token },
+        transports: ['websocket', 'polling']
+      });
+
+      socketInstance.on('connect', () => {
+        console.log('Dispatcher chat connected to server');
+        setSocketConnected(true);
+
+        // Join group chat for shift messages
+        socketInstance.emit('join_group_chat', 'dispatcher_shift');
+      });
+
+      socketInstance.on('disconnect', () => {
+        console.log('Dispatcher chat disconnected from server');
+        setSocketConnected(false);
+      });
+
+      // Listen for new messages
+      socketInstance.on('new_message', (messageData) => {
+        console.log('Dispatcher chat received message:', messageData);
+
+        // Update allMessages for chat history
+        setAllMessages(prev => {
+          const exists = prev.some(m => m.id === messageData.id);
+          if (!exists) {
+            return [messageData, ...prev];
+          }
+          return prev;
+        });
+
+        // Add to local state if it's relevant to current chat
+        if (selectedVehicleId) {
+          const isRelevant = (messageData.sender_id === 'dispatcher' && messageData.receiver_id === 'dispatcher') ||
+                            (messageData.sender_id === `driver_${selectedVehicleId}` && messageData.receiver_id === 'dispatcher') ||
+                            (messageData.sender_id === 'dispatcher' && messageData.receiver_id === `driver_${selectedVehicleId}`) ||
+                            (selectedVehicleId === 'general' && messageData.receiver_id === 'general');
+
+          if (isRelevant) {
+            setMessages(prev => {
+              const exists = prev.some(m => m.id === messageData.id);
+              if (!exists) {
+                return [messageData, ...prev];
+              }
+              return prev;
+            });
+
+            // Update chat history
+            setChatHistory(prev => prev.map(chat => {
+              if ((selectedVehicleId === 'general' && chat.vehicleId === 'general') ||
+                  (chat.vehicleId === selectedVehicleId)) {
+                return {
+                  ...chat,
+                  lastMessage: messageData.message,
+                  timestamp: messageData.timestamp,
+                  unreadCount: chat.vehicleId === selectedVehicleId ? 0 : chat.unreadCount + 1
+                };
+              }
+              return chat;
+            }));
+          }
+        }
+
+        // Notify parent component
+        if (onNewMessage && messageData.sender_id !== 'dispatcher') {
+          const vehicleId = messageData.sender_id.startsWith('driver_') ?
+            parseInt(messageData.sender_id.replace('driver_', '')) : null;
+          if (vehicleId) {
+            onNewMessage(vehicleId, messageData.message);
+          }
+        }
+      });
+
+      setSocket(socketInstance);
+    };
+
+    initSocket();
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, [currentUserId, selectedVehicleId, onNewMessage]);
+
+  // Join appropriate chat room when recipient changes
+  useEffect(() => {
+    if (!socket || !socketConnected || !selectedVehicleId) return;
+
+    if (selectedVehicleId !== 'general') {
+      socket.emit('join_chat_dispatcher_driver', {
+        dispatcherId: 'dispatcher',
+        driverId: selectedVehicleId
+      });
+    }
+  }, [selectedVehicleId, socket, socketConnected]);
 
   // Load all messages for all vehicles (for chat history) - runs on mount and when vehicles change
   useEffect(() => {
@@ -288,74 +400,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     loadMessages();
   }, [selectedVehicleId]);
 
-  // Subscribe to new messages globally (for all vehicles) - improved
-  useEffect(() => {
-    if (!currentUserId || !SUPABASE_ENABLED) return;
 
-    console.log('Setting up real-time message subscription');
-
-    const channel = supabase
-      .channel('driver_messages_global')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'driver_messages'
-       }, (payload) => {
-        const incomingMessage = payload.new as ChatMessage;
-        console.log('New message received:', incomingMessage);
-
-        // Update allMessages for chat history (avoid duplicates)
-        setAllMessages(prev => {
-          const exists = prev.some(m => m.id === incomingMessage.id);
-          if (!exists) {
-            const updated = [...prev, incomingMessage];
-            console.log(`Updated allMessages count: ${updated.length}`);
-
-            // Also save to localStorage
-            saveDriverMessages(updated);
-            return updated;
-          }
-          return prev;
-        });
-
-        // Check if the message is relevant to the currently selected vehicle or general chat
-        if (selectedVehicleId) {
-          let isRelevant = false;
-
-          if (selectedVehicleId === 'general') {
-            isRelevant = incomingMessage.receiver_id === 'general';
-          } else {
-            isRelevant = (incomingMessage.sender_id === 'dispatcher' && incomingMessage.receiver_id === 'driver_' + selectedVehicleId) ||
-                         (incomingMessage.sender_id === 'driver_' + selectedVehicleId && incomingMessage.receiver_id === 'dispatcher');
-          }
-
-          if (isRelevant) {
-            console.log('Message is relevant to selected vehicle, updating messages state');
-            setMessages(prev => {
-              const exists = prev.some(m => m.id === incomingMessage.id);
-              if (!exists) {
-                return [...prev, incomingMessage];
-              }
-              return prev;
-            });
-
-            // Notify about new message if it's from a vehicle
-            if (incomingMessage.sender_id.startsWith('driver_')) {
-              const vehicleId = parseInt(incomingMessage.sender_id.replace('driver_', ''));
-              if (onNewMessage) {
-                onNewMessage(vehicleId, incomingMessage.message);
-              }
-            }
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      console.log('Cleaning up message subscription');
-      supabase.removeChannel(channel);
-    };
-  }, [selectedVehicleId, currentUserId, onNewMessage]);
 
   // Scroll to bottom when new messages arrive
   // useEffect(() => {
@@ -363,47 +408,62 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   // }, [messages]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedVehicleId || sending) return;
+    if (!newMessage.trim() || !selectedVehicleId || sending || !socket || !socketConnected) return;
 
     setSending(true);
     try {
+      // Determine room and chat type
+      let room;
+      let chatType;
+      if (selectedVehicleId === 'general') {
+        room = 'shift_chat:dispatcher_shift';
+        chatType = 'group';
+      } else {
+        room = `chat:Ddispatcher_R${selectedVehicleId}`;
+        chatType = 'dispatcher_driver';
+      }
+
       const messageData = {
+        room,
+        message: newMessage.trim(),
+        senderId: 'dispatcher',
+        receiverId: selectedVehicleId === 'general' ? 'general' : `driver_${selectedVehicleId}`,
+        type: chatType
+      };
+
+      console.log('Dispatcher sending message via socket:', messageData);
+
+      // Send via socket
+      socket.emit('message', messageData);
+
+      // Create local message object for immediate UI update
+      const localMessageData = {
+        id: `temp-${Date.now()}`,
         sender_id: 'dispatcher',
         receiver_id: selectedVehicleId === 'general' ? 'general' : `driver_${selectedVehicleId}`,
         message: newMessage.trim(),
         timestamp: new Date().toISOString(),
-        read: false
+        read: true
       };
 
-      let newMessageData;
+      // Update local state immediately
+      setMessages(prev => [localMessageData, ...prev]);
 
-      if (SUPABASE_ENABLED) {
-        const { data, error } = await supabase
-          .from('driver_messages')
-          .insert({
-            sender_id: messageData.sender_id,
-            receiver_id: messageData.receiver_id,
-            message: messageData.message,
-            read: messageData.read
-          })
-          .select()
-          .single();
+      // Update chat history
+      setChatHistory(prev => prev.map(chat => {
+        if ((selectedVehicleId === 'general' && chat.vehicleId === 'general') ||
+            (chat.vehicleId === selectedVehicleId)) {
+          return {
+            ...chat,
+            lastMessage: newMessage.trim(),
+            timestamp: new Date().toISOString(),
+            unreadCount: 0
+          };
+        }
+        return chat;
+      }));
 
-        if (error) throw error;
-        // Use the returned data which includes the database timestamp
-        newMessageData = data;
-      } else {
-        // Local storage fallback
-        newMessageData = { ...messageData, id: `local-${Date.now()}` };
-      }
-
-       // Store message in local cache/history
-       addDriverMessage(newMessageData);
-        // Update local state immediately
-        setMessages(prev => [newMessageData, ...prev]);
-
-        setNewMessage('');
-        // inputRef.current?.focus();
+      setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -477,12 +537,23 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   return (
     <div className="bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full" tabIndex={-1}>
       <div className="flex-shrink-0 mb-4">
-        <h3 className="text-sm font-semibold text-white flex items-center">
-          <div className="w-6 h-6 bg-[#8FBCBB]/80 rounded-lg flex items-center justify-center mr-2">
-            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-white flex items-center">
+            <div className="w-6 h-6 bg-[#8FBCBB]/80 rounded-lg flex items-center justify-center mr-2">
+              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03 8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            Chat s vozidly
+          </h3>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-400' : 'bg-red-400'}`}></div>
+            <span className="text-xs text-slate-300">
+              {socketConnected ? 'Online' : 'Offline'}
+            </span>
           </div>
+        </div>
+      </div>
           Chat s vozidly
         </h3>
       </div>
@@ -623,7 +694,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                     />
                   <button
                     onClick={sendMessage}
-                    disabled={!newMessage.trim() || sending}
+                    disabled={!newMessage.trim() || sending || !socketConnected}
                     className="px-4 py-2 bg-primary hover:bg-nord-frost4 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium text-sm whitespace-nowrap"
                   >
                     {sending ? 'Odesílání...' : 'Odeslat'}
