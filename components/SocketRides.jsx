@@ -19,7 +19,7 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
 
     const initSocket = async () => {
       const token = await getToken();
-      const socketUrl = import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+       const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
       console.log('SocketRides connecting to:', socketUrl);
 
       const socketInstance = io(socketUrl, {

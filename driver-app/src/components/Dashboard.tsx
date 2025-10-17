@@ -389,7 +389,7 @@ const Dashboard: React.FC = () => {
     const initSocket = async () => {
       const token = await getToken();
 
-      const socketInstance = io(import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
+       const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000', {
         auth: { token },
         transports: ['websocket', 'polling']
       });

@@ -42,7 +42,7 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
 
     const initSocket = async () => {
       const token = await getToken();
-      const socketUrl = import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
+       const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
       console.log('SocketChat connecting to:', socketUrl);
 
       const socketInstance = io(socketUrl, {
