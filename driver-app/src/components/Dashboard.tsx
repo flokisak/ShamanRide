@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, supabaseService, authService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
+import { supabase, authService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
+import { supabaseService } from '../../../services/supabaseClient';
+import { SUPABASE_ENABLED as SUPABASE_ENABLED_SERVICES } from '../../../services/supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
@@ -329,17 +331,15 @@ const Dashboard: React.FC = () => {
             console.warn('Could not load other vehicles and drivers:', error);
           }
 
-           // Load recent messages (limit to reduce data)
+        // Load recent messages (limit to reduce data)
            try {
               const msgs = await supabaseService.getDriverMessages();
               console.log('All messages from DB:', msgs.length);
               const filtered = msgs.filter((m: any) => {
                 const isForThisDriver = m.receiver_id === `driver_${vehicleNumber}` ||
-                                       m.receiver_id === vehicleNumber?.toString() ||
                                        m.sender_id === `driver_${vehicleNumber}` ||
                                        m.receiver_id === 'general' ||
-                                       (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
-                                       (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString());
+                                       (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`);
                 return isForThisDriver;
               }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                 .slice(0, 50); // Limit to 50 most recent messages
@@ -788,7 +788,7 @@ const Dashboard: React.FC = () => {
           console.log('acceptRideSpecific: Updated ride object:', updatedRide);
           try {
             console.log('acceptRideSpecific: Calling supabaseService.addRideLog...');
-            console.log('acceptRideSpecific: SUPABASE_ENABLED =', supabaseService.SUPABASE_ENABLED);
+            console.log('acceptRideSpecific: SUPABASE_ENABLED =', SUPABASE_ENABLED_SERVICES);
             await supabaseService.addRideLog(updatedRide);
             console.log('acceptRideSpecific: Ride successfully saved to database');
 
