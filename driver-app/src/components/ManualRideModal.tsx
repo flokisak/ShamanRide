@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CloseIcon, CheckCircleIcon, AlertTriangleIcon } from '../icons';
 import { supabaseService, SUPABASE_ENABLED } from '../supabaseClient';
-import { RideLog, RideStatus, RideType } from '../types';
+import { RideLog, RideStatus, RideType, DEFAULT_TARIFF } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 
 interface ManualRideModalProps {
@@ -31,9 +31,27 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
     const [customerPhone, setCustomerPhone] = useState('');
     const [passengers, setPassengers] = useState(1);
     const [notes, setNotes] = useState('');
+    const [estimatedDistance, setEstimatedDistance] = useState<number | undefined>();
     const [estimatedPrice, setEstimatedPrice] = useState<number | undefined>();
     const [modalState, setModalState] = useState<ModalState>('form');
     const [error, setError] = useState<string | null>(null);
+
+    // Calculate price based on distance using default tariff
+    const calculatePrice = (distanceKm: number): number => {
+        // Use default tariff rates - assuming car for manual rides
+        const { startingFee, pricePerKmCar } = DEFAULT_TARIFF;
+        return Math.round(startingFee + (distanceKm * pricePerKmCar));
+    };
+
+    // Auto-calculate price when distance changes
+    useEffect(() => {
+        if (estimatedDistance && estimatedDistance > 0) {
+            const calculatedPrice = calculatePrice(estimatedDistance);
+            setEstimatedPrice(calculatedPrice);
+        } else {
+            setEstimatedPrice(undefined);
+        }
+    }, [estimatedDistance]);
 
     const handleStopChange = (index: number, value: string) => {
         const newStops = [...stops];
@@ -87,10 +105,10 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 estimatedPrice,
                 estimatedPickupTimestamp: Date.now(),
                 estimatedCompletionTimestamp,
-                fuelCost: undefined,
-                startMileage: undefined,
-                endMileage: undefined,
-                distance: undefined,
+                 fuelCost: undefined,
+                 startMileage: undefined,
+                 endMileage: undefined,
+                 distance: estimatedDistance,
                 purpose: undefined,
                 businessPurpose: undefined
             };
@@ -188,35 +206,26 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
                                     required
                                 />
-                            </div>
+                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Kam</label>
-                                <input
-                                    type="text"
-                                    value={stops[1]}
-                                    onChange={(e) => handleStopChange(1, e.target.value)}
-                                    placeholder="Adresa cíle"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                    required
-                                />
-                            </div>
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná vzdálenost (km)</label>
+                                 <input
+                                     type="number"
+                                     value={estimatedDistance || ''}
+                                     onChange={(e) => setEstimatedDistance(e.target.value ? parseFloat(e.target.value) : undefined)}
+                                     placeholder="Např. 15.5"
+                                     min="0"
+                                     step="0.1"
+                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                 />
+                                 <p className="text-xs text-gray-400 mt-1">
+                                     Cena se automaticky vypočítá podle tarifů (základní sazba + cena za km)
+                                 </p>
+                             </div>
 
-                            {/* Navigation Button */}
-                            {stops[0] && stops[1] && onNavigateToDestination && (
-                                <div className="mt-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => onNavigateToDestination(stops, preferredNavApp)}
-                                        className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium text-sm"
-                                    >
-                                        🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
-                                    </button>
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Jméno zákazníka (volitelné)</label>
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">Jméno zákazníka (volitelné)</label>
                                 <input
                                     type="text"
                                     value={customerName}
@@ -249,16 +258,26 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná cena (volitelné)</label>
-                                <input
-                                    type="number"
-                                    value={estimatedPrice || ''}
-                                    onChange={(e) => setEstimatedPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                                    placeholder="Kč"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">
+                                     Odhadovaná cena {estimatedDistance ? '(automaticky vypočítáno)' : '(volitelné)'}
+                                 </label>
+                                 <input
+                                     type="number"
+                                     value={estimatedPrice || ''}
+                                     onChange={(e) => setEstimatedPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                                     placeholder={estimatedDistance ? `${calculatePrice(estimatedDistance)} Kč` : "Kč"}
+                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                 />
+                                 {estimatedDistance && estimatedPrice && (
+                                     <p className="text-xs text-green-400 mt-1">
+                                         Automaticky vypočítáno: {calculatePrice(estimatedDistance)} Kč
+                                         {estimatedPrice !== calculatePrice(estimatedDistance) && (
+                                             <span className="text-yellow-400 ml-2">(manuálně upraveno)</span>
+                                         )}
+                                     </p>
+                                 )}
+                             </div>
 
                             <div>
                                 <label className="block text-sm font-medium text-gray-300 mb-1">Poznámky (volitelné)</label>
