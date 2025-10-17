@@ -435,6 +435,27 @@ const Dashboard: React.FC = () => {
               }
             }
           })
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+            // Only process important status changes for rides assigned to this vehicle
+            const oldStatus = payload.old?.status?.toLowerCase();
+            const newStatus = payload.new?.status?.toLowerCase();
+
+            // Only update for significant status changes
+            const importantStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+            if (!importantStatuses.includes(newStatus) || oldStatus === newStatus || payload.new.vehicle_id !== vehicleNumber) {
+              return; // Skip minor updates or updates for other vehicles
+            }
+
+            console.log('Ride status updated for our vehicle:', { id: payload.new.id, oldStatus, newStatus });
+
+            const now = Date.now();
+            if (now - lastSubscriptionRefresh > 10000) {
+              setLastSubscriptionRefresh(now);
+              refreshVehicleData();
+            } else {
+              console.log('⏳ Skipping status update refresh due to rate limiting');
+            }
+          })
          .subscribe((status, err) => {
            console.log('🚗 Ride assignments channel status:', status, err);
            if (status === 'SUBSCRIBED') {

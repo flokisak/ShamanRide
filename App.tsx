@@ -231,45 +231,61 @@ const AppContent: React.FC = () => {
             // Add new ride to local ride log
             setRideLog(prev => [mappedRide, ...prev]);
           })
-         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-           console.log('Ride updated by driver:', payload);
-           const updatedRide = payload.new;
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+            // Only process important status changes to reduce traffic
+            const oldStatus = payload.old?.status?.toLowerCase();
+            const newStatus = payload.new?.status?.toLowerCase();
 
-           // Update local ride log
-           const statusLower = updatedRide.status.toLowerCase();
-           setRideLog(prev => prev.map(ride =>
-             ride.id === updatedRide.id
-               ? {
-                   ...ride,
-                   status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                           statusLower === 'completed' ? RideStatus.Completed :
-                           statusLower === 'cancelled' ? RideStatus.Cancelled :
-                           ride.status,
-                   completedAt: updatedRide.completed_at || ride.completedAt
-                 }
-               : ride
-           ));
+            // Only update for significant status changes
+            const importantStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+            if (!importantStatuses.includes(newStatus) || oldStatus === newStatus) {
+              return; // Skip minor updates
+            }
 
-           // Send status change message to driver if this is a status change
-           if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
-             // Find the ride in our local state to get full details
-             const localRide = rideLog.find(r => r.id === updatedRide.id);
-             if (localRide) {
-               const oldStatusLower = payload.old.status.toLowerCase();
-               const oldStatus = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
-                                 oldStatusLower === 'completed' ? RideStatus.Completed :
-                                 oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
-                                 RideStatus.Pending;
-               const newStatus = statusLower === 'in_progress' ? RideStatus.InProgress :
-                                 statusLower === 'completed' ? RideStatus.Completed :
-                                 statusLower === 'cancelled' ? RideStatus.Cancelled :
-                                 localRide.status;
-               const updatedRideForMessage = { ...localRide, status: newStatus };
-               sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatus);
-             }
-           }
-         })
-         .subscribe((status) => {
+            console.log('Ride status updated:', { id: payload.new.id, oldStatus, newStatus });
+
+            const updatedRide = payload.new;
+            const statusLower = updatedRide.status.toLowerCase();
+
+            // Update local ride log
+            setRideLog(prev => prev.map(ride =>
+              ride.id === updatedRide.id
+                ? {
+                    ...ride,
+                    status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                            statusLower === 'completed' ? RideStatus.Completed :
+                            statusLower === 'cancelled' ? RideStatus.Cancelled :
+                            statusLower === 'accepted' ? RideStatus.Accepted :
+                            statusLower === 'pending' ? RideStatus.Pending :
+                            ride.status,
+                    completedAt: updatedRide.completed_at || ride.completedAt,
+                    acceptedAt: updatedRide.accepted_at || ride.acceptedAt,
+                    startedAt: updatedRide.started_at || ride.startedAt
+                  }
+                : ride
+            ));
+
+            // Send status change message to driver if this is a status change
+            if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
+              const localRide = rideLog.find(r => r.id === updatedRide.id);
+              if (localRide) {
+                const oldStatusLower = payload.old.status.toLowerCase();
+                const oldStatusMapped = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
+                                  oldStatusLower === 'completed' ? RideStatus.Completed :
+                                  oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
+                                  oldStatusLower === 'accepted' ? RideStatus.Accepted :
+                                  RideStatus.Pending;
+                const newStatusMapped = statusLower === 'in_progress' ? RideStatus.InProgress :
+                                  statusLower === 'completed' ? RideStatus.Completed :
+                                  statusLower === 'cancelled' ? RideStatus.Cancelled :
+                                  statusLower === 'accepted' ? RideStatus.Accepted :
+                                  RideStatus.Pending;
+                const updatedRideForMessage = { ...localRide, status: newStatusMapped };
+                sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatusMapped);
+              }
+            }
+          })
+          .subscribe((status) => {
            console.log('Dispatcher ride updates channel status:', status);
            if (status === 'SUBSCRIBED') {
              console.log('Successfully subscribed to dispatcher ride updates');
