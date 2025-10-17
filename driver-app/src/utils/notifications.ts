@@ -270,6 +270,48 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
+// Screen Wake Lock management
+let wakeLock: WakeLockSentinel | null = null;
+
+export const requestWakeLock = async (): Promise<boolean> => {
+  try {
+    if (!('wakeLock' in navigator)) {
+      console.warn('Screen Wake Lock API not supported');
+      return false;
+    }
+
+    if (wakeLock) {
+      console.log('Wake lock already active');
+      return true;
+    }
+
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('Screen wake lock acquired');
+
+    wakeLock.addEventListener('release', () => {
+      console.log('Screen wake lock released');
+      wakeLock = null;
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error requesting wake lock:', error);
+    return false;
+  }
+};
+
+export const releaseWakeLock = async (): Promise<void> => {
+  if (wakeLock) {
+    await wakeLock.release();
+    wakeLock = null;
+    console.log('Wake lock manually released');
+  }
+};
+
+export const isWakeLockSupported = (): boolean => {
+  return 'wakeLock' in navigator;
+};
+
 // Initialize notifications on app start
 export const initializeNotifications = async (userId?: string, vapidPublicKey?: string) => {
   const permissionGranted = await requestNotificationPermission();
@@ -283,5 +325,13 @@ export const initializeNotifications = async (userId?: string, vapidPublicKey?: 
     }
   } else {
     console.warn('Notification permissions not granted');
+  }
+
+  // Request wake lock to keep screen on
+  const wakeLockGranted = await requestWakeLock();
+  if (wakeLockGranted) {
+    console.log('Screen wake lock enabled - display will stay on while app is active');
+  } else {
+    console.warn('Screen wake lock not available - display may turn off');
   }
 };

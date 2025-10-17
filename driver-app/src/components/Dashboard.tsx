@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, supabaseService, authService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
-import { notifyUser, initializeNotifications } from '../utils/notifications';
+import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
 
@@ -40,6 +40,7 @@ const Dashboard: React.FC = () => {
     const [lastRefreshTime, setLastRefreshTime] = useState(0);
     const [lastSubscriptionRefresh, setLastSubscriptionRefresh] = useState(0);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [wakeLockActive, setWakeLockActive] = useState(false);
 
    // Debounced refresh function to prevent multiple simultaneous calls
    const refreshVehicleData = useCallback(async () => {
@@ -583,10 +584,49 @@ const Dashboard: React.FC = () => {
    // Auto-refresh ride data every 15 seconds (for local mode without real-time)
 
 
-  // Save preferred navigation app to localStorage
-  useEffect(() => {
-    localStorage.setItem('preferredNavApp', preferredNavApp);
-  }, [preferredNavApp]);
+   // Save preferred navigation app to localStorage
+   useEffect(() => {
+     localStorage.setItem('preferredNavApp', preferredNavApp);
+   }, [preferredNavApp]);
+
+   // Manage screen wake lock based on driver status and ride activity
+   useEffect(() => {
+     const shouldKeepScreenOn = driverStatus === 'available' || driverStatus === 'on_ride' || currentRide !== null;
+
+     const manageWakeLock = async () => {
+       if (shouldKeepScreenOn && !wakeLockActive && isWakeLockSupported()) {
+         const success = await requestWakeLock();
+         if (success) {
+           setWakeLockActive(true);
+           console.log('Screen wake lock activated - display will stay on');
+         }
+       } else if (!shouldKeepScreenOn && wakeLockActive) {
+         await releaseWakeLock();
+         setWakeLockActive(false);
+         console.log('Screen wake lock released - display can turn off');
+       }
+     };
+
+     manageWakeLock();
+
+     // Re-request wake lock when page becomes visible again
+     const handleVisibilityChange = () => {
+       if (document.visibilityState === 'visible' && shouldKeepScreenOn && isWakeLockSupported()) {
+         requestWakeLock().then(success => {
+           if (success) {
+             setWakeLockActive(true);
+             console.log('Screen wake lock re-acquired after visibility change');
+           }
+         });
+       }
+     };
+
+     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+     return () => {
+       document.removeEventListener('visibilitychange', handleVisibilityChange);
+     };
+   }, [driverStatus, currentRide, wakeLockActive]);
 
    // Handle break timer
   useEffect(() => {
@@ -1208,13 +1248,13 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
 
-           {/* Notification Permission Indicator */}
-           {notificationPermission !== 'granted' && (
-             <div className="flex items-center gap-2 mt-2">
-               <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-               <span className="text-xs text-yellow-400">
-                 Upozornění: Povolte notifikace pro lepší zážitek
-               </span>
+            {/* Notification Permission Indicator */}
+            {notificationPermission !== 'granted' && (
+              <div className="flex items-center gap-2 mt-2">
+                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <span className="text-xs text-yellow-400">
+                  Upozornění: Povolte notifikace pro lepší zážitek
+                </span>
                 <button
                   onClick={async () => {
                     const granted = await initializeNotifications(userId || undefined);
@@ -1224,8 +1264,18 @@ const Dashboard: React.FC = () => {
                 >
                   Povolit
                 </button>
-             </div>
-           )}
+              </div>
+            )}
+
+            {/* Screen Wake Lock Indicator */}
+            {isWakeLockSupported() && (
+              <div className="flex items-center gap-2 mt-2">
+                <div className={`w-3 h-3 rounded-full ${wakeLockActive ? 'bg-green-400' : 'bg-gray-400'}`}></div>
+                <span className="text-xs text-slate-400">
+                  {wakeLockActive ? 'Obrazovka zůstane zapnutá' : 'Obrazovka se může vypnout'}
+                </span>
+              </div>
+            )}
         </div>
 
 
