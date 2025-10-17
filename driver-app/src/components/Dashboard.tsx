@@ -53,16 +53,41 @@ const Dashboard: React.FC = () => {
         // Check if ride falls within the selected shift time window
         return rideTime >= shiftStartTime.getTime() && rideTime <= shiftEndTime.getTime();
       }).reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
-    } else if (shiftStart) {
-      // Use automatic shift start time
+    } else {
+      // Use automatic shift start time or filter by history filter period
+      let startTime: number;
+      const now = Date.now();
+
+      if (shiftStart) {
+        startTime = shiftStart;
+      } else {
+        // Use history filter period as fallback
+        const filterDate = new Date();
+        switch (historyFilter) {
+          case '2days':
+            filterDate.setDate(filterDate.getDate() - 2);
+            break;
+          case 'week':
+            filterDate.setDate(filterDate.getDate() - 7);
+            break;
+          case 'month':
+            filterDate.setMonth(filterDate.getMonth() - 1);
+            break;
+          case 'all':
+          default:
+            // For 'all', use a very old date (effectively no start limit)
+            filterDate.setFullYear(filterDate.getFullYear() - 10);
+            break;
+        }
+        startTime = filterDate.getTime();
+      }
+
       const shiftCompleted = rides.filter(ride =>
         ride.status === RideStatus.Completed &&
-        new Date(ride.timestamp).getTime() >= shiftStart! &&
-        new Date(ride.timestamp).getTime() <= Date.now()
+        new Date(ride.timestamp).getTime() >= startTime &&
+        new Date(ride.timestamp).getTime() <= now
       );
       return shiftCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
-    } else {
-      return 0;
     }
   };
   const [messages, setMessages] = useState<any[]>([]);
@@ -723,11 +748,11 @@ const Dashboard: React.FC = () => {
 
   // Update shift cash when ride history changes
    useEffect(() => {
-     if ((shiftStartTime || (useCustomShift && customShiftStart && customShiftEnd && customShiftDate)) && rideHistory.length > 0) {
+     if ((shiftStartTime || (useCustomShift && customShiftStart && customShiftEnd && customShiftDate) || (!useCustomShift && historyFilter)) && rideHistory.length > 0) {
        const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime || undefined);
        setShiftCash(shiftCashAmount);
      }
-   }, [rideHistory, shiftStartTime, useCustomShift, customShiftStart, customShiftEnd, customShiftDate]);
+   }, [rideHistory, shiftStartTime, useCustomShift, customShiftStart, customShiftEnd, customShiftDate, historyFilter]);
 
    // Handle break timer
   useEffect(() => {
@@ -1596,40 +1621,6 @@ const Dashboard: React.FC = () => {
            </div>
          )}
 
-        {/* Navigation Settings */}
-        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-          <h2 className="text-lg font-semibold mb-3 text-white">Nastavení navigace</h2>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Preferovaná navigační aplikace
-              </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPreferredNavApp('google')}
-                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
-                    preferredNavApp === 'google'
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : 'bg-slate-700 hover:bg-slate-600'
-                  }`}
-                >
-                  Google Maps
-                </button>
-                <button
-                  onClick={() => setPreferredNavApp('mapy')}
-                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
-                    preferredNavApp === 'mapy'
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-slate-700 hover:bg-slate-600'
-                  }`}
-                >
-                  Mapy.cz
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Shift Time Settings */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
           <h2 className="text-lg font-semibold mb-3 text-white">Nastavení směny</h2>
@@ -1712,9 +1703,43 @@ const Dashboard: React.FC = () => {
               }
             </div>
           </div>
+         </div>
+
+        {/* Navigation Settings */}
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <h2 className="text-lg font-semibold mb-3 text-white">Nastavení navigace</h2>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Preferovaná navigační aplikace
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPreferredNavApp('google')}
+                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                    preferredNavApp === 'google'
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-slate-700 hover:bg-slate-600'
+                  }`}
+                >
+                  Google Maps
+                </button>
+                <button
+                  onClick={() => setPreferredNavApp('mapy')}
+                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                    preferredNavApp === 'mapy'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-slate-700 hover:bg-slate-600'
+                  }`}
+                >
+                  Mapy.cz
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
-          {/* Logout */}
+           {/* Logout */}
           <button
            onClick={() => supabase.auth.signOut()}
            className="w-full bg-danger hover:bg-red-700 py-3 rounded-2xl btn-modern text-white font-medium shadow-frost"
