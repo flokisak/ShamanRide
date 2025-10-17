@@ -326,18 +326,26 @@ const Dashboard: React.FC = () => {
            console.warn('Could not load other vehicles and drivers:', error);
          }
 
-         // Load messages
-         try {
-            const msgs = await supabaseService.getDriverMessages();
-            const filtered = msgs.filter((m: any) =>
-              m.receiver_id === `driver_${vehicleNumber}` ||
-              m.sender_id === `driver_${vehicleNumber}` ||
-              m.receiver_id === 'general'
-            ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-           setMessages(filtered);
-         } catch (error) {
-           console.warn('Could not load messages:', error);
-         }
+          // Load messages
+          try {
+             const msgs = await supabaseService.getDriverMessages();
+             console.log('All messages from DB:', msgs);
+             console.log('Filtering for vehicleNumber:', vehicleNumber, 'type:', typeof vehicleNumber);
+             const filtered = msgs.filter((m: any) => {
+               const isForThisDriver = m.receiver_id === `driver_${vehicleNumber}` ||
+                                      m.receiver_id === vehicleNumber?.toString() ||
+                                      m.sender_id === `driver_${vehicleNumber}` ||
+                                      m.receiver_id === 'general' ||
+                                      (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
+                                      (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString());
+               console.log('Message:', m.id, 'sender:', m.sender_id, 'receiver:', m.receiver_id, 'accepted:', isForThisDriver);
+               return isForThisDriver;
+             }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            console.log('Filtered messages count:', filtered.length);
+            setMessages(filtered);
+          } catch (error) {
+            console.warn('Could not load messages:', error);
+          }
 
           console.log('getVehicleInfo completed successfully');
 
@@ -359,23 +367,28 @@ const Dashboard: React.FC = () => {
   // Subscribe to driver messages with improved error handling
       const messageChannel = supabase
         .channel('driver_messages_global')
-         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
-          console.log('New driver message:', payload);
-            // Check if the message is for this vehicle or general
-            if (vehicleNumber && (
-              payload.new.sender_id === `driver_${vehicleNumber}` ||
-              payload.new.receiver_id === `driver_${vehicleNumber}` ||
-              payload.new.receiver_id === 'general'
-            )) {
-              setMessages(prev => [...prev, payload.new]);
-              // Notify for dispatcher or general messages
-              if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
-                // Notify user with sound and vibration for dispatcher or general message
-                notifyUser('message');
-                // Messages will appear in the chat widget automatically
-              }
-            }
-         })
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
+           console.log('New driver message:', payload);
+             // Check if the message is for this vehicle or general (more flexible filtering)
+             if (vehicleNumber && (
+               payload.new.sender_id === `driver_${vehicleNumber}` ||
+               payload.new.receiver_id === `driver_${vehicleNumber}` ||
+               payload.new.receiver_id === vehicleNumber?.toString() ||
+               payload.new.receiver_id === 'general' ||
+               (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === `driver_${vehicleNumber}`) ||
+               (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === vehicleNumber?.toString())
+             )) {
+               console.log('Message accepted for driver', vehicleNumber);
+               setMessages(prev => [...prev, payload.new]);
+               // Notify for dispatcher or general messages
+               if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
+                 notifyUser('message');
+                 // Messages will appear in the chat widget automatically
+               }
+             } else {
+               console.log('Message rejected for driver', vehicleNumber, '- sender:', payload.new.sender_id, 'receiver:', payload.new.receiver_id);
+             }
+          })
         .subscribe((status) => {
           console.log('Message channel status:', status);
           if (status === 'SUBSCRIBED') {
@@ -652,11 +665,14 @@ const Dashboard: React.FC = () => {
        const refreshInterval = setInterval(async () => {
          try {
             const msgs = await supabaseService.getDriverMessages();
-            // Filter for this driver
+            // Filter for this driver (more flexible)
             const filtered = msgs.filter((m: any) =>
               m.receiver_id === `driver_${vehicleNumber}` ||
+              m.receiver_id === vehicleNumber?.toString() ||
               m.sender_id === `driver_${vehicleNumber}` ||
-              m.receiver_id === 'general'
+              m.receiver_id === 'general' ||
+              (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
+              (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString())
             ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
            // Only update if we have new messages or different data
