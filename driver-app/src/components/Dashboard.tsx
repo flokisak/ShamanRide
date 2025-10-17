@@ -331,24 +331,25 @@ const Dashboard: React.FC = () => {
             console.warn('Could not load other vehicles and drivers:', error);
           }
 
-        // Load recent messages (limit to reduce data)
-            try {
-               const msgs = await supabaseService.getDriverMessages();
-               console.log('All messages from DB:', msgs.length, 'vehicleNumber:', vehicleNumber);
-               const filtered = msgs.filter((m: any) => {
-                 const isForThisDriver = m.receiver_id === `driver_${vehicleNumber}` ||
-                                        m.sender_id === `driver_${vehicleNumber}` ||
-                                        m.receiver_id === 'general' ||
-                                        (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`);
-                 console.log('Message check:', m.id, 'sender:', m.sender_id, 'receiver:', m.receiver_id, 'isForThisDriver:', isForThisDriver);
-                 return isForThisDriver;
-               }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                 .slice(0, 50); // Limit to 50 most recent messages
-              console.log('Filtered messages count:', filtered.length, 'filtered messages:', filtered.map(m => ({ id: m.id, sender: m.sender_id, receiver: m.receiver_id })));
-              setMessages(filtered);
-            } catch (error) {
-              console.warn('Could not load messages:', error);
-            }
+         // Load recent messages (limit to reduce data)
+             try {
+                const msgs = await supabaseService.getDriverMessages();
+                console.log('All messages from DB:', msgs.length, 'vehicleNum:', vehicleNum);
+                // More flexible filtering to handle different message formats
+                const filtered = msgs.filter((m: any) =>
+                  m.receiver_id === `driver_${vehicleNum}` ||
+                  m.receiver_id === vehicleNum?.toString() ||
+                  m.sender_id === `driver_${vehicleNum}` ||
+                  m.receiver_id === 'general' ||
+                  (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNum}`) ||
+                  (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNum?.toString())
+                ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .slice(0, 50); // Limit to 50 most recent messages
+               console.log('Filtered messages count:', filtered.length, 'filtered messages:', filtered.map(m => ({ id: m.id, sender: m.sender_id, receiver: m.receiver_id })));
+               setMessages(filtered);
+             } catch (error) {
+               console.warn('Could not load messages:', error);
+             }
 
           console.log('getVehicleInfo completed successfully');
 
@@ -614,38 +615,77 @@ const Dashboard: React.FC = () => {
     };
    }, [vehicleNumber, socket, socketConnected]);
 
-     // Auto-refresh messages every 2 minutes (reduced from 5)
-     useEffect(() => {
-       if (!vehicleNumber) return;
+      // Load messages when vehicleNumber is first set
+      useEffect(() => {
+        if (!vehicleNumber) return;
 
-       const refreshInterval = setInterval(async () => {
-         try {
+        const loadMessages = async () => {
+          try {
             const msgs = await supabaseService.getDriverMessages();
-            // Filter for this driver (more flexible)
-            const filtered = msgs.filter((m: any) =>
-              m.receiver_id === `driver_${vehicleNumber}` ||
-              m.receiver_id === vehicleNumber?.toString() ||
-              m.sender_id === `driver_${vehicleNumber}` ||
-              m.receiver_id === 'general' ||
-              (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
-              (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString())
-            ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+            console.log('Loading messages for vehicle:', vehicleNumber, 'total messages:', msgs.length);
+            // More flexible filtering to handle different message formats
+            const filtered = msgs.filter((m: any) => {
+              const isRelevant = m.receiver_id === `driver_${vehicleNumber}` ||
+                m.receiver_id === vehicleNumber?.toString() ||
+                m.sender_id === `driver_${vehicleNumber}` ||
+                m.sender_id === vehicleNumber?.toString() ||
+                m.receiver_id === 'general' ||
+                (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
+                (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString()) ||
+                (m.sender_id === 'dispatcher' && m.receiver_id === 'general');
+              console.log('Message filter check for vehicle', vehicleNumber, ':', {
+                id: m.id,
+                sender: m.sender_id,
+                receiver: m.receiver_id,
+                isRelevant
+              });
+              return isRelevant;
+            }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+              .slice(0, 50); // Limit to 50 most recent messages
+            console.log('Filtered messages for vehicle', vehicleNumber, ':', filtered.length);
+            setMessages(filtered);
+          } catch (err) {
+            console.warn('Error loading messages:', err);
+          }
+        };
 
-           // Only update if we have new messages or different data
-           const currentMessageIds = messages.map(m => m.id).sort();
-           const newMessageIds = filtered.map(m => m.id).sort();
+        loadMessages();
+      }, [vehicleNumber]);
 
-           if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
-             setMessages(filtered);
-             console.log('Messages refreshed automatically');
-           }
-         } catch (err) {
-           console.warn('Error refreshing messages:', err);
-         }
+      // Auto-refresh messages every 5 minutes
+      useEffect(() => {
+        if (!vehicleNumber) return;
+
+        const refreshInterval = setInterval(async () => {
+          try {
+             const msgs = await supabaseService.getDriverMessages();
+             // Filter for this driver (more flexible)
+             const filtered = msgs.filter((m: any) =>
+               m.receiver_id === `driver_${vehicleNumber}` ||
+               m.receiver_id === vehicleNumber?.toString() ||
+               m.sender_id === `driver_${vehicleNumber}` ||
+               m.sender_id === vehicleNumber?.toString() ||
+               m.receiver_id === 'general' ||
+               (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
+               (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString()) ||
+               (m.sender_id === 'dispatcher' && m.receiver_id === 'general')
+             ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+            // Only update if we have new messages or different data
+            const currentMessageIds = messages.map(m => m.id).sort();
+            const newMessageIds = filtered.map(m => m.id).sort();
+
+            if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
+              setMessages(filtered);
+              console.log('Messages refreshed automatically');
+            }
+          } catch (err) {
+            console.warn('Error refreshing messages:', err);
+          }
         }, 300000); // Refresh every 5 minutes to reduce data transfer
 
-       return () => clearInterval(refreshInterval);
-     }, [vehicleNumber, messages]);
+        return () => clearInterval(refreshInterval);
+      }, [vehicleNumber, messages]);
 
    // Auto-refresh ride data every 15 seconds (for local mode without real-time)
 
