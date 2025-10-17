@@ -239,15 +239,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
             index === self.findIndex(m => m.id === msg.id)
           );
 
-          data = uniqueMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-          if (error) {
-            console.warn('Could not load all messages from Supabase:', error);
-            // Fallback to localStorage
-            const localMessages = getDriverMessages();
-            setAllMessages(localMessages);
-            return;
-          }
+          const data = uniqueMessages.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
           if (data && data.length > 0) {
             console.log(`Loaded ${data.length} messages from Supabase`);
@@ -620,11 +612,11 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
               {socketConnected ? 'Online' : 'Offline'}
             </span>
           </div>
-          </div>
         </div>
+      </div>
 
-       {/* Simplified chat selection */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Chat History Sidebar */}
+      <div className="flex-1 overflow-y-auto mb-4">
         <div className="mb-4">
           <h4 className="text-sm font-medium text-white mb-2">Vyberte chat:</h4>
           <div className="space-y-2">
@@ -665,101 +657,106 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
             Odeslat test zprávu
           </button>
         </div>
-          </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {chatHistory.map(chat => (
-              <div
-                key={chat.vehicleId}
-                onClick={() => {
-                  console.log('Clicked on chat:', chat.vehicleId, chat.vehicleName);
-                  setSelectedVehicleId(chat.vehicleId);
-                }}
-                className={`p-3 border-b border-slate-700 cursor-pointer hover:bg-slate-700/50 transition-colors ${
-                  selectedVehicleId === chat.vehicleId ? 'bg-slate-700 border-l-4 border-primary' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-white font-medium text-sm truncate">{chat.vehicleName}</div>
-                    {chat.lastMessage && (
-                      <div className="text-slate-400 text-xs truncate mt-1">{chat.lastMessage}</div>
-                    )}
-                    {chat.timestamp && (
-                      <div className="text-slate-500 text-xs mt-1">
-                        {new Date(chat.timestamp).toLocaleTimeString('cs-CZ', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          day: '2-digit',
-                          month: '2-digit'
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  {chat.unreadCount > 0 && (
-                    <div className="flex-shrink-0 ml-2">
-                      <div className="bg-primary text-slate-900 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                        {chat.unreadCount}
-                      </div>
+        <div className="flex-1 overflow-y-auto">
+          {chatHistory.map(chat => (
+            <div
+              key={chat.vehicleId}
+              onClick={() => {
+                console.log('Clicked on chat:', chat.vehicleId, chat.vehicleName);
+                setSelectedVehicleId(chat.vehicleId);
+              }}
+              className={`p-3 border-b border-slate-700 cursor-pointer hover:bg-slate-700/50 transition-colors ${
+                selectedVehicleId === chat.vehicleId ? 'bg-slate-700 border-l-4 border-primary' : ''
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-medium text-sm truncate">{chat.vehicleName}</div>
+                  {chat.lastMessage && (
+                    <div className="text-slate-400 text-xs truncate mt-1">{chat.lastMessage}</div>
+                  )}
+                  {chat.timestamp && (
+                    <div className="text-slate-500 text-xs mt-1">
+                      {new Date(chat.timestamp).toLocaleTimeString('cs-CZ', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        day: '2-digit',
+                        month: '2-digit'
+                      })}
                     </div>
                   )}
                 </div>
+                {chat.unreadCount > 0 && (
+                  <div className="flex-shrink-0 ml-2">
+                    <div className="bg-primary text-slate-900 text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {chat.unreadCount}
+                    </div>
+                  </div>
+                )}
               </div>
-            ))}
-            {chatHistory.length === 0 && (
-              <div className="p-4 text-center text-slate-500 text-sm">
-                Žádné vozidlo nenalezeno
+            </div>
+          ))}
+          {chatHistory.length === 0 && (
+            <div className="p-4 text-center text-slate-500 text-sm">
+              Žádné vozidlo nenalezeno
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Active Chat */}
+      {selectedVehicleId ? (
+        <div className="bg-slate-900/50 rounded-lg flex flex-col flex-1 min-h-0">
+          <h4 className="text-sm font-medium text-white p-3 border-b border-slate-600">
+            {selectedVehicleId === 'general'
+              ? 'Všeobecný chat (celá směna)'
+              : `Chat s ${vehicles.find(v => v.id === selectedVehicleId)?.name || 'vozidlem'}`
+            }
+          </h4>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-3 min-h-0">
+            {messages.length === 0 ? (
+              <p className="text-sm text-slate-400 italic text-center">
+                {selectedVehicleId === 'general'
+                  ? 'Žádné zprávy ve všeobecném chatu'
+                  : 'Žádné zprávy s tímto vozidlem'
+                }
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {messages
+                  .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                  .map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
+                          msg.sender_id === currentUserId
+                            ? 'bg-primary text-slate-900'
+                            : 'bg-slate-700 text-white'
+                        }`}
+                      >
+                        <div className="text-xs opacity-75 mb-1">
+                          {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
+                        </div>
+                        <div>{msg.message}</div>
+                      </div>
+                    </div>
+                  ))}
+                <div ref={messagesEndRef} />
               </div>
             )}
           </div>
-        </div>
 
-        {/* Active Chat */}
-        {selectedVehicleId ? (
-          <div className="bg-slate-900/50 rounded-lg p-4">
-            <h4 className="text-sm font-medium text-white mb-3">
-              {selectedVehicleId === 'general'
-                ? 'Všeobecný chat (celá směna)'
-                : `Chat s ${vehicles.find(v => v.id === selectedVehicleId)?.name || 'vozidlem'}`
-              }
-            </h4>
-
-            {/* Messages */}
-            <div className="mb-4 max-h-60 overflow-y-auto">
-              {messages.length === 0 ? (
-                <p className="text-sm text-slate-400 italic">
-                  Žádné zprávy
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {messages
-                    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                    .map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.sender_id === 'dispatcher' ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                            msg.sender_id === 'dispatcher'
-                              ? 'bg-primary text-slate-900'
-                              : 'bg-slate-700 text-white'
-                          }`}
-                        >
-                          <div className="text-xs opacity-75 mb-1">
-                            {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
-                          </div>
-                          {msg.message}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-
-            {/* Message input */}
+          {/* Message input */}
+          <div className="flex-shrink-0 p-3 border-t border-slate-600">
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
@@ -767,115 +764,31 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                 placeholder="Napište zprávu..."
                 className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                 disabled={sending}
+                tabIndex={-1}
               />
               <button
                 onClick={sendMessage}
                 disabled={!newMessage.trim() || sending || !socketConnected}
-                className="px-4 py-2 bg-primary hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-slate-900 font-medium text-sm"
+                className="px-4 py-2 bg-primary hover:bg-nord-frost4 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium text-sm whitespace-nowrap"
               >
                 {sending ? 'Odesílání...' : 'Odeslat'}
               </button>
             </div>
           </div>
-        ) : (
-          <div className="bg-slate-900/50 rounded-lg p-4 text-center text-slate-400">
-            <p>Vyberte chat výše</p>
-          </div>
-        )}
-                <h4 className="text-sm font-medium text-white">
-                  {selectedVehicleId === 'general'
-                    ? 'Všeobecný chat (celá směna)'
-                    : `Chat s ${vehicles.find(v => v.id === selectedVehicleId)?.name || 'vozidlem'}`
-                  }
-                </h4>
-              </div>
-            ) : (
-              <div className="text-slate-400 text-sm">
-                Vyberte chat zleva
-              </div>
-            )}
-          </div>
-
-          {selectedVehicleId ? (
-            <>
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-3 min-h-0">
-                 {messages.length === 0 ? (
-                   <p className="text-sm text-slate-400 italic text-center">
-                     {selectedVehicleId === 'general'
-                       ? 'Žádné zprávy ve všeobecném chatu'
-                       : 'Žádné zprávy s tímto vozidlem'
-                     }
-                   </p>
-                ) : (
-                  <div className="space-y-2">
-                     {messages
-                       .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-                       .map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                            msg.sender_id === currentUserId
-                              ? 'bg-primary text-slate-900'
-                              : 'bg-slate-700 text-white'
-                          }`}
-                        >
-                          <div className="text-xs opacity-75 mb-1">
-                            {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
-                          </div>
-                          <div>{msg.message}</div>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                )}
-              </div>
-
-              {/* Message input */}
-              <div className="flex-shrink-0 p-3 border-t border-slate-600">
-                <div className="flex gap-2">
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="Napište zprávu..."
-                      className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                      disabled={sending}
-                      tabIndex={-1}
-                    />
-                  <button
-                    onClick={sendMessage}
-                    disabled={!newMessage.trim() || sending || !socketConnected}
-                    className="px-4 py-2 bg-primary hover:bg-nord-frost4 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium text-sm whitespace-nowrap"
-                  >
-                    {sending ? 'Odesílání...' : 'Odeslat'}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center">
-              <div className="text-center text-slate-400">
-                <div className="w-16 h-16 mx-auto mb-4 bg-slate-800 rounded-full flex items-center justify-center">
-                  <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </div>
-                <p className="text-lg font-medium">Vyberte vozidlo zleva</p>
-                <p className="text-sm mt-2">Začněte konverzaci se svým řidičem</p>
-              </div>
-            </div>
-          )}
         </div>
-      </div>
-
-
+      ) : (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-slate-400">
+            <div className="w-16 h-16 mx-auto mb-4 bg-slate-800 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <p className="text-lg font-medium">Vyberte vozidlo zleva</p>
+            <p className="text-sm mt-2">Začněte konverzaci se svým řidičem</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
