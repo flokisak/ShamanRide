@@ -136,21 +136,11 @@ const Dashboard: React.FC = () => {
      setTimeout(() => setIsRefreshing(false), 3000); // Prevent refreshes for 3 seconds
    }, [isRefreshing, lastRefreshTime, lastAcceptedRideId, lastAcceptTime]);
 
-   // Auto-refresh function that can access refreshVehicleData
-   const startAutoRefresh = () => {
-     const refreshInterval = setInterval(async () => {
-       if (vehicleNumber) {
-         try {
-           console.log('Auto-refreshing ride data...');
-           await refreshVehicleData();
-         } catch (err) {
-           console.warn('Error auto-refreshing ride data:', err);
-         }
-       }
-     }, 10000); // Refresh every 10 seconds (reduced from 30)
-
-     return () => clearInterval(refreshInterval);
-   };
+    // Auto-refresh disabled - real-time subscriptions handle updates
+    const startAutoRefresh = () => {
+      // Disabled to prevent excessive database requests
+      return () => {};
+    };
 
   useEffect(() => {
     // Initialize notifications and check permissions
@@ -426,42 +416,23 @@ const Dashboard: React.FC = () => {
 
        const rideChannel = supabase
          .channel('ride_assignments')
-         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-           console.log('🚗 New ride INSERT detected:', payload);
-           console.log('vehicle_id in payload:', payload.new.vehicle_id, 'type:', typeof payload.new.vehicle_id);
-           console.log('vehicleNumber:', vehicleNumber, 'type:', typeof vehicleNumber);
-           console.log('match:', payload.new.vehicle_id === vehicleNumber);
-           // Only refresh if this ride is assigned to our vehicle
-           if (payload.new.vehicle_id === vehicleNumber) {
-             console.log('✅ Ride matches our vehicle, refreshing data...');
-             const now = Date.now();
-             if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second between subscription-triggered refreshes
-               setLastSubscriptionRefresh(now);
-               refreshVehicleData();
-               // Notify user with sound and vibration for new ride assignment
-               notifyUser('ride');
-             } else {
-               console.log('⏳ Skipping refresh due to rate limiting');
-             }
-           } else {
-             console.log('❌ Ride does not match our vehicle, ignoring');
-           }
-         })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-            console.log('🔄 Ride UPDATE detected:', payload);
-            console.log('vehicle_id in payload:', payload.new.vehicle_id, 'vehicleNumber:', vehicleNumber);
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
+            console.log('🚗 New ride INSERT detected:', payload);
+            console.log('vehicle_id in payload:', payload.new.vehicle_id, 'type:', typeof payload.new.vehicle_id);
+            console.log('vehicleNumber:', vehicleNumber, 'type:', typeof vehicleNumber);
+            console.log('match:', payload.new.vehicle_id === vehicleNumber);
             // Only refresh if this ride is assigned to our vehicle
             if (payload.new.vehicle_id === vehicleNumber) {
-              console.log('✅ Ride update matches our vehicle, refreshing data...');
+              console.log('✅ Ride matches our vehicle, refreshing data...');
               const now = Date.now();
-              if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second
+              if (now - lastSubscriptionRefresh > 10000) { // Increased to 10 seconds between subscription-triggered refreshes
                 setLastSubscriptionRefresh(now);
                 refreshVehicleData();
+                // Notify user with sound and vibration for new ride assignment
+                notifyUser('ride');
               } else {
-                console.log('⏳ Skipping update refresh due to rate limiting');
+                console.log('⏳ Skipping refresh due to rate limiting');
               }
-            } else {
-              console.log('❌ Ride update does not match our vehicle, ignoring');
             }
           })
          .subscribe((status, err) => {
@@ -666,7 +637,7 @@ const Dashboard: React.FC = () => {
       } else {
         console.log('Not sending location - currentPosition:', !!currentPosition, 'vehicleNumber:', vehicleNumber);
       }
-    }, 60000); // Send every minute
+    }, 300000); // Send every 5 minutes to reduce data transfer
 
     return () => {
       console.log('Stopping GPS tracking');
@@ -709,7 +680,7 @@ const Dashboard: React.FC = () => {
          } catch (err) {
            console.warn('Error refreshing messages:', err);
          }
-       }, 120000); // Refresh every 2 minutes (reduced from 5)
+        }, 300000); // Refresh every 5 minutes to reduce data transfer
 
        return () => clearInterval(refreshInterval);
      }, [vehicleNumber, messages]);

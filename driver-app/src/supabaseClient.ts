@@ -192,29 +192,19 @@ const supabaseService: any = SUPABASE_ENABLED ? {
     if (error) throw error;
     return (data || []).map((d: any) => this._fromDbRideLog(d));
   },
-  async addRideLog(rideLog: any) {
-    const dbData = this._toDbRideLog(rideLog);
-    console.log('addRideLog: sending to database:', dbData);
-    if (SUPABASE_ENABLED) {
-      // Try update first (for existing rides), then upsert if it fails
-      const { data: updateData, error: updateError } = await supabase.from('ride_logs').update(dbData).eq('id', rideLog.id);
-      console.log('addRideLog update result:', { data: updateData, error: updateError });
-      if (updateError) {
-        console.warn('Update failed, trying upsert:', updateError);
-        const { data: upsertData, error: upsertError } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
-        console.log('addRideLog upsert result:', { data: upsertData, error: upsertError });
-        if (upsertError) {
-          console.error('addRideLog upsert error:', upsertError);
-          throw upsertError;
-        }
-      }
-      console.log('addRideLog: successfully saved to Supabase');
-      // Note: Real-time postgres_changes subscription handles notifications automatically
-    } else {
-      console.log('addRideLog: Supabase not enabled, using localStorage');
-    }
-    upsertLocal('ride-log', rideLog);
-  },
+   async addRideLog(rideLog: any) {
+     const dbData = this._toDbRideLog(rideLog);
+     console.log('addRideLog: sending to database:', dbData);
+     if (SUPABASE_ENABLED) {
+       const { error } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
+       if (error) throw error;
+       console.log('addRideLog: successfully saved to Supabase');
+       // Note: Real-time postgres_changes subscription handles notifications automatically
+     } else {
+       console.log('addRideLog: Supabase not enabled, using localStorage');
+     }
+     upsertLocal('ride-log', rideLog);
+   },
   async updateRideLogs(rideLogs: any[]) {
     if (SUPABASE_ENABLED) {
       try {

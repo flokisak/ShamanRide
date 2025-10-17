@@ -191,46 +191,46 @@ const AppContent: React.FC = () => {
        if (!SUPABASE_ENABLED) return;
 
        console.log('Setting up dispatcher ride updates subscription');
-       const rideChannel = supabase
-         .channel('dispatcher_ride_updates')
-         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-           console.log('New ride inserted:', payload);
-           const newRide = payload.new;
-           const statusLower = newRide.status.toLowerCase();
+        const rideChannel = supabase
+          .channel('dispatcher_ride_updates')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
+            console.log('New ride inserted:', payload);
+            const newRide = payload.new;
+            const statusLower = newRide.status.toLowerCase();
 
-           // Map from DB format to app format
-           const mappedRide = {
-             id: newRide.id,
-             timestamp: newRide.timestamp,
-             vehicleName: newRide.vehicle_name ?? null,
-             vehicleLicensePlate: newRide.vehicle_license_plate ?? null,
-             driverName: newRide.driver_name ?? null,
-             vehicleType: newRide.vehicle_type ?? null,
-             customerName: newRide.customer_name,
-             rideType: (newRide.ride_type ?? 'business').toUpperCase(),
-             customerPhone: newRide.customer_phone,
-             stops: newRide.stops,
-             passengers: newRide.passengers,
-             pickupTime: newRide.pickup_time,
-              status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                      statusLower === 'completed' ? RideStatus.Completed :
-                      statusLower === 'cancelled' ? RideStatus.Cancelled :
-                      RideStatus.Pending,
-             vehicleId: newRide.vehicle_id ?? null,
-             notes: newRide.notes ?? null,
-             estimatedPrice: newRide.estimated_price ?? null,
-             estimatedPickupTimestamp: newRide.estimated_pickup_timestamp,
-             estimatedCompletionTimestamp: newRide.estimated_completion_timestamp,
-             fuelCost: newRide.fuel_cost ?? null,
-             distance: newRide.distance ?? null,
-             acceptedAt: newRide.accepted_at ?? null,
-             startedAt: newRide.started_at ?? null,
-             completedAt: newRide.completed_at ?? null,
-           };
+            // Map from DB format to app format
+            const mappedRide = {
+              id: newRide.id,
+              timestamp: newRide.timestamp,
+              vehicleName: newRide.vehicle_name ?? null,
+              vehicleLicensePlate: newRide.vehicle_license_plate ?? null,
+              driverName: newRide.driver_name ?? null,
+              vehicleType: newRide.vehicle_type ?? null,
+              customerName: newRide.customer_name,
+              rideType: (newRide.ride_type ?? 'business').toUpperCase(),
+              customerPhone: newRide.customer_phone,
+              stops: newRide.stops,
+              passengers: newRide.passengers,
+              pickupTime: newRide.pickup_time,
+               status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                       statusLower === 'completed' ? RideStatus.Completed :
+                       statusLower === 'cancelled' ? RideStatus.Cancelled :
+                       RideStatus.Pending,
+              vehicleId: newRide.vehicle_id ?? null,
+              notes: newRide.notes ?? null,
+              estimatedPrice: newRide.estimated_price ?? null,
+              estimatedPickupTimestamp: newRide.estimated_pickup_timestamp,
+              estimatedCompletionTimestamp: newRide.estimated_completion_timestamp,
+              fuelCost: newRide.fuel_cost ?? null,
+              distance: newRide.distance ?? null,
+              acceptedAt: newRide.accepted_at ?? null,
+              startedAt: newRide.started_at ?? null,
+              completedAt: newRide.completed_at ?? null,
+            };
 
-           // Add new ride to local ride log
-           setRideLog(prev => [mappedRide, ...prev]);
-         })
+            // Add new ride to local ride log
+            setRideLog(prev => [mappedRide, ...prev]);
+          })
          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
            console.log('Ride updated by driver:', payload);
            const updatedRide = payload.new;
