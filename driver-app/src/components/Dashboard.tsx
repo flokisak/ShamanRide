@@ -1675,72 +1675,70 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Location widget - positioned at bottom right */}
-        <div className="fixed bottom-4 right-4 z-10">
-          <div className="glass card-hover p-3 rounded-2xl border border-slate-700/50 w-64">
-            <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.currentLocation')}</label>
-            <p className="text-slate-300 text-sm">
-              {location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : t('dashboard.locationNotAvailable')}
+        {/* Location */}
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <label className="block text-sm font-medium mb-2 text-slate-300">{t('dashboard.currentLocation')}</label>
+          <p className="text-slate-300">
+            {location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : t('dashboard.locationNotAvailable')}
+          </p>
+          {location && (
+            <p className="text-xs text-slate-400 mt-1">
+              Last updated: {new Date().toLocaleTimeString()}
             </p>
-            {location && (
-              <p className="text-xs text-slate-400 mt-1">
-                Last updated: {new Date().toLocaleTimeString()}
-              </p>
+          )}
+
+            {/* Network Status Indicator */}
+            <div className="flex items-center gap-2 mt-2">
+              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+              <span className="text-xs text-slate-400">
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+
+            {/* Real-time Connection Status Indicator */}
+            <div className="flex items-center gap-2 mt-2">
+              <div className={`w-3 h-3 rounded-full ${
+                realtimeConnectionStatus === 'connected' ? 'bg-blue-400' :
+                realtimeConnectionStatus === 'connecting' ? 'bg-yellow-400' :
+                'bg-red-400'
+              }`}></div>
+              <span className="text-xs text-slate-400">
+                Real-time: {
+                  realtimeConnectionStatus === 'connected' ? 'Connected' :
+                  realtimeConnectionStatus === 'connecting' ? 'Connecting...' :
+                  'Disconnected'
+                }
+              </span>
+            </div>
+
+            {/* Notification Permission Indicator */}
+            {notificationPermission !== 'granted' && (
+              <div className="flex items-center gap-2 mt-2">
+                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <span className="text-xs text-yellow-400">
+                  Upozornění: Povolte notifikace pro lepší zážitek
+                </span>
+                <button
+                  onClick={async () => {
+                    const granted = await initializeNotifications(userId || undefined);
+                    setNotificationPermission(Notification.permission as NotificationPermission);
+                  }}
+                  className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
+                >
+                  Povolit
+                </button>
+              </div>
             )}
 
-              {/* Network Status Indicator */}
+            {/* Screen Wake Lock Indicator */}
+            {isWakeLockSupported() && (
               <div className="flex items-center gap-2 mt-2">
-                <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                <div className={`w-3 h-3 rounded-full ${wakeLockActive ? 'bg-green-400' : 'bg-gray-400'}`}></div>
                 <span className="text-xs text-slate-400">
-                  {isOnline ? 'Online' : 'Offline'}
+                  {wakeLockActive ? 'Obrazovka zůstane zapnutá' : 'Obrazovka se může vypnout'}
                 </span>
               </div>
-
-              {/* Real-time Connection Status Indicator */}
-              <div className="flex items-center gap-2 mt-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  realtimeConnectionStatus === 'connected' ? 'bg-blue-400' :
-                  realtimeConnectionStatus === 'connecting' ? 'bg-yellow-400' :
-                  'bg-red-400'
-                }`}></div>
-                <span className="text-xs text-slate-400">
-                  Real-time: {
-                    realtimeConnectionStatus === 'connected' ? 'Connected' :
-                    realtimeConnectionStatus === 'connecting' ? 'Connecting...' :
-                    'Disconnected'
-                  }
-                </span>
-              </div>
-
-              {/* Notification Permission Indicator */}
-              {notificationPermission !== 'granted' && (
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                  <span className="text-xs text-yellow-400">
-                    Upozornění: Povolte notifikace pro lepší zážitek
-                  </span>
-                  <button
-                    onClick={async () => {
-                      const granted = await initializeNotifications(userId || undefined);
-                      setNotificationPermission(Notification.permission as NotificationPermission);
-                    }}
-                    className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white ml-2"
-                  >
-                    Povolit
-                  </button>
-                </div>
-              )}
-
-              {/* Screen Wake Lock Indicator */}
-              {isWakeLockSupported() && (
-                <div className="flex items-center gap-2 mt-2">
-                  <div className={`w-3 h-3 rounded-full ${wakeLockActive ? 'bg-green-400' : 'bg-gray-400'}`}></div>
-                  <span className="text-xs text-slate-400">
-                    {wakeLockActive ? 'Obrazovka zůstane zapnutá' : 'Obrazovka se může vypnout'}
-                  </span>
-                </div>
-              )}
-          </div>
+            )}
         </div>
 
         {/* Logout button - full width at bottom */}

@@ -1926,9 +1926,9 @@ const AppContent: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Map Widget - Dynamic columns, Row 1 */}
-                      {widgetVisibility.map && (
-                        <div className={`col-start-${mapColStart} row-start-1 col-span-${mapColSpan}`}>
+                       {/* Map Widget - Column 3, Row 1 */}
+                       {widgetVisibility.map && (
+                         <div className="col-start-3 row-start-1">
                            <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
                              <div className="p-3 border-b border-slate-700">
                                <h3 className="text-sm font-semibold text-white flex items-center">
@@ -1949,9 +1949,9 @@ const AppContent: React.FC = () => {
                          </div>
                       )}
 
-                       {/* Driver Chat - Dynamic columns and row */}
-                       {widgetVisibility.driverChat && (
-                         <div className={`col-start-${smsColStart} row-start-${smsRowStart} col-span-${smsColSpan}`}>
+                        {/* Driver Chat - Column 2, Row 1 */}
+                        {widgetVisibility.driverChat && (
+                          <div className="col-start-2 row-start-1">
                             <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
                               <div className="p-4 h-full">
                                 {widgetMap.driverChat}
@@ -1960,9 +1960,9 @@ const AppContent: React.FC = () => {
                           </div>
                        )}
 
-                      {/* Ride History - Dynamic columns, Row 3 */}
-                      {widgetVisibility.rideLog && (
-                        <div className={`col-start-1 row-start-3 col-span-${rideLogColSpan}`}>
+                       {/* Ride History - Columns 1-2, Row 2 */}
+                       {widgetVisibility.rideLog && (
+                         <div className="col-start-1 row-start-2 col-span-2">
                            <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
                              <div className="p-3 border-b border-slate-700">
                                 <div className="flex justify-between items-center">
@@ -2001,9 +2001,9 @@ const AppContent: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Vehicles Status - Dynamic columns, Row 3 */}
-                      {widgetVisibility.vehicles && (
-                        <div className={`col-start-${vehiclesColStart} row-start-3 col-span-${vehiclesColSpan}`}>
+                       {/* Vehicles Status - Column 3, Row 2 */}
+                       {widgetVisibility.vehicles && (
+                         <div className="col-start-3 row-start-2">
                            <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
                              <div className="p-3 border-b border-slate-700">
                                <h3 className="text-sm font-semibold text-white flex items-center">
