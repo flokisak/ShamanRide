@@ -565,6 +565,17 @@ const AppContent: React.FC = () => {
            [newLocation.vehicle_id]: newLocation
          }));
        })
+       .on('postgres_changes', {
+         event: 'UPDATE',
+         schema: 'public',
+         table: 'locations'
+       }, (payload) => {
+         const updatedLocation = payload.new;
+         setLocations(prev => ({
+           ...prev,
+           [updatedLocation.vehicle_id]: updatedLocation
+         }));
+       })
        .subscribe((status) => {
          console.log('Locations changes channel status:', status);
          if (status === 'SUBSCRIBED') {
@@ -574,9 +585,27 @@ const AppContent: React.FC = () => {
          }
        });
 
+     // Periodic location refresh every minute
+     const locationRefreshInterval = setInterval(async () => {
+       try {
+         const loc = await supabaseService.getLocations().catch(() => []);
+         const latestLocs = (loc as any[]).reduce((acc, l) => {
+           const key = l.vehicle_id;
+           if (!acc[key] || new Date(l.timestamp) > new Date(acc[key].timestamp)) {
+             acc[key] = l;
+           }
+           return acc;
+         }, {} as Record<string, any>);
+         setLocations(latestLocs);
+       } catch (err) {
+         console.warn('Error refreshing locations:', err);
+       }
+     }, 60000); // Refresh every minute
+
      return () => {
        supabase.removeChannel(vehicleChannel);
        supabase.removeChannel(locationsChannel);
+       clearInterval(locationRefreshInterval);
      };
    }, []);
 

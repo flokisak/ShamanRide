@@ -80,7 +80,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     // Initialize notifications and check permissions
     const initNotifications = async () => {
-      const granted = await initializeNotifications();
+      const granted = await initializeNotifications(userId || undefined);
       setNotificationPermission(Notification.permission as NotificationPermission);
     };
     initNotifications();
@@ -486,7 +486,7 @@ const Dashboard: React.FC = () => {
       })();
     }
 
-    // Send location every 5 minutes to reduce data usage
+    // Send location every minute for better tracking
     locationIntervalRef.current = setInterval(async () => {
       if (currentPosition && vehicleNumber) {
         const locationData = {
@@ -534,7 +534,7 @@ const Dashboard: React.FC = () => {
       } else {
         console.log('Not sending location - currentPosition:', !!currentPosition, 'vehicleNumber:', vehicleNumber);
       }
-    }, 300000); // Send every 5 minutes
+    }, 60000); // Send every minute
 
     return () => {
       console.log('Stopping GPS tracking');
@@ -1215,15 +1215,15 @@ const Dashboard: React.FC = () => {
                <span className="text-xs text-yellow-400">
                  Upozornění: Povolte notifikace pro lepší zážitek
                </span>
-               <button
-                 onClick={async () => {
-                   const granted = await initializeNotifications();
-                   setNotificationPermission(Notification.permission as NotificationPermission);
-                 }}
-                 className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
-               >
-                 Povolit
-               </button>
+                <button
+                  onClick={async () => {
+                    const granted = await initializeNotifications(userId || undefined);
+                    setNotificationPermission(Notification.permission as NotificationPermission);
+                  }}
+                  className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
+                >
+                  Povolit
+                </button>
              </div>
            )}
         </div>

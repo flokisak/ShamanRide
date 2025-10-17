@@ -172,11 +172,115 @@ export const notifyUser = (type: 'ride' | 'message' | 'general' = 'general', cus
   }
 };
 
+// Register for push notifications
+export const registerPushNotifications = async (vapidPublicKey?: string) => {
+  try {
+    if (!('serviceWorker' in navigator)) {
+      console.warn('Service workers not supported');
+      return null;
+    }
+
+    if (!('PushManager' in window)) {
+      console.warn('Push messaging not supported');
+      return null;
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    // Check if already subscribed
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      // Subscribe to push notifications
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidPublicKey ? urlBase64ToUint8Array(vapidPublicKey) : undefined
+      });
+
+      console.log('Push notification subscription created:', subscription);
+    } else {
+      console.log('Already subscribed to push notifications');
+    }
+
+    return subscription;
+  } catch (error) {
+    console.error('Error registering push notifications:', error);
+    return null;
+  }
+};
+
+// Convert VAPID key to Uint8Array
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+// Send subscription to server
+export const sendSubscriptionToServer = async (subscription: PushSubscription, userId: string) => {
+  try {
+    // This would typically send the subscription to your backend
+    // For now, we'll just log it
+    console.log('Subscription to send to server:', {
+      userId,
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
+        auth: arrayBufferToBase64(subscription.getKey('auth')!)
+      }
+    });
+
+    // TODO: Send to your backend API
+    // await fetch('/api/push-subscription', {
+    //   method: 'POST',
+    //   headers: { 'Content-Type': 'application/json' },
+    //   body: JSON.stringify({
+    //     userId,
+    //     subscription: {
+    //       endpoint: subscription.endpoint,
+    //       keys: {
+    //         p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
+    //         auth: arrayBufferToBase64(subscription.getKey('auth')!)
+    //       }
+    //     }
+    //   })
+    // });
+
+  } catch (error) {
+    console.error('Error sending subscription to server:', error);
+  }
+};
+
+// Helper function to convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+}
+
 // Initialize notifications on app start
-export const initializeNotifications = async () => {
+export const initializeNotifications = async (userId?: string, vapidPublicKey?: string) => {
   const permissionGranted = await requestNotificationPermission();
   if (permissionGranted) {
     console.log('Notification permissions granted');
+
+    // Register for push notifications
+    const subscription = await registerPushNotifications(vapidPublicKey);
+    if (subscription && userId) {
+      await sendSubscriptionToServer(subscription, userId);
+    }
   } else {
     console.warn('Notification permissions not granted');
   }

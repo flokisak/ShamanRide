@@ -9,6 +9,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      swSrc: 'public/sw.js',
       manifest: {
         name: 'Need For Taxi',
         short_name: 'NFTaxi',
