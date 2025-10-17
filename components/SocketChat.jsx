@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { supabase } from '../../services/supabaseClient';
+import { supabase } from '../services/supabaseClient';
 
 const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
   const [messages, setMessages] = useState([]);
@@ -43,7 +43,7 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
     const initSocket = async () => {
       const token = await getToken();
 
-      const socketInstance = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
+      const socketInstance = io(import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
         auth: { token },
         transports: ['websocket', 'polling']
       });

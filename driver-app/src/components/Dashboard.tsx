@@ -5,6 +5,8 @@ import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
+import SocketRides from './SocketRides';
+import io from 'socket.io-client';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
@@ -22,6 +24,8 @@ const Dashboard: React.FC = () => {
   const [customShiftEnd, setCustomShiftEnd] = useState<string>('');
   const [customShiftDate, setCustomShiftDate] = useState<string>('');
   const [useCustomShift, setUseCustomShift] = useState<boolean>(false);
+  const [socket, setSocket] = useState<any>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
 
   // Calculate shift cash from completed rides within shift time range
   const calculateShiftCash = (rides: RideLog[], shiftStart?: number, shiftEnd?: number) => {
@@ -366,151 +370,72 @@ const Dashboard: React.FC = () => {
 
 
 
-    // Subscribe to vehicle status changes (from dispatcher app) with improved error handling
-     const vehicleChannel = supabase
-       .channel('vehicle_status_changes_driver')
-       .on('postgres_changes', {
-         event: 'UPDATE',
-         schema: 'public',
-         table: 'vehicles'
-       }, (payload) => {
-         const updatedVehicle = payload.new;
-         console.log('Vehicle status changed (driver app):', updatedVehicle);
 
-         // Only update if this is our vehicle and it's an external change
-         if (vehicleNumber && updatedVehicle.id === vehicleNumber) {
-           // Check if this is different from our current status to avoid loops
-           const currentDbStatus = driverStatus === 'available' ? 'AVAILABLE' :
-                                 driverStatus === 'on_ride' ? 'BUSY' :
-                                 driverStatus === 'break' ? 'BREAK' :
-                                 driverStatus === 'offline' ? 'OUT_OF_SERVICE' : 'AVAILABLE';
-
-           if (updatedVehicle.status !== currentDbStatus) {
-             const newStatus = updatedVehicle.status === 'AVAILABLE' ? 'available' :
-                               updatedVehicle.status === 'BUSY' ? 'on_ride' :
-                               updatedVehicle.status === 'BREAK' ? 'break' :
-                               updatedVehicle.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline';
-
-             console.log(`Updating local status to ${newStatus} from external database change`);
-             setDriverStatus(newStatus);
-           }
-         }
-       })
-       .subscribe((status) => {
-         console.log('Vehicle status channel status:', status);
-         if (status === 'SUBSCRIBED') {
-           console.log('Successfully subscribed to vehicle status changes');
-         } else if (status === 'CHANNEL_ERROR') {
-           console.error('Failed to subscribe to vehicle status changes, falling back to polling');
-         }
-       });
 
     return () => {
-      supabase.removeChannel(vehicleChannel);
       clearInterval(connectionCheckInterval);
     };
   }, []);
 
-  // Separate effect for ride subscriptions that depends on vehicleNumber
-   useEffect(() => {
-     if (!vehicleNumber || !SUPABASE_ENABLED) return;
+  // Socket.io connection for real-time messaging
+  useEffect(() => {
+    if (!userId || !vehicleNumber) return;
 
-     console.log('Setting up ride subscriptions for vehicle:', vehicleNumber);
+    const getToken = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.access_token;
+    };
 
-      // Note: Using postgres_changes subscriptions instead of broadcasts for better reliability
+    const initSocket = async () => {
+      const token = await getToken();
 
-       const rideChannel = supabase
-         .channel('ride_assignments')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-            console.log('🚗 New ride INSERT detected:', payload);
-            console.log('vehicle_id in payload:', payload.new.vehicle_id, 'type:', typeof payload.new.vehicle_id);
-            console.log('vehicleNumber:', vehicleNumber, 'type:', typeof vehicleNumber);
-            console.log('match:', payload.new.vehicle_id === vehicleNumber);
-            // Only refresh if this ride is assigned to our vehicle
-            if (payload.new.vehicle_id === vehicleNumber) {
-              console.log('✅ Ride matches our vehicle, refreshing data...');
-              const now = Date.now();
-              if (now - lastSubscriptionRefresh > 10000) { // Increased to 10 seconds between subscription-triggered refreshes
-                setLastSubscriptionRefresh(now);
-                refreshVehicleData();
-                // Notify user with sound and vibration for new ride assignment
-                notifyUser('ride');
-              } else {
-                console.log('⏳ Skipping refresh due to rate limiting');
-              }
-            }
-          })
+      const socketInstance = io(import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
+        auth: { token },
+        transports: ['websocket', 'polling']
+      });
 
-         .subscribe((status, err) => {
-           console.log('🚗 Ride assignments channel status:', status, err);
-           if (status === 'SUBSCRIBED') {
-             console.log('✅ Successfully subscribed to ride assignments for vehicle:', vehicleNumber);
-           } else if (status === 'CHANNEL_ERROR') {
-             console.error('❌ Failed to subscribe to ride assignments:', err);
-           } else if (status === 'TIMED_OUT') {
-             console.warn('⏰ Ride assignments subscription timed out');
-           } else if (status === 'CLOSED') {
-             console.warn('🔒 Ride assignments subscription closed');
-           }
-         });
+      socketInstance.on('connect', () => {
+        console.log('Driver app connected to chat server');
+        setSocketConnected(true);
 
-      return () => {
-        supabase.removeChannel(rideChannel);
-      };
-    }, [vehicleNumber, lastSubscriptionRefresh, refreshVehicleData]);
+        // Join shift chat for group messages
+        socketInstance.emit('join_group_chat', `driver_shift_${vehicleNumber}`);
+      });
 
-    // Subscribe to driver messages - separate effect to ensure vehicleNumber is available
-    useEffect(() => {
-      if (!vehicleNumber || !SUPABASE_ENABLED) return;
+      socketInstance.on('disconnect', () => {
+        console.log('Driver app disconnected from chat server');
+        setSocketConnected(false);
+      });
 
-      console.log('Setting up message subscription for vehicle:', vehicleNumber);
-      const messageChannel = supabase
-        .channel(`driver_messages_${vehicleNumber}`)  // Unique channel per driver
-         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_messages' }, (payload) => {
-          console.log('New driver message received:', payload);
-          console.log('Vehicle number:', vehicleNumber, 'Message sender:', payload.new.sender_id, 'receiver:', payload.new.receiver_id);
-
-            // Check if the message is for this vehicle or general (more flexible filtering)
-            const shouldAccept = vehicleNumber && (
-              payload.new.sender_id === `driver_${vehicleNumber}` ||
-              payload.new.receiver_id === `driver_${vehicleNumber}` ||
-              payload.new.receiver_id === vehicleNumber?.toString() ||
-              payload.new.receiver_id === 'general' ||
-              (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === `driver_${vehicleNumber}`) ||
-              (payload.new.sender_id === 'dispatcher' && payload.new.receiver_id === vehicleNumber?.toString())
-            );
-
-            console.log('Should accept message:', shouldAccept);
-
-            if (shouldAccept) {
-              console.log('Message accepted, adding to UI');
-              setMessages(prev => [...prev, payload.new]);
-              // Notify for dispatcher or general messages
-              if (payload.new.sender_id === 'dispatcher' || payload.new.receiver_id === 'general') {
-                notifyUser('message');
-                // Messages will appear in the chat widget automatically
-              }
-            } else {
-              console.log('Message rejected - not for this driver');
-            }
-         })
-        .subscribe((status, err) => {
-          console.log('Message channel status:', status, err);
-          if (status === 'SUBSCRIBED') {
-            console.log('Successfully subscribed to driver messages for vehicle', vehicleNumber);
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('Failed to subscribe to driver messages:', err);
-          } else if (status === 'TIMED_OUT') {
-            console.warn('Message subscription timed out');
-          } else if (status === 'CLOSED') {
-            console.warn('Message subscription closed');
+      // Listen for new messages
+      socketInstance.on('new_message', (messageData) => {
+        console.log('Driver app received message:', messageData);
+        setMessages(prev => {
+          // Check if message already exists
+          const exists = prev.some(m => m.id === messageData.id);
+          if (!exists) {
+            return [messageData, ...prev];
           }
+          return prev;
         });
 
-      return () => {
-        supabase.removeChannel(messageChannel);
-      };
-    }, [vehicleNumber]);
+        // Notify user for new messages
+        if (messageData.sender_id !== `driver_${vehicleNumber}`) {
+          notifyUser('message');
+        }
+      });
+
+      setSocket(socketInstance);
+    };
+
+    initSocket();
+
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, [userId, vehicleNumber]);
 
   // GPS Location tracking and sending
   useEffect(() => {
@@ -1030,8 +955,8 @@ const Dashboard: React.FC = () => {
   };
 
     const sendMessage = async () => {
-      if (!newMessage.trim() || !vehicleNumber) {
-        console.warn('Cannot send message: empty message or no vehicle number');
+      if (!newMessage.trim() || !vehicleNumber || !socket || !socketConnected) {
+        console.warn('Cannot send message: empty message, no vehicle number, or socket not connected');
         return;
       }
 
@@ -1039,44 +964,39 @@ const Dashboard: React.FC = () => {
                         selectedRecipient === 'general' ? 'general' :
                         `driver_${selectedRecipient}`;
 
+      // Determine room name based on recipient
+      let room;
+      let chatType;
+      if (selectedRecipient === 'dispatcher') {
+        room = `chat:Ddispatcher_R${vehicleNumber}`;
+        chatType = 'dispatcher_driver';
+      } else if (selectedRecipient === 'general') {
+        room = `shift_chat:driver_shift_${vehicleNumber}`;
+        chatType = 'group';
+      } else {
+        room = `chat:R${vehicleNumber}_R${selectedRecipient}`;
+        chatType = 'driver_driver';
+      }
+
       const messageData = {
-        sender_id: `driver_${vehicleNumber}`,
-        receiver_id: receiverId,
-        message: newMessage,
-        timestamp: new Date().toISOString(),
-        read: false
+        room,
+        message: newMessage.trim(),
+        senderId: `driver_${vehicleNumber}`,
+        receiverId,
+        type: chatType
       };
 
-      console.log('Sending message:', messageData);
+      console.log('Sending message via Socket.io:', messageData);
 
-      if (SUPABASE_ENABLED && supabase) {
-        try {
-          console.log('Inserting message to Supabase...');
-          const { data, error } = await supabase
-            .from('driver_messages')
-            .insert(messageData)
-            .select()
-            .single();
-
-          if (error) {
-            console.error('Supabase insert error:', error);
-            throw error;
-          }
-          console.log('Message sent successfully:', data);
-          // The real-time subscription will handle adding it to the UI
-        } catch (error) {
-          console.error('Failed to send message:', error);
-          alert('Failed to send message. Please try again.');
-          return; // Don't clear input if failed
-        }
-      } else {
-        console.warn('Supabase not enabled, message saved locally');
-        // For local mode, add directly to state
-        const localMessage = { ...messageData, id: `local-${Date.now()}` };
-        setMessages(prev => [localMessage, ...prev]);
+      try {
+        socket.emit('message', messageData);
+        console.log('Message sent successfully via Socket.io');
+        setNewMessage('');
+      } catch (error) {
+        console.error('Failed to send message via Socket.io:', error);
+        alert('Failed to send message. Please try again.');
       }
-      setNewMessage('');
-   };
+    };
 
   const getSenderName = (senderId: string) => {
     if (senderId === 'dispatcher') return 'Dispečer';
@@ -1508,11 +1428,11 @@ const Dashboard: React.FC = () => {
                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
                 placeholder={t('dashboard.typeMessage')}
               />
-              <button
-                onClick={sendMessage}
-                disabled={!newMessage.trim()}
-                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-white font-medium"
-              >
+               <button
+                 onClick={sendMessage}
+                 disabled={!newMessage.trim() || !socketConnected}
+                 className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-white font-medium"
+               >
                 {t('dashboard.send')}
               </button>
             </div>
@@ -1812,9 +1732,34 @@ const Dashboard: React.FC = () => {
            vehicleNumber={vehicleNumber}
            onRideCompleted={handleRideCompleted}
          />
-       )}
-     </div>
-   );
- };
+        )}
+
+        {/* Socket.io Real-time Updates (Hidden) */}
+        <SocketRides
+          currentUser={{ id: userId }}
+          shiftId={`driver_shift_${vehicleNumber}`}
+          isDispatcher={false}
+          onRideUpdate={(rideData) => {
+            // Handle ride updates from Socket.io
+            console.log('Driver app received ride update:', rideData);
+            // Refresh data when new rides are assigned
+            if (rideData.vehicleId === vehicleNumber) {
+              refreshVehicleData();
+            }
+          }}
+          onStatusChange={(rideId, newStatus) => {
+            // Handle status changes from Socket.io
+            console.log('Driver app received status change:', rideId, newStatus);
+            refreshVehicleData();
+          }}
+          onRideCancel={(rideId) => {
+            // Handle ride cancellations from Socket.io
+            console.log('Driver app received ride cancellation:', rideId);
+            refreshVehicleData();
+          }}
+        />
+      </div>
+    );
+  };
 
 export default Dashboard;

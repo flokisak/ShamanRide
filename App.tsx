@@ -25,7 +25,8 @@ import { TariffSettingsModal } from './components/TariffSettingsModal';
 import { AnalyticsModal } from './components/AnalyticsModal';
 import { SmsPreviewModal } from './components/SmsPreviewModal';
 import SmsGate from './components/SmsGate';
-import { DriverChat } from './components/DriverChat';
+import SocketRides from './components/SocketRides';
+import SocketChat from './components/SocketChat';
 import { useTranslation } from './contexts/LanguageContext';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -69,6 +70,8 @@ const DEFAULT_LAYOUT: LayoutConfig = [
   // Row 2: rideLog (left 2/3), vehicles (right 1/3)
   { id: 'rideLog', colStart: 1, colSpan: 2, rowStart: 3, rowSpan: 1 },
   { id: 'vehicles', colStart: 3, colSpan: 1, rowStart: 3, rowSpan: 1 },
+  // Row 3: socketRides (full width)
+  { id: 'socketRides', colStart: 1, colSpan: 3, rowStart: 4, rowSpan: 1 },
 ];
 
 const DEFAULT_WIDGET_VISIBILITY: Record<WidgetId, boolean> = {
@@ -80,6 +83,7 @@ const DEFAULT_WIDGET_VISIBILITY: Record<WidgetId, boolean> = {
     smsGate: true,
     dailyStats: true,
     driverChat: true,
+    socketRides: true,
 };
 
 export const DEFAULT_TARIFF: Tariff = {
@@ -186,124 +190,7 @@ const AppContent: React.FC = () => {
     return () => clearInterval(interval);
   }, [reloadSmsMessages]);
 
-  // Subscribe to real-time ride updates from drivers with improved error handling
-     useEffect(() => {
-       if (!SUPABASE_ENABLED) return;
 
-       console.log('Setting up dispatcher ride updates subscription');
-        const rideChannel = supabase
-          .channel('dispatcher_ride_updates')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-            console.log('New ride inserted:', payload);
-            const newRide = payload.new;
-            const statusLower = newRide.status.toLowerCase();
-
-            // Map from DB format to app format
-            const mappedRide = {
-              id: newRide.id,
-              timestamp: newRide.timestamp,
-              vehicleName: newRide.vehicle_name ?? null,
-              vehicleLicensePlate: newRide.vehicle_license_plate ?? null,
-              driverName: newRide.driver_name ?? null,
-              vehicleType: newRide.vehicle_type ?? null,
-              customerName: newRide.customer_name,
-              rideType: (newRide.ride_type ?? 'business').toUpperCase(),
-              customerPhone: newRide.customer_phone,
-              stops: newRide.stops,
-              passengers: newRide.passengers,
-              pickupTime: newRide.pickup_time,
-               status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                       statusLower === 'completed' ? RideStatus.Completed :
-                       statusLower === 'cancelled' ? RideStatus.Cancelled :
-                       RideStatus.Pending,
-              vehicleId: newRide.vehicle_id ?? null,
-              notes: newRide.notes ?? null,
-              estimatedPrice: newRide.estimated_price ?? null,
-              estimatedPickupTimestamp: newRide.estimated_pickup_timestamp,
-              estimatedCompletionTimestamp: newRide.estimated_completion_timestamp,
-              fuelCost: newRide.fuel_cost ?? null,
-              distance: newRide.distance ?? null,
-              acceptedAt: newRide.accepted_at ?? null,
-              startedAt: newRide.started_at ?? null,
-              completedAt: newRide.completed_at ?? null,
-            };
-
-            // Add new ride to local ride log
-            setRideLog(prev => [mappedRide, ...prev]);
-          })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-            // Only process important status changes to reduce traffic, skip completed/cancelled rides
-            const oldStatus = payload.old?.status?.toLowerCase();
-            const newStatus = payload.new?.status?.toLowerCase();
-
-            // Skip updates for already completed or cancelled rides
-            if (oldStatus === 'completed' || oldStatus === 'cancelled' || newStatus === 'completed' || newStatus === 'cancelled') {
-              return;
-            }
-
-            // Only update for significant status changes
-            const importantStatuses = ['pending', 'accepted', 'in_progress'];
-            if (!importantStatuses.includes(newStatus) || oldStatus === newStatus) {
-              return; // Skip minor updates
-            }
-
-            console.log('Ride status updated:', { id: payload.new.id, oldStatus, newStatus });
-
-            const updatedRide = payload.new;
-            const statusLower = updatedRide.status.toLowerCase();
-
-            // Update local ride log
-            setRideLog(prev => prev.map(ride =>
-              ride.id === updatedRide.id
-                ? {
-                    ...ride,
-                    status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                            statusLower === 'completed' ? RideStatus.Completed :
-                            statusLower === 'cancelled' ? RideStatus.Cancelled :
-                            statusLower === 'accepted' ? RideStatus.Accepted :
-                            statusLower === 'pending' ? RideStatus.Pending :
-                            ride.status,
-                    completedAt: updatedRide.completed_at || ride.completedAt,
-                    acceptedAt: updatedRide.accepted_at || ride.acceptedAt,
-                    startedAt: updatedRide.started_at || ride.startedAt
-                  }
-                : ride
-            ));
-
-            // Send status change message to driver if this is a status change
-            if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
-              const localRide = rideLog.find(r => r.id === updatedRide.id);
-              if (localRide) {
-                const oldStatusLower = payload.old.status.toLowerCase();
-                const oldStatusMapped = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
-                                  oldStatusLower === 'completed' ? RideStatus.Completed :
-                                  oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
-                                  oldStatusLower === 'accepted' ? RideStatus.Accepted :
-                                  RideStatus.Pending;
-                const newStatusMapped = statusLower === 'in_progress' ? RideStatus.InProgress :
-                                  statusLower === 'completed' ? RideStatus.Completed :
-                                  statusLower === 'cancelled' ? RideStatus.Cancelled :
-                                  statusLower === 'accepted' ? RideStatus.Accepted :
-                                  RideStatus.Pending;
-                const updatedRideForMessage = { ...localRide, status: newStatusMapped };
-                sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatusMapped);
-              }
-            }
-          })
-          .subscribe((status) => {
-           console.log('Dispatcher ride updates channel status:', status);
-           if (status === 'SUBSCRIBED') {
-             console.log('Successfully subscribed to dispatcher ride updates');
-           } else if (status === 'CHANNEL_ERROR') {
-             console.error('Failed to subscribe to dispatcher ride updates, falling back to polling');
-           }
-         });
-
-   return () => {
-     console.log('Cleaning up dispatcher ride updates subscription');
-     supabase.removeChannel(rideChannel);
-   };
-     }, []); // Remove dependencies to prevent re-subscription on every state change
 
   // Layout and widget visibility remain local-only. Load persisted values but merge with defaults
   const [layout, setLayout] = useState<LayoutConfig>(() => {
@@ -536,99 +423,7 @@ const AppContent: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Real-time subscription for vehicle status changes (from driver app) with improved error handling
-   useEffect(() => {
-     if (!SUPABASE_ENABLED) return;
 
-     const vehicleChannel = supabase
-       .channel('vehicle_status_changes')
-       .on('postgres_changes', {
-         event: 'UPDATE',
-         schema: 'public',
-         table: 'vehicles'
-       }, (payload) => {
-         const updatedVehicle = payload.new;
-         console.log('Vehicle status changed:', updatedVehicle);
-
-         setVehicles(prevVehicles =>
-           prevVehicles.map(v =>
-             v.id === updatedVehicle.id
-               ? {
-                   ...v,
-                   status: updatedVehicle.status,
-                   location: updatedVehicle.location || v.location,
-                   updated_at: updatedVehicle.updated_at
-                 }
-               : v
-           )
-         );
-       })
-       .subscribe((status) => {
-         console.log('Vehicle status changes channel status:', status);
-         if (status === 'SUBSCRIBED') {
-           console.log('Successfully subscribed to vehicle status changes');
-         } else if (status === 'CHANNEL_ERROR') {
-           console.error('Failed to subscribe to vehicle status changes');
-         }
-       });
-
-     // Real-time subscription for location updates
-     const locationsChannel = supabase
-       .channel('locations_changes')
-       .on('postgres_changes', {
-         event: 'INSERT',
-         schema: 'public',
-         table: 'locations'
-       }, (payload) => {
-         const newLocation = payload.new;
-         setLocations(prev => ({
-           ...prev,
-           [newLocation.vehicle_id]: newLocation
-         }));
-       })
-       .on('postgres_changes', {
-         event: 'UPDATE',
-         schema: 'public',
-         table: 'locations'
-       }, (payload) => {
-         const updatedLocation = payload.new;
-         setLocations(prev => ({
-           ...prev,
-           [updatedLocation.vehicle_id]: updatedLocation
-         }));
-       })
-       .subscribe((status) => {
-         console.log('Locations changes channel status:', status);
-         if (status === 'SUBSCRIBED') {
-           console.log('Successfully subscribed to location updates');
-         } else if (status === 'CHANNEL_ERROR') {
-           console.error('Failed to subscribe to location updates');
-         }
-       });
-
-     // Periodic location refresh every minute
-     const locationRefreshInterval = setInterval(async () => {
-       try {
-         const loc = await supabaseService.getLocations().catch(() => []);
-         const latestLocs = (loc as any[]).reduce((acc, l) => {
-           const key = l.vehicle_id;
-           if (!acc[key] || new Date(l.timestamp) > new Date(acc[key].timestamp)) {
-             acc[key] = l;
-           }
-           return acc;
-         }, {} as Record<string, any>);
-         setLocations(latestLocs);
-       } catch (err) {
-         console.warn('Error refreshing locations:', err);
-       }
-     }, 60000); // Refresh every minute
-
-     return () => {
-       supabase.removeChannel(vehicleChannel);
-       supabase.removeChannel(locationsChannel);
-       clearInterval(locationRefreshInterval);
-     };
-   }, []);
 
       // --- Sync state changes to Supabase when enabled, otherwise keep localStorage ---
 
@@ -1823,7 +1618,75 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-      driverChat: <DriverChat vehicles={vehicles} onNewMessage={handleDriverMessage} />,
+      driverChat: <SocketChat currentUser={user} shiftId="dispatcher_shift" chatType="group" targetId="dispatcher" />,
+      socketRides: <SocketRides
+        currentUser={user}
+        shiftId="dispatcher_shift"
+        isDispatcher={true}
+        onRideUpdate={(rideData) => {
+          // Handle ride updates from Socket.io
+          const mappedRide = {
+            id: rideData.id,
+            timestamp: rideData.timestamp,
+            vehicleName: rideData.vehicleName ?? null,
+            vehicleLicensePlate: rideData.vehicleLicensePlate ?? null,
+            driverName: rideData.driverName ?? null,
+            vehicleType: rideData.vehicleType ?? null,
+            customerName: rideData.customerName,
+            rideType: (rideData.rideType ?? 'business').toUpperCase(),
+            customerPhone: rideData.customerPhone,
+            stops: rideData.stops,
+            passengers: rideData.passengers,
+            pickupTime: rideData.pickupTime,
+            status: rideData.status?.toLowerCase() === 'in_progress' ? RideStatus.InProgress :
+                    rideData.status?.toLowerCase() === 'completed' ? RideStatus.Completed :
+                    rideData.status?.toLowerCase() === 'cancelled' ? RideStatus.Cancelled :
+                    rideData.status?.toLowerCase() === 'accepted' ? RideStatus.Accepted :
+                    RideStatus.Pending,
+            vehicleId: rideData.vehicleId ?? null,
+            notes: rideData.notes ?? null,
+            estimatedPrice: rideData.estimatedPrice ?? null,
+            estimatedPickupTimestamp: rideData.estimatedPickupTimestamp,
+            estimatedCompletionTimestamp: rideData.estimatedCompletionTimestamp,
+            fuelCost: rideData.fuelCost ?? null,
+            distance: rideData.distance ?? null,
+            acceptedAt: rideData.acceptedAt ?? null,
+            startedAt: rideData.startedAt ?? null,
+            completedAt: rideData.completedAt ?? null,
+          };
+          setRideLog(prev => {
+            const existingIndex = prev.findIndex(r => r.id === rideData.id);
+            if (existingIndex >= 0) {
+              const updated = [...prev];
+              updated[existingIndex] = { ...updated[existingIndex], ...mappedRide };
+              return updated;
+            } else {
+              return [mappedRide, ...prev];
+            }
+          });
+        }}
+        onStatusChange={(rideId, newStatus) => {
+          // Handle status changes from Socket.io
+          const statusLower = newStatus.toLowerCase();
+          setRideLog(prev => prev.map(ride =>
+            ride.id === rideId
+              ? {
+                  ...ride,
+                  status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                          statusLower === 'completed' ? RideStatus.Completed :
+                          statusLower === 'cancelled' ? RideStatus.Cancelled :
+                          statusLower === 'accepted' ? RideStatus.Accepted :
+                          statusLower === 'pending' ? RideStatus.Pending :
+                          ride.status,
+                }
+              : ride
+          ));
+        }}
+        onRideCancel={(rideId) => {
+          // Handle ride cancellations from Socket.io
+          setRideLog(prev => prev.filter(ride => ride.id !== rideId));
+        }}
+      />,
   };
 
   const visibleLayout = layout.filter(item => widgetVisibility[item.id]);

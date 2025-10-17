@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
-import { supabase } from '../services/supabaseClient';
+import { supabase } from '../supabaseClient';
 
 const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onStatusChange, onRideCancel }) => {
   const [rides, setRides] = useState([]);
@@ -20,7 +20,7 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
     const initSocket = async () => {
       const token = await getToken();
 
-      const socketInstance = io(import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
+      const socketInstance = io(process.env.REACT_APP_SOCKET_URL || 'http://localhost:3000', {
         auth: { token },
         transports: ['websocket', 'polling']
       });
