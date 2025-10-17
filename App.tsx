@@ -7,6 +7,8 @@ import { findBestVehicle, generateSms, generateCustomerSms, generateNavigationUr
 import { SUPABASE_ENABLED, supabase, supabaseService } from './services/supabaseClient';
 import type { SmsMessageRecord } from './services/smsService';
 import { sendSms, isSmsGateConfigured } from './services/messagingService';
+import { initializeNotifications, notifyUser } from './services/notifications';
+import io from 'socket.io-client';
 
 import { LoadingSpinner } from './components/LoadingSpinner';
 
@@ -243,9 +245,11 @@ const AppContent: React.FC = () => {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
   // Gamification modal
-   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
+  const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
 
-         // Apply modern Nord theme with rotating background
+
+
+          // Apply modern Nord theme with rotating background
          useEffect(() => {
            const nordBase = 'rgb(46, 52, 64)';
            const nordMid = 'rgb(59, 66, 82)';
@@ -278,9 +282,14 @@ const AppContent: React.FC = () => {
          }, []);
 
 
-  // Load initial data (Supabase when enabled, otherwise localStorage) and auto-update vehicle statuses
+  // Initialize notifications on app start
   useEffect(() => {
-    const loadData = async () => {
+    initializeNotifications();
+  }, []);
+
+  // Load initial data (Supabase when enabled, otherwise localStorage) and auto-update vehicle statuses
+   useEffect(() => {
+     const loadData = async () => {
       try {
         console.log('📥 Loading data via supabaseService (cloud or local fallback)');
         const results = await Promise.all([
@@ -356,8 +365,10 @@ const AppContent: React.FC = () => {
     loadData();
   }, []);
 
+
+
   // Load ride logs based on dateFilter
-  useEffect(() => {
+   useEffect(() => {
     const loadRideLogs = async () => {
       try {
         let options: { dateFrom?: string; dateTo?: string } | undefined;
@@ -1619,55 +1630,72 @@ const AppContent: React.FC = () => {
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
       driverChat: <DriverChat vehicles={vehicles} onNewMessage={(vehicleId, message) => {
-        // Handle new message notifications if needed
-        console.log(`New message from vehicle ${vehicleId}: ${message}`);
+        // Trigger browser notification for new messages
+        const vehicle = vehicles.find(v => v.id === vehicleId);
+        const vehicleName = vehicle ? vehicle.name : `Vozidlo ${vehicleId}`;
+        notifyUser('message', {
+          title: 'Nová zpráva od řidiče',
+          body: `${vehicleName}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`
+        });
       }} />,
-      socketRides: <SocketRides
-        currentUser={user}
-        shiftId="dispatcher_shift"
-        isDispatcher={true}
-        onRideUpdate={(rideData) => {
-          // Handle ride updates from Socket.io
-          const mappedRide = {
-            id: rideData.id,
-            timestamp: rideData.timestamp,
-            vehicleName: rideData.vehicleName ?? null,
-            vehicleLicensePlate: rideData.vehicleLicensePlate ?? null,
-            driverName: rideData.driverName ?? null,
-            vehicleType: rideData.vehicleType ?? null,
-            customerName: rideData.customerName,
-            rideType: (rideData.rideType ?? 'business').toUpperCase(),
-            customerPhone: rideData.customerPhone,
-            stops: rideData.stops,
-            passengers: rideData.passengers,
-            pickupTime: rideData.pickupTime,
-            status: rideData.status?.toLowerCase() === 'in_progress' ? RideStatus.InProgress :
-                    rideData.status?.toLowerCase() === 'completed' ? RideStatus.Completed :
-                    rideData.status?.toLowerCase() === 'cancelled' ? RideStatus.Cancelled :
-                    rideData.status?.toLowerCase() === 'accepted' ? RideStatus.Accepted :
-                    RideStatus.Pending,
-            vehicleId: rideData.vehicleId ?? null,
-            notes: rideData.notes ?? null,
-            estimatedPrice: rideData.estimatedPrice ?? null,
-            estimatedPickupTimestamp: rideData.estimatedPickupTimestamp,
-            estimatedCompletionTimestamp: rideData.estimatedCompletionTimestamp,
-            fuelCost: rideData.fuelCost ?? null,
-            distance: rideData.distance ?? null,
-            acceptedAt: rideData.acceptedAt ?? null,
-            startedAt: rideData.startedAt ?? null,
-            completedAt: rideData.completedAt ?? null,
-          };
-          setRideLog(prev => {
-            const existingIndex = prev.findIndex(r => r.id === rideData.id);
-            if (existingIndex >= 0) {
-              const updated = [...prev];
-              updated[existingIndex] = { ...updated[existingIndex], ...mappedRide };
-              return updated;
-            } else {
-              return [mappedRide, ...prev];
-            }
-          });
-        }}
+       socketRides: <SocketRides
+         currentUser={user}
+         shiftId="dispatcher_shift"
+         isDispatcher={true}
+         onRideUpdate={(rideData) => {
+           // Handle ride updates from Socket.io
+           const mappedRide = {
+             id: rideData.id,
+             timestamp: rideData.timestamp,
+             vehicleName: rideData.vehicleName ?? null,
+             vehicleLicensePlate: rideData.vehicleLicensePlate ?? null,
+             driverName: rideData.driverName ?? null,
+             vehicleType: rideData.vehicleType ?? null,
+             customerName: rideData.customerName,
+             rideType: (rideData.rideType ?? 'business').toUpperCase(),
+             customerPhone: rideData.customerPhone,
+             stops: rideData.stops,
+             passengers: rideData.passengers,
+             pickupTime: rideData.pickupTime,
+             status: rideData.status?.toLowerCase() === 'in_progress' ? RideStatus.InProgress :
+                     rideData.status?.toLowerCase() === 'completed' ? RideStatus.Completed :
+                     rideData.status?.toLowerCase() === 'cancelled' ? RideStatus.Cancelled :
+                     rideData.status?.toLowerCase() === 'accepted' ? RideStatus.Accepted :
+                     RideStatus.Pending,
+             vehicleId: rideData.vehicleId ?? null,
+             notes: rideData.notes ?? null,
+             estimatedPrice: rideData.estimatedPrice ?? null,
+             estimatedPickupTimestamp: rideData.estimatedPickupTimestamp,
+             estimatedCompletionTimestamp: rideData.estimatedCompletionTimestamp,
+             fuelCost: rideData.fuelCost ?? null,
+             distance: rideData.distance ?? null,
+             acceptedAt: rideData.acceptedAt ?? null,
+             startedAt: rideData.startedAt ?? null,
+             completedAt: rideData.completedAt ?? null,
+           };
+
+           // Check if this is a new ride (not already in our ride log)
+           const isNewRide = !rideLog.some(r => r.id === rideData.id);
+
+           setRideLog(prev => {
+             const existingIndex = prev.findIndex(r => r.id === rideData.id);
+             if (existingIndex >= 0) {
+               const updated = [...prev];
+               updated[existingIndex] = { ...updated[existingIndex], ...mappedRide };
+               return updated;
+             } else {
+               return [mappedRide, ...prev];
+             }
+           });
+
+           // Notify dispatcher of new ride from driver
+           if (isNewRide && rideData.status?.toLowerCase() === 'pending') {
+             notifyUser('ride', {
+               title: 'Nová jízda od řidiče!',
+               body: `${rideData.customerName} - ${rideData.stops?.[0]} → ${rideData.stops?.[rideData.stops.length - 1]}`
+             });
+           }
+         }}
         onStatusChange={(rideId, newStatus) => {
           // Handle status changes from Socket.io
           const statusLower = newStatus.toLowerCase();

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase, authService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
-import { supabaseService } from '../../../services/supabaseClient';
-import { SUPABASE_ENABLED as SUPABASE_ENABLED_SERVICES } from '../../../services/supabaseClient';
+import { supabaseService } from '../supabaseClient';
+import { SUPABASE_ENABLED as SUPABASE_ENABLED_SERVICES } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
