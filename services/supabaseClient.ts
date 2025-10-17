@@ -244,7 +244,7 @@ export const supabaseService = SUPABASE_ENABLED
               stops: r.stops,
               passengers: r.passengers,
               pickup_time: r.pickupTime,
-                status: r.status.replace(/([A-Z])/g, '_$1').toLowerCase().replace(/^_/, ''),
+                 status: r.status.toLowerCase(),
               vehicle_id: r.vehicleId ?? null,
               notes: r.notes ?? null,
               estimated_price: r.estimatedPrice ?? null,
