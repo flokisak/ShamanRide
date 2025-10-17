@@ -24,42 +24,60 @@ const Dashboard: React.FC = () => {
 
   // Calculate shift cash from completed rides within shift time range
   const calculateShiftCash = (rides: RideLog[], shiftStart?: number, shiftEnd?: number) => {
-    let startTime: number;
-    let endTime: number;
-
     if (useCustomShift && customShiftStart && customShiftEnd) {
-      // Use custom shift times
-      const today = new Date();
+      // Use custom shift times - look at recent rides within shift hours
       const [startHours, startMinutes] = customShiftStart.split(':').map(Number);
       const [endHours, endMinutes] = customShiftEnd.split(':').map(Number);
 
-      const shiftStartDate = new Date(today);
-      shiftStartDate.setHours(startHours, startMinutes, 0, 0);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-      const shiftEndDate = new Date(today);
-      shiftEndDate.setHours(endHours, endMinutes, 0, 0);
+      // Create shift start and end times for today
+      const shiftStartToday = new Date(today);
+      shiftStartToday.setHours(startHours, startMinutes, 0, 0);
 
-      // If end time is before start time, assume it's next day
-      if (shiftEndDate <= shiftStartDate) {
-        shiftEndDate.setDate(shiftEndDate.getDate() + 1);
+      const shiftEndToday = new Date(today);
+      shiftEndToday.setHours(endHours, endMinutes, 0, 0);
+
+      // For overnight shifts, if end time is before start time, end is tomorrow
+      if (shiftEndToday <= shiftStartToday) {
+        shiftEndToday.setDate(shiftEndToday.getDate() + 1);
       }
 
-      startTime = shiftStartDate.getTime();
-      endTime = shiftEndDate.getTime();
+      // Also check yesterday's shift for overnight scenarios
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+
+      const shiftStartYesterday = new Date(yesterday);
+      shiftStartYesterday.setHours(startHours, startMinutes, 0, 0);
+
+      const shiftEndYesterday = new Date(yesterday);
+      shiftEndYesterday.setHours(endHours, endMinutes, 0, 0);
+
+      if (shiftEndYesterday <= shiftStartYesterday) {
+        shiftEndYesterday.setDate(shiftEndYesterday.getDate() + 1);
+      }
+
+      return rides.filter(ride => {
+        if (ride.status !== RideStatus.Completed) return false;
+
+        const rideTime = new Date(ride.timestamp).getTime();
+
+        // Check if ride falls within today's shift or yesterday's shift (for overnight)
+        return (rideTime >= shiftStartToday.getTime() && rideTime <= shiftEndToday.getTime()) ||
+               (rideTime >= shiftStartYesterday.getTime() && rideTime <= shiftEndYesterday.getTime());
+      }).reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
     } else if (shiftStart) {
       // Use automatic shift start time
-      startTime = shiftStart;
-      endTime = Date.now();
+      const shiftCompleted = rides.filter(ride =>
+        ride.status === RideStatus.Completed &&
+        new Date(ride.timestamp).getTime() >= shiftStart! &&
+        new Date(ride.timestamp).getTime() <= Date.now()
+      );
+      return shiftCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
     } else {
       return 0;
     }
-
-    const shiftCompleted = rides.filter(ride =>
-      ride.status === RideStatus.Completed &&
-      new Date(ride.timestamp).getTime() >= startTime &&
-      new Date(ride.timestamp).getTime() <= endTime
-    );
-    return shiftCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
   };
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -1436,6 +1454,9 @@ const Dashboard: React.FC = () => {
                      {useCustomShift && customShiftStart && customShiftEnd ? (
                        <div className="text-xs text-slate-400 mt-1">
                          {customShiftStart} - {customShiftEnd}
+                         <div className="text-xs text-slate-500">
+                           (včetně přes půlnoc)
+                         </div>
                        </div>
                      ) : shiftStartTime ? (
                        <div className="text-xs text-slate-400 mt-1">
@@ -1493,6 +1514,7 @@ const Dashboard: React.FC = () => {
                    {useCustomShift && customShiftStart && customShiftEnd && (
                      <div className="text-xs text-slate-400">
                        {customShiftStart} - {customShiftEnd}
+                       <span className="text-xs text-slate-500 ml-1">(přes půlnoc)</span>
                      </div>
                    )}
                  </div>
