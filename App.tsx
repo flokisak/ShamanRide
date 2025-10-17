@@ -1614,6 +1614,20 @@ const AppContent: React.FC = () => {
     }
   }, [rideLog, t]);
 
+  const handleDriverMessage = useCallback((vehicleId: number, message: string) => {
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    if (vehicle) {
+      setNotifications(prev => [...prev, {
+        id: `vehicle-msg-${Date.now()}`,
+        type: 'info',
+        titleKey: 'notifications.vehicleMessage.title',
+        messageKey: 'notifications.vehicleMessage.message',
+        messageParams: { vehicleName: vehicle.name, message: message.length > 50 ? message.substring(0, 50) + '...' : message },
+        timestamp: Date.now(),
+      }]);
+    }
+  }, [vehicles]);
+
   const handleWidgetVisibilityChange = (widgetId: WidgetId, isVisible: boolean) => {
     setWidgetVisibility(prev => ({
         ...prev,
@@ -1788,19 +1802,7 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-      driverChat: <DriverChat vehicles={vehicles} onNewMessage={(vehicleId, message) => {
-        const vehicle = vehicles.find(v => v.id === vehicleId);
-        if (vehicle) {
-          setNotifications(prev => [...prev, {
-            id: `vehicle-msg-${Date.now()}`,
-            type: 'info',
-            titleKey: 'notifications.vehicleMessage.title',
-            messageKey: 'notifications.vehicleMessage.message',
-            messageParams: { vehicleName: vehicle.name, message: message.length > 50 ? message.substring(0, 50) + '...' : message },
-            timestamp: Date.now(),
-          }]);
-       }
-     }} />,
+      driverChat: <DriverChat vehicles={vehicles} onNewMessage={handleDriverMessage} />,
   };
 
   const visibleLayout = layout.filter(item => widgetVisibility[item.id]);

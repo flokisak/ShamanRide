@@ -45,8 +45,13 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
             console.log('completeRide: Updated ride object:', updatedRide);
             console.log('completeRide: Calling supabaseService.addRideLog...');
             console.log('completeRide: SUPABASE_ENABLED =', supabaseService.SUPABASE_ENABLED);
-            await supabaseService.addRideLog(updatedRide);
-            console.log('completeRide: Ride completion database update completed successfully');
+            try {
+              await supabaseService.addRideLog(updatedRide);
+              console.log('completeRide: Ride completion database update completed successfully');
+            } catch (dbError) {
+              console.error('completeRide: Database update failed:', dbError);
+              throw dbError; // Re-throw to be caught by outer try-catch
+            }
 
             // Verify the update by fetching the ride back
             try {
