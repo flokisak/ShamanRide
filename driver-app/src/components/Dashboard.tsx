@@ -254,13 +254,16 @@ const Dashboard: React.FC = () => {
         setLicensePlate(vehicleData.licensePlate);
 
         // Get pending rides for this vehicle (queue: oldest first)
-        console.log('Querying for rides with vehicle_id:', vehicleNum, 'status: pending');
+        console.log('🔍 Querying for rides with vehicle_id:', vehicleNum, 'status: pending');
         try {
           const pending = await supabaseService.getRideLogsByVehicle(vehicleNum, 'pending');
-          console.log('Found pending rides:', pending);
+          console.log('📋 Found pending rides:', pending.length, 'rides');
+          if (pending.length > 0) {
+            console.log('📋 Pending ride details:', pending.map(r => ({ id: r.id, customer: r.customerName, status: r.status })));
+          }
           setPendingRides(pending);
         } catch (error) {
-          console.warn('Could not load pending rides:', error);
+          console.warn('❌ Could not load pending rides:', error);
           setPendingRides([]);
         }
 
@@ -438,40 +441,58 @@ const Dashboard: React.FC = () => {
           }
         });
 
-      const rideChannel = supabase
-        .channel('ride_assignments')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-          console.log('New ride assigned:', payload);
-          console.log('vehicle_id in payload:', payload.new.vehicle_id, 'vehicleNumber:', vehicleNumber, 'match:', payload.new.vehicle_id === vehicleNumber);
-          // Only refresh if this ride is assigned to our vehicle
-          if (payload.new.vehicle_id === vehicleNumber) {
-            const now = Date.now();
-            if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second between subscription-triggered refreshes
-              setLastSubscriptionRefresh(now);
-              refreshVehicleData();
-              // Notify user with sound and vibration for new ride assignment
-              notifyUser('ride');
-            }
-          }
-        })
-         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+       const rideChannel = supabase
+         .channel('ride_assignments')
+         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
+           console.log('🚗 New ride INSERT detected:', payload);
+           console.log('vehicle_id in payload:', payload.new.vehicle_id, 'type:', typeof payload.new.vehicle_id);
+           console.log('vehicleNumber:', vehicleNumber, 'type:', typeof vehicleNumber);
+           console.log('match:', payload.new.vehicle_id === vehicleNumber);
            // Only refresh if this ride is assigned to our vehicle
            if (payload.new.vehicle_id === vehicleNumber) {
+             console.log('✅ Ride matches our vehicle, refreshing data...');
              const now = Date.now();
-             if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second
+             if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second between subscription-triggered refreshes
                setLastSubscriptionRefresh(now);
                refreshVehicleData();
+               // Notify user with sound and vibration for new ride assignment
+               notifyUser('ride');
+             } else {
+               console.log('⏳ Skipping refresh due to rate limiting');
              }
+           } else {
+             console.log('❌ Ride does not match our vehicle, ignoring');
            }
          })
-        .subscribe((status) => {
-          console.log('Ride assignments channel status:', status);
-          if (status === 'SUBSCRIBED') {
-            console.log('Successfully subscribed to ride assignments');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('Failed to subscribe to ride assignments, falling back to polling');
-          }
-        });
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
+            console.log('🔄 Ride UPDATE detected:', payload);
+            console.log('vehicle_id in payload:', payload.new.vehicle_id, 'vehicleNumber:', vehicleNumber);
+            // Only refresh if this ride is assigned to our vehicle
+            if (payload.new.vehicle_id === vehicleNumber) {
+              console.log('✅ Ride update matches our vehicle, refreshing data...');
+              const now = Date.now();
+              if (now - lastSubscriptionRefresh > 1000) { // Reduced to 1 second
+                setLastSubscriptionRefresh(now);
+                refreshVehicleData();
+              } else {
+                console.log('⏳ Skipping update refresh due to rate limiting');
+              }
+            } else {
+              console.log('❌ Ride update does not match our vehicle, ignoring');
+            }
+          })
+         .subscribe((status, err) => {
+           console.log('🚗 Ride assignments channel status:', status, err);
+           if (status === 'SUBSCRIBED') {
+             console.log('✅ Successfully subscribed to ride assignments for vehicle:', vehicleNumber);
+           } else if (status === 'CHANNEL_ERROR') {
+             console.error('❌ Failed to subscribe to ride assignments:', err);
+           } else if (status === 'TIMED_OUT') {
+             console.warn('⏰ Ride assignments subscription timed out');
+           } else if (status === 'CLOSED') {
+             console.warn('🔒 Ride assignments subscription closed');
+           }
+         });
 
       return () => {
         supabase.removeChannel(updateChannel);

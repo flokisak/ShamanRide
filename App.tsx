@@ -970,9 +970,17 @@ const AppContent: React.FC = () => {
           distance: totalDistance,
        };
 
-      setRideLog(prev => [newLog, ...prev]);
-      setAssignmentResult(null);
-      setManualAssignmentDetails(null);
+       console.log('🚗 Creating new ride for driver:', {
+         vehicleId: newLog.vehicleId,
+         vehicleName: newLog.vehicleName,
+         customerName: newLog.customerName,
+         status: newLog.status,
+         id: newLog.id
+       });
+
+       setRideLog(prev => [newLog, ...prev]);
+       setAssignmentResult(null);
+       setManualAssignmentDetails(null);
 
       // Automatically open SMS modal for the new ride
       handleSendSms(newLog.id);

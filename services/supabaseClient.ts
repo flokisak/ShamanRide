@@ -634,28 +634,36 @@ export const supabaseService = SUPABASE_ENABLED
          } // if no options, return all
          return filtered;
        },
-          async addRideLog(rideLog: any) {
-            const dbData = this._toDbRideLog(rideLog);
-            console.log('addRideLog: sending to database:', dbData);
-            if (SUPABASE_ENABLED) {
-              // Try update first, since the record should exist
-              const { data: updateData, error: updateError } = await supabase.from('ride_logs').update(dbData).eq('id', rideLog.id);
-              console.log('Update result:', { data: updateData, error: updateError });
-              if (updateError) {
-                console.warn('Update failed, trying upsert:', updateError);
-                const { data: upsertData, error: upsertError } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
-                console.log('Upsert result:', { data: upsertData, error: upsertError });
-                if (upsertError) {
-                  console.error('addRideLog upsert error:', upsertError);
-                  throw upsertError;
-                }
-              }
-              console.log('addRideLog: successfully saved to Supabase');
-            } else {
-              console.log('addRideLog: Supabase not enabled, using localStorage');
-            }
-            upsertLocal('ride-log', rideLog);
-          },
+           async addRideLog(rideLog: any) {
+             const dbData = this._toDbRideLog(rideLog);
+             console.log('🚗 addRideLog: sending to database:', {
+               id: dbData.id,
+               vehicle_id: dbData.vehicle_id,
+               status: dbData.status,
+               customer_name: dbData.customer_name
+             });
+             if (SUPABASE_ENABLED) {
+               // Try update first, since the record should exist
+               const { data: updateData, error: updateError } = await supabase.from('ride_logs').update(dbData).eq('id', rideLog.id);
+               console.log('Update result:', { data: updateData, error: updateError });
+               if (updateError) {
+                 console.warn('Update failed, trying upsert:', updateError);
+                 const { data: upsertData, error: upsertError } = await supabase.from('ride_logs').upsert(dbData, { onConflict: 'id' });
+                 console.log('Upsert result:', { data: upsertData, error: upsertError });
+                 if (upsertError) {
+                   console.error('❌ addRideLog upsert error:', upsertError);
+                   throw upsertError;
+                 } else {
+                   console.log('✅ addRideLog: successfully upserted to Supabase');
+                 }
+               } else {
+                 console.log('✅ addRideLog: successfully updated in Supabase');
+               }
+             } else {
+               console.log('addRideLog: Supabase not enabled, using localStorage');
+             }
+             upsertLocal('ride-log', rideLog);
+           },
       async updateRideLogs(rideLogs: any[]) {
         writeTable('ride-log', rideLogs);
       },
