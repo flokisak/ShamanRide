@@ -108,59 +108,50 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         setSocketConnected(false);
       });
 
-      // Listen for new messages
-      socketInstance.on('new_message', (messageData) => {
-        console.log('Dispatcher chat received message:', messageData);
+       // Listen for new messages
+       socketInstance.on('new_message', (messageData) => {
+         console.log('Dispatcher chat received message:', messageData);
 
-        // Update allMessages for chat history
-        setAllMessages(prev => {
-          const exists = prev.some(m => m.id === messageData.id);
-          if (!exists) {
-            return [messageData, ...prev];
-          }
-          return prev;
-        });
+         // Update allMessages for chat history
+         setAllMessages(prev => {
+           const exists = prev.some(m => m.id === messageData.id);
+           if (!exists) {
+             return [messageData, ...prev];
+           }
+           return prev;
+         });
 
-        // Add to allMessages for chat history
-        setAllMessages(prev => {
-          const exists = prev.some(m => m.id === messageData.id);
-          if (!exists) {
-            return [messageData, ...prev];
-          }
-          return prev;
-        });
+         // Add to current chat messages if it's relevant to the selected chat
+         if (selectedVehicleId) {
+           let isRelevant = false;
 
-        // Add to local state if it's relevant to current chat
-        if (selectedVehicleId) {
-          let isRelevant = false;
+           if (selectedVehicleId === 'general') {
+             isRelevant = messageData.receiver_id === 'general';
+           } else {
+             isRelevant = (messageData.sender_id === `driver_${selectedVehicleId}` && messageData.receiver_id === 'dispatcher') ||
+                         (messageData.sender_id === 'dispatcher' && messageData.receiver_id === `driver_${selectedVehicleId}`);
+           }
 
-          if (selectedVehicleId === 'general') {
-            isRelevant = messageData.receiver_id === 'general';
-          } else {
-            isRelevant = (messageData.sender_id === `driver_${selectedVehicleId}` && messageData.receiver_id === 'dispatcher') ||
-                        (messageData.sender_id === 'dispatcher' && messageData.receiver_id === `driver_${selectedVehicleId}`);
-          }
+           if (isRelevant) {
+             setMessages(prev => {
+               const exists = prev.some(m => m.id === messageData.id);
+               if (!exists) {
+                 return [messageData, ...prev];
+               }
+               return prev;
+             });
+           }
+         }
 
-          if (isRelevant) {
-            setMessages(prev => {
-              const exists = prev.some(m => m.id === messageData.id);
-              if (!exists) {
-                return [messageData, ...prev];
-              }
-              return prev;
-            });
-          }
-        }
-
-        // Notify parent component
-        if (onNewMessage && messageData.sender_id !== 'dispatcher') {
-          const vehicleId = messageData.sender_id.startsWith('driver_') ?
-            parseInt(messageData.sender_id.replace('driver_', '')) : null;
-          if (vehicleId) {
-            onNewMessage(vehicleId, messageData.message);
-          }
-        }
-      });
+         // Notify parent component
+         if (onNewMessage && messageData.sender_id !== 'dispatcher') {
+           const vehicleId = messageData.sender_id.startsWith('driver_') ?
+             parseInt(messageData.sender_id.replace('driver_', '')) : null;
+           if (vehicleId) {
+             onNewMessage(vehicleId, messageData.message);
+           }
+         }
+       });
 
       setSocket(socketInstance);
     };
@@ -348,12 +339,31 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
   // Load messages for selected vehicle or general chat - improved with better error handling
   useEffect(() => {
-    if (!selectedVehicleId) return;
+    if (!selectedVehicleId) {
+      setMessages([]);
+      return;
+    }
 
-    const loadMessages = async () => {
+    console.log(`Loading messages for: ${selectedVehicleId}`);
+
+    // First try to load from allMessages (which includes real-time messages)
+    let filteredMessages;
+
+    if (selectedVehicleId === 'general') {
+      filteredMessages = allMessages.filter(msg => msg.receiver_id === 'general');
+    } else {
+      filteredMessages = allMessages.filter(msg =>
+        (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
+        (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
+      );
+    }
+
+    console.log(`Loaded ${filteredMessages.length} messages from allMessages for ${selectedVehicleId}`);
+    setMessages(filteredMessages);
+
+    // Also load from Supabase/localStorage as backup and to ensure we have all historical messages
+    const loadFromStorage = async () => {
       try {
-        console.log(`Loading messages for: ${selectedVehicleId}`);
-
         if (SUPABASE_ENABLED) {
           let query;
 
@@ -379,66 +389,74 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
             console.warn('Could not load messages from Supabase:', error);
             // Fallback to localStorage
             const localMessages = getDriverMessages();
-            let filteredMessages;
+            let localFilteredMessages;
 
             if (selectedVehicleId === 'general') {
-              filteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
+              localFilteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
             } else {
-              filteredMessages = localMessages.filter(msg =>
+              localFilteredMessages = localMessages.filter(msg =>
                 (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
                 (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
               );
             }
 
-            console.log(`Loaded ${filteredMessages.length} messages from localStorage for ${selectedVehicleId}`);
-            setMessages(filteredMessages);
+            // Merge with existing messages to avoid duplicates
+            const mergedMessages = [...filteredMessages];
+            localFilteredMessages.forEach(msg => {
+              if (!mergedMessages.some(m => m.id === msg.id)) {
+                mergedMessages.push(msg);
+              }
+            });
+
+            console.log(`Merged ${mergedMessages.length} messages (including ${localFilteredMessages.length} from localStorage) for ${selectedVehicleId}`);
+            setMessages(mergedMessages);
             return;
           }
 
           if (data && data.length > 0) {
-            console.log(`Loaded ${data.length} messages for vehicle ${selectedVehicleId} from Supabase`);
-            setMessages(data);
-          } else {
-            console.log(`No messages found for vehicle ${selectedVehicleId} in Supabase`);
-            setMessages([]);
+            // Merge with existing messages to avoid duplicates
+            const mergedMessages = [...filteredMessages];
+            data.forEach(msg => {
+              if (!mergedMessages.some(m => m.id === msg.id)) {
+                mergedMessages.push(msg);
+              }
+            });
+
+            console.log(`Merged ${mergedMessages.length} messages (including ${data.length} from Supabase) for ${selectedVehicleId}`);
+            setMessages(mergedMessages);
           }
         } else {
           // Load from localStorage
           const localMessages = getDriverMessages();
-          let filteredMessages;
+          let localFilteredMessages;
 
           if (selectedVehicleId === 'general') {
-            filteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
+            localFilteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
           } else {
-            filteredMessages = localMessages.filter(msg =>
+            localFilteredMessages = localMessages.filter(msg =>
               (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
               (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
             );
           }
 
-          console.log(`Loaded ${filteredMessages.length} messages from localStorage for ${selectedVehicleId}`);
-          setMessages(filteredMessages);
+          // Merge with existing messages to avoid duplicates
+          const mergedMessages = [...filteredMessages];
+          localFilteredMessages.forEach(msg => {
+            if (!mergedMessages.some(m => m.id === msg.id)) {
+              mergedMessages.push(msg);
+            }
+          });
+
+          console.log(`Merged ${mergedMessages.length} messages (including ${localFilteredMessages.length} from localStorage) for ${selectedVehicleId}`);
+          setMessages(mergedMessages);
         }
       } catch (err) {
         console.warn('Error loading messages for:', selectedVehicleId, err);
-        // Fallback to localStorage
-        const localMessages = getDriverMessages();
-        let filteredMessages;
-
-        if (selectedVehicleId === 'general') {
-          filteredMessages = localMessages.filter(msg => msg.receiver_id === 'general');
-        } else {
-          filteredMessages = localMessages.filter(msg =>
-            (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${selectedVehicleId}`) ||
-            (msg.sender_id === `driver_${selectedVehicleId}` && msg.receiver_id === 'dispatcher')
-          );
-        }
-        setMessages(filteredMessages);
       }
     };
 
-    loadMessages();
-  }, [selectedVehicleId]);
+    loadFromStorage();
+  }, [selectedVehicleId, allMessages]);
 
 
 
