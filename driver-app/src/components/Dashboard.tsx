@@ -538,14 +538,6 @@ const Dashboard: React.FC = () => {
     );
 
     // Location updates are now handled via socket.io - no need to check Supabase table
-          } else {
-            console.log('Locations table exists and is accessible');
-          }
-        } catch (err) {
-          console.error('Exception checking locations table:', err);
-        }
-      })();
-    }
 
     // Send real-time location updates via socket.io
     locationIntervalRef.current = setInterval(() => {
