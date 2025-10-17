@@ -228,95 +228,150 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
         </div>
       </div>
 
-      {/* Rides list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {rides.length === 0 ? (
-          <div className="text-center text-slate-400 py-8">
-            No rides available
-          </div>
-        ) : (
-          rides.map((ride) => (
-            <div
-              key={ride.id}
-              className="bg-slate-800 rounded-lg p-4 border border-slate-700"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="font-semibold text-white">{ride.customerName}</h3>
-                  <p className="text-sm text-slate-400">
-                    {ride.vehicleName} • {ride.vehicleLicensePlate}
-                  </p>
-                </div>
-                <div className={`px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(ride.status)}`}>
-                  {ride.status?.replace('_', ' ').toUpperCase()}
-                </div>
-              </div>
+       {/* Rides list - compact row format */}
+       <div className="flex-1 overflow-y-auto">
+         {rides.length === 0 ? (
+           <div className="text-center text-slate-400 py-8">
+             No rides available
+           </div>
+         ) : (
+           <div className="p-2">
+             {/* Header */}
+             <div className="grid grid-cols-12 gap-2 mb-2 px-3 py-2 bg-slate-800 rounded-lg text-xs font-medium text-slate-300 border-b border-slate-700">
+               <div className="col-span-3">Customer</div>
+               <div className="col-span-2">Route</div>
+               <div className="col-span-2">Vehicle</div>
+               <div className="col-span-2">Time</div>
+               <div className="col-span-2">Status</div>
+               <div className="col-span-1">Actions</div>
+             </div>
 
-              <div className="space-y-1 text-sm text-slate-300">
-                <p><span className="font-medium">Phone:</span> {ride.customerPhone}</p>
-                <p><span className="font-medium">Pickup:</span> {ride.stops?.[0]}</p>
-                <p><span className="font-medium">Destination:</span> {ride.stops?.[ride.stops.length - 1]}</p>
-                <p><span className="font-medium">Passengers:</span> {ride.passengers}</p>
-                {ride.estimatedPrice && (
-                  <p><span className="font-medium">Price:</span> {ride.estimatedPrice} Kč</p>
-                )}
-                <p><span className="font-medium">Time:</span> {formatTime(ride.timestamp)}</p>
-              </div>
+             {/* Rides rows */}
+             <div className="space-y-1">
+               {rides.map((ride) => (
+                 <div
+                   key={ride.id}
+                   className="grid grid-cols-12 gap-2 px-3 py-3 bg-slate-800/50 rounded-lg border border-slate-700 hover:bg-slate-800/70 transition-colors"
+                 >
+                   {/* Customer */}
+                   <div className="col-span-3">
+                     <div className="font-medium text-white text-sm">{ride.customerName}</div>
+                     <div className="text-xs text-slate-400">{ride.customerPhone}</div>
+                     <div className="text-xs text-slate-500">{ride.passengers} pax</div>
+                   </div>
 
-              {/* Action buttons based on role and status */}
-              <div className="mt-3 flex gap-2">
-                {isDispatcher ? (
-                  <>
-                    {ride.status === 'pending' && (
-                      <button
-                        onClick={() => updateRide({ ...ride, status: 'assigned' })}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
-                      >
-                        Assign
-                      </button>
-                    )}
-                    {ride.status !== 'completed' && ride.status !== 'cancelled' && (
-                      <button
-                        onClick={() => cancelRide(ride.id)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm font-medium"
-                      >
-                        Cancel
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {ride.status === 'assigned' && (
-                      <button
-                        onClick={() => changeStatus(ride.id, 'accepted', currentUser.id)}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium"
-                      >
-                        Accept
-                      </button>
-                    )}
-                    {ride.status === 'accepted' && (
-                      <button
-                        onClick={() => changeStatus(ride.id, 'in_progress', currentUser.id)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
-                      >
-                        Start Ride
-                      </button>
-                    )}
-                    {ride.status === 'in_progress' && (
-                      <button
-                        onClick={() => changeStatus(ride.id, 'completed', currentUser.id)}
-                        className="px-3 py-1 bg-purple-600 hover:bg-purple-700 rounded text-sm font-medium"
-                      >
-                        Complete
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+                   {/* Route */}
+                   <div className="col-span-2">
+                     <div className="text-xs text-slate-300 truncate" title={ride.stops?.[0]}>
+                       📍 {ride.stops?.[0]}
+                     </div>
+                     <div className="text-xs text-slate-400 truncate" title={ride.stops?.[ride.stops.length - 1]}>
+                       🎯 {ride.stops?.[ride.stops.length - 1]}
+                     </div>
+                   </div>
+
+                   {/* Vehicle */}
+                   <div className="col-span-2">
+                     <div className="text-xs text-slate-300">{ride.vehicleName}</div>
+                     <div className="text-xs text-slate-400">{ride.vehicleLicensePlate}</div>
+                   </div>
+
+                   {/* Time */}
+                   <div className="col-span-2">
+                     <div className="text-xs text-slate-300">{formatTime(ride.timestamp)}</div>
+                     {ride.estimatedPrice && (
+                       <div className="text-xs text-green-400 font-medium">{ride.estimatedPrice} Kč</div>
+                     )}
+                   </div>
+
+                   {/* Status */}
+                   <div className="col-span-2">
+                     <select
+                       value={ride.status || 'pending'}
+                       onChange={(e) => {
+                         const newStatus = e.target.value;
+                         if (isDispatcher) {
+                           if (newStatus === 'assigned') {
+                             updateRide({ ...ride, status: 'assigned' });
+                           } else if (newStatus === 'cancelled') {
+                             cancelRide(ride.id);
+                           }
+                         } else {
+                           changeStatus(ride.id, newStatus, currentUser.id);
+                         }
+                       }}
+                       className={`w-full px-2 py-1 rounded text-xs font-medium text-white ${getStatusColor(ride.status)} border-0`}
+                     >
+                       <option value="pending">Pending</option>
+                       <option value="assigned">Assigned</option>
+                       <option value="accepted">Accepted</option>
+                       <option value="in_progress">In Progress</option>
+                       <option value="completed">Completed</option>
+                       <option value="cancelled">Cancelled</option>
+                     </select>
+                   </div>
+
+                   {/* Actions */}
+                   <div className="col-span-1 flex flex-col gap-1">
+                     {isDispatcher ? (
+                       <>
+                         {ride.status === 'pending' && (
+                           <button
+                             onClick={() => updateRide({ ...ride, status: 'assigned' })}
+                             className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium"
+                             title="Assign ride"
+                           >
+                             ✓
+                           </button>
+                         )}
+                         {ride.status !== 'completed' && ride.status !== 'cancelled' && (
+                           <button
+                             onClick={() => cancelRide(ride.id)}
+                             className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-medium"
+                             title="Cancel ride"
+                           >
+                             ✕
+                           </button>
+                         )}
+                       </>
+                     ) : (
+                       <>
+                         {ride.status === 'assigned' && (
+                           <button
+                             onClick={() => changeStatus(ride.id, 'accepted', currentUser.id)}
+                             className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium"
+                             title="Accept ride"
+                           >
+                             ✓
+                           </button>
+                         )}
+                         {ride.status === 'accepted' && (
+                           <button
+                             onClick={() => changeStatus(ride.id, 'in_progress', currentUser.id)}
+                             className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium"
+                             title="Start ride"
+                           >
+                             ▶
+                           </button>
+                         )}
+                         {ride.status === 'in_progress' && (
+                           <button
+                             onClick={() => changeStatus(ride.id, 'completed', currentUser.id)}
+                             className="px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium"
+                             title="Complete ride"
+                           >
+                             ■
+                           </button>
+                         )}
+                       </>
+                     )}
+                   </div>
+                 </div>
+               ))}
+             </div>
+           </div>
+         )}
+       </div>
     </div>
   );
 };

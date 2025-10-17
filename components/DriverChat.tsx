@@ -621,10 +621,10 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         </div>
       </div>
 
-      {/* Two-column layout */}
-      <div className="flex-1 flex gap-4 min-h-0">
-        {/* Left Column: Compact Chat List */}
-        <div className="w-72 flex flex-col bg-slate-900/30 rounded-lg min-h-0">
+       {/* Two-column layout */}
+       <div className="flex-1 flex gap-4 min-h-0">
+         {/* Left Column: Compact Chat List */}
+         <div className="w-64 flex flex-col bg-slate-900/30 rounded-lg min-h-0">
           {/* Quick Chat Selection - Horizontal Scroll */}
           <div className="flex-shrink-0 p-3 border-b border-slate-600">
             <div className="flex items-center justify-between mb-2">
