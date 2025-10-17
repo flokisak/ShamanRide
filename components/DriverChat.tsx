@@ -443,9 +443,9 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
 
   // Scroll to bottom when new messages arrive
-  // useEffect(() => {
-  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  // }, [messages]);
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const sendMessage = async () => {
     console.log('DriverChat sendMessage called:', { newMessage: newMessage.trim(), selectedVehicleId, sending, socket: !!socket, socketConnected });
@@ -619,7 +619,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
       {/* Two-column layout */}
       <div className="flex-1 flex gap-4 min-h-0">
         {/* Left Column: Chat Selection */}
-        <div className="w-80 flex flex-col bg-slate-900/30 rounded-lg">
+        <div className="w-80 flex flex-col bg-slate-900/30 rounded-lg min-h-0">
           {/* Chat Selection Buttons */}
           <div className="flex-shrink-0 p-3 border-b border-slate-600">
             <h4 className="text-sm font-medium text-white mb-2">Vyberte chat:</h4>
@@ -734,7 +734,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                 ) : (
                   <div className="space-y-2">
                     {messages
-                      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+                      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                       .map((msg) => (
                         <div
                           key={msg.id}

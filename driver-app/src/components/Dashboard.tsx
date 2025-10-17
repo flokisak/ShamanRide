@@ -416,43 +416,76 @@ const Dashboard: React.FC = () => {
          setSocketConnected(false);
        });
 
-       // Listen for new messages
-       socketInstance.on('new_message', (messageData) => {
-         console.log('Driver app received message:', messageData);
-         setMessages(prev => {
-           // Check if message already exists
-           const exists = prev.some(m => m.id === messageData.id);
-           if (!exists) {
-             return [messageData, ...prev];
-           }
-           return prev;
-         });
+        // Listen for new messages
+        socketInstance.on('new_message', (messageData) => {
+          console.log('Driver app received message:', messageData);
+          setMessages(prev => {
+            // Check if message already exists
+            const exists = prev.some(m => m.id === messageData.id);
+            if (!exists) {
+              return [messageData, ...prev];
+            }
+            return prev;
+          });
 
-         // Notify user for new messages
-         if (messageData.sender_id !== `driver_${vehicleNumber}`) {
-           notifyUser('message');
-         }
-       });
+          // Notify user for new messages from dispatcher or other drivers
+          if (messageData.sender_id !== `driver_${vehicleNumber}`) {
+            if (messageData.sender_id === 'dispatcher') {
+              notifyUser('message', {
+                title: 'Zpráva od dispečera',
+                body: messageData.message.length > 50 ? messageData.message.substring(0, 50) + '...' : messageData.message
+              });
+            } else {
+              notifyUser('message', {
+                title: 'Nová zpráva',
+                body: messageData.message.length > 50 ? messageData.message.substring(0, 50) + '...' : messageData.message
+              });
+            }
+          }
+        });
 
-       // Listen for ride updates
-       socketInstance.on('ride_updated', (rideData) => {
-         console.log('Driver app received ride update:', rideData);
-         if (rideData.vehicleId === vehicleNumber) {
-           refreshVehicleData();
-         }
-       });
+        // Listen for ride updates
+        socketInstance.on('ride_updated', (rideData) => {
+          console.log('Driver app received ride update:', rideData);
+          if (rideData.vehicleId === vehicleNumber) {
+            // Notify driver of new ride assignment
+            if (rideData.status === 'assigned' || rideData.status === 'pending') {
+              notifyUser('ride', {
+                title: 'Nová jízda přiřazena!',
+                body: `${rideData.customerName} - ${rideData.stops?.[0]} → ${rideData.stops?.[rideData.stops.length - 1]}`
+              });
+            }
+            refreshVehicleData();
+          }
+        });
 
-       // Listen for status changes
-       socketInstance.on('status_changed', (data) => {
-         console.log('Driver app received status change:', data);
-         refreshVehicleData();
-       });
+        // Listen for status changes
+        socketInstance.on('status_changed', (data) => {
+          console.log('Driver app received status change:', data);
 
-       // Listen for ride cancellations
-       socketInstance.on('ride_cancelled', (data) => {
-         console.log('Driver app received ride cancellation:', data);
-         refreshVehicleData();
-       });
+          // Notify driver of important status changes
+          if (data.newStatus === 'cancelled') {
+            notifyUser('general', {
+              title: 'Jízda zrušena',
+              body: `Jízda ID ${data.rideId} byla zrušena dispečerem`
+            });
+          }
+
+          refreshVehicleData();
+        });
+
+        // Listen for ride cancellations
+        socketInstance.on('ride_cancelled', (data) => {
+          console.log('Driver app received ride cancellation:', data);
+
+          // Notify driver of ride cancellation
+          notifyUser('general', {
+            title: 'Jízda zrušena',
+            body: `Jízda ID ${data.rideId} byla zrušena dispečerem`
+          });
+
+          refreshVehicleData();
+        });
 
        setSocket(socketInstance);
      };
