@@ -20,42 +20,29 @@ const Dashboard: React.FC = () => {
   const [shiftStartTime, setShiftStartTime] = useState<number | null>(null);
   const [customShiftStart, setCustomShiftStart] = useState<string>('');
   const [customShiftEnd, setCustomShiftEnd] = useState<string>('');
+  const [customShiftDate, setCustomShiftDate] = useState<string>('');
   const [useCustomShift, setUseCustomShift] = useState<boolean>(false);
 
   // Calculate shift cash from completed rides within shift time range
   const calculateShiftCash = (rides: RideLog[], shiftStart?: number, shiftEnd?: number) => {
-    if (useCustomShift && customShiftStart && customShiftEnd) {
-      // Use custom shift times - look at recent rides within shift hours
+    if (useCustomShift && customShiftStart && customShiftEnd && customShiftDate) {
+      // Use custom shift times for selected date
       const [startHours, startMinutes] = customShiftStart.split(':').map(Number);
       const [endHours, endMinutes] = customShiftEnd.split(':').map(Number);
 
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // Parse the selected date
+      const shiftDate = new Date(customShiftDate + 'T00:00:00');
 
-      // Create shift start and end times for today
-      const shiftStartToday = new Date(today);
-      shiftStartToday.setHours(startHours, startMinutes, 0, 0);
+      // Create shift start time for the selected date
+      const shiftStartTime = new Date(shiftDate);
+      shiftStartTime.setHours(startHours, startMinutes, 0, 0);
 
-      const shiftEndToday = new Date(today);
-      shiftEndToday.setHours(endHours, endMinutes, 0, 0);
+      // Create shift end time - if end time is before start time, it's next day
+      const shiftEndTime = new Date(shiftDate);
+      shiftEndTime.setHours(endHours, endMinutes, 0, 0);
 
-      // For overnight shifts, if end time is before start time, end is tomorrow
-      if (shiftEndToday <= shiftStartToday) {
-        shiftEndToday.setDate(shiftEndToday.getDate() + 1);
-      }
-
-      // Also check yesterday's shift for overnight scenarios
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
-
-      const shiftStartYesterday = new Date(yesterday);
-      shiftStartYesterday.setHours(startHours, startMinutes, 0, 0);
-
-      const shiftEndYesterday = new Date(yesterday);
-      shiftEndYesterday.setHours(endHours, endMinutes, 0, 0);
-
-      if (shiftEndYesterday <= shiftStartYesterday) {
-        shiftEndYesterday.setDate(shiftEndYesterday.getDate() + 1);
+      if (shiftEndTime <= shiftStartTime) {
+        shiftEndTime.setDate(shiftEndTime.getDate() + 1);
       }
 
       return rides.filter(ride => {
@@ -63,9 +50,8 @@ const Dashboard: React.FC = () => {
 
         const rideTime = new Date(ride.timestamp).getTime();
 
-        // Check if ride falls within today's shift or yesterday's shift (for overnight)
-        return (rideTime >= shiftStartToday.getTime() && rideTime <= shiftEndToday.getTime()) ||
-               (rideTime >= shiftStartYesterday.getTime() && rideTime <= shiftEndYesterday.getTime());
+        // Check if ride falls within the selected shift time window
+        return rideTime >= shiftStartTime.getTime() && rideTime <= shiftEndTime.getTime();
       }).reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
     } else if (shiftStart) {
       // Use automatic shift start time
@@ -158,10 +144,12 @@ const Dashboard: React.FC = () => {
     const savedCustomShift = localStorage.getItem('useCustomShift') === 'true';
     const savedShiftStart = localStorage.getItem('customShiftStart') || '';
     const savedShiftEnd = localStorage.getItem('customShiftEnd') || '';
+    const savedShiftDate = localStorage.getItem('customShiftDate') || new Date().toISOString().split('T')[0];
 
     setUseCustomShift(savedCustomShift);
     setCustomShiftStart(savedShiftStart);
     setCustomShiftEnd(savedShiftEnd);
+    setCustomShiftDate(savedShiftDate);
 
     // Monitor real-time connection status
     const checkRealtimeConnection = () => {
@@ -710,11 +698,11 @@ const Dashboard: React.FC = () => {
 
    // Update shift cash when ride history changes
    useEffect(() => {
-     if ((shiftStartTime || (useCustomShift && customShiftStart && customShiftEnd)) && rideHistory.length > 0) {
+     if ((shiftStartTime || (useCustomShift && customShiftStart && customShiftEnd && customShiftDate)) && rideHistory.length > 0) {
        const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime || undefined);
        setShiftCash(shiftCashAmount);
      }
-   }, [rideHistory, shiftStartTime, useCustomShift, customShiftStart, customShiftEnd]);
+   }, [rideHistory, shiftStartTime, useCustomShift, customShiftStart, customShiftEnd, customShiftDate]);
 
    // Handle break timer
   useEffect(() => {
@@ -1451,9 +1439,9 @@ const Dashboard: React.FC = () => {
                  <div className="flex items-center space-x-2">
                  <div className="text-sm text-slate-300">
                    <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
-                     {useCustomShift && customShiftStart && customShiftEnd ? (
+                     {useCustomShift && customShiftStart && customShiftEnd && customShiftDate ? (
                        <div className="text-xs text-slate-400 mt-1">
-                         {customShiftStart} - {customShiftEnd}
+                         {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
                          <div className="text-xs text-slate-500">
                            (včetně přes půlnoc)
                          </div>
@@ -1511,9 +1499,9 @@ const Dashboard: React.FC = () => {
                <div className="flex items-center space-x-2">
                  <div className="text-sm text-slate-300">
                    <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
-                   {useCustomShift && customShiftStart && customShiftEnd && (
+                   {useCustomShift && customShiftStart && customShiftEnd && customShiftDate && (
                      <div className="text-xs text-slate-400">
-                       {customShiftStart} - {customShiftEnd}
+                       {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
                        <span className="text-xs text-slate-500 ml-1">(přes půlnoc)</span>
                      </div>
                    )}
@@ -1594,41 +1582,57 @@ const Dashboard: React.FC = () => {
             </div>
 
             {useCustomShift && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Začátek směny
+                    Datum směny
                   </label>
                   <input
-                    type="time"
-                    value={customShiftStart}
+                    type="date"
+                    value={customShiftDate}
                     onChange={(e) => {
-                      setCustomShiftStart(e.target.value);
-                      localStorage.setItem('customShiftStart', e.target.value);
+                      setCustomShiftDate(e.target.value);
+                      localStorage.setItem('customShiftDate', e.target.value);
                     }}
                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Konec směny
-                  </label>
-                  <input
-                    type="time"
-                    value={customShiftEnd}
-                    onChange={(e) => {
-                      setCustomShiftEnd(e.target.value);
-                      localStorage.setItem('customShiftEnd', e.target.value);
-                    }}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Začátek směny
+                    </label>
+                    <input
+                      type="time"
+                      value={customShiftStart}
+                      onChange={(e) => {
+                        setCustomShiftStart(e.target.value);
+                        localStorage.setItem('customShiftStart', e.target.value);
+                      }}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Konec směny
+                    </label>
+                    <input
+                      type="time"
+                      value={customShiftEnd}
+                      onChange={(e) => {
+                        setCustomShiftEnd(e.target.value);
+                        localStorage.setItem('customShiftEnd', e.target.value);
+                      }}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             <div className="text-xs text-slate-400">
               {useCustomShift
-                ? "Tržba se počítá pouze z jízd dokončených v zadaném časovém rozmezí."
+                ? "Tržba se počítá pouze z jízd dokončených v zadaném časovém rozmezí pro vybraný den."
                 : "Tržba se počítá od okamžiku přihlášení do odhlášení."
               }
             </div>
