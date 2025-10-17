@@ -18,8 +18,7 @@ const io = socketIo(server, {
   cors: {
     origin: [
       "http://localhost:5173", "http://localhost:5174", "http://localhost:5175", "http://localhost:5176", "http://localhost:5177",
-      "https://shaman-ride.vercel.app", // Replace with actual dispatcher app URL
-      "https://shaman-driver.vercel.app" // Replace with actual driver app URL
+      "*", // Allow all origins for now to test
     ],
     methods: ["GET", "POST"],
     credentials: true
