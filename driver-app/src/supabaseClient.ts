@@ -209,12 +209,7 @@ const supabaseService: any = SUPABASE_ENABLED ? {
         }
       }
       console.log('addRideLog: successfully saved to Supabase');
-      // Notify other apps of the update
-      supabase.channel('ride_updates').send({
-        type: 'broadcast',
-        event: 'ride_updated',
-        payload: { rideId: rideLog.id, status: rideLog.status, vehicleId: rideLog.vehicleId }
-      });
+      // Note: Real-time postgres_changes subscription handles notifications automatically
     } else {
       console.log('addRideLog: Supabase not enabled, using localStorage');
     }

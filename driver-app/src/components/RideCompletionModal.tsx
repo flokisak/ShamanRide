@@ -53,21 +53,7 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
               throw dbError; // Re-throw to be caught by outer try-catch
             }
 
-            // Verify the update by fetching the ride back
-            try {
-              const rides = await supabaseService.getRideLogsByVehicle(updatedRide.vehicleId, undefined, 10);
-              const completedRideFromDb = rides.find(r => r.id === ride.id);
-              console.log('completeRide: Ride status after completion:', completedRideFromDb?.status);
-            } catch (verifyError) {
-              console.warn('completeRide: Could not verify ride completion:', verifyError);
-            }
-
-            // Notify dispatcher of ride update
-            supabase.channel('ride_updates').send({
-              type: 'broadcast',
-              event: 'ride_updated',
-              payload: { rideId: ride.id }
-            });
+            // Note: Real-time postgres_changes subscription handles notifications automatically
 
             setModalState('success');
 

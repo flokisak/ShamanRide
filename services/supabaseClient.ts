@@ -365,12 +365,8 @@ export const supabaseService = SUPABASE_ENABLED
             if (SUPABASE_ENABLED) {
               const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });
               if (error) throw error;
-              // Notify driver apps of the update
-              supabase.channel('ride_updates').send({
-                type: 'broadcast',
-                event: 'ride_updated',
-                payload: { rideId: rideLog.id, status: rideLog.status, vehicleId: rideLog.vehicleId }
-              });
+              console.log('addRideLog: successfully saved to Supabase');
+              // Note: Real-time postgres_changes subscription handles notifications automatically
             }
             upsertLocal('ride-log', rideLog);
           },

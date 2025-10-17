@@ -422,24 +422,7 @@ const Dashboard: React.FC = () => {
 
      console.log('Setting up ride subscriptions for vehicle:', vehicleNumber);
 
-      // Subscribe to ride update broadcasts from dispatcher with improved error handling
-      const updateChannel = supabase
-        .channel('ride_updates')
-        .on('broadcast', { event: 'ride_updated' }, (payload) => {
-          console.log('Received ride update broadcast:', payload);
-          // Only refresh if this update is for our vehicle
-          if (payload.vehicleId === vehicleNumber) {
-            refreshVehicleData();
-          }
-        })
-        .subscribe((status) => {
-          console.log('Ride update broadcast channel status:', status);
-          if (status === 'SUBSCRIBED') {
-            console.log('Successfully subscribed to ride update broadcasts');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('Failed to subscribe to ride update broadcasts');
-          }
-        });
+      // Note: Using postgres_changes subscriptions instead of broadcasts for better reliability
 
        const rideChannel = supabase
          .channel('ride_assignments')
@@ -495,7 +478,6 @@ const Dashboard: React.FC = () => {
          });
 
       return () => {
-        supabase.removeChannel(updateChannel);
         supabase.removeChannel(rideChannel);
       };
     }, [vehicleNumber, lastSubscriptionRefresh, refreshVehicleData]);
