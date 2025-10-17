@@ -4,6 +4,7 @@ const socketIo = require('socket.io');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
+const CryptoJS = require('crypto-js');
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL || 'https://dmxkqofoecqdjbigxoon.supabase.co';
@@ -51,9 +52,42 @@ io.use(async (socket, next) => {
   }
 });
 
-// Socket connection handling
+// Track user presence
+const userPresence = new Map();
+
+// Encryption utilities
+const generateRoomKey = (roomName, salt = 'shamanride_chat_salt') => {
+  return CryptoJS.PBKDF2(roomName, salt, {
+    keySize: 256 / 32,
+    iterations: 1000
+  }).toString();
+};
+
+const encryptMessage = (message, key) => {
+  return CryptoJS.AES.encrypt(message, key).toString();
+};
+
+const decryptMessage = (encryptedMessage, key) => {
+  const bytes = CryptoJS.AES.decrypt(encryptedMessage, key);
+  return bytes.toString(CryptoJS.enc.Utf8);
+};
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.userEmail} (${socket.userId})`);
+
+  // Update presence
+  userPresence.set(socket.userId, {
+    id: socket.userId,
+    email: socket.userEmail,
+    status: 'online',
+    lastSeen: new Date()
+  });
+
+  // Broadcast presence update
+  socket.broadcast.emit('presence_update', {
+    userId: socket.userId,
+    status: 'online'
+  });
 
   // Join shift room for ride updates
   socket.on('join_shift', (shiftId) => {
@@ -87,31 +121,73 @@ io.on('connection', (socket) => {
     try {
       const { room, message, senderId, receiverId, type } = data;
 
-      // Create message object
+      // Generate room-specific encryption key
+      const encryptionKey = generateRoomKey(room);
+
+      // Encrypt the message content
+      const encryptedMessage = encryptMessage(message, encryptionKey);
+
+      // Create message object with encrypted content
       const messageData = {
         id: Date.now().toString(),
         sender_id: senderId,
         receiver_id: receiverId || room,
-        message: message,
+        message: encryptedMessage, // Store encrypted message
         timestamp: new Date().toISOString(),
         read: false,
-        type: type || 'private'
+        type: type || 'private',
+        encrypted: true // Flag to indicate message is encrypted
       };
 
-      // Broadcast to room
-      socket.to(room).emit('new_message', messageData);
+      // Decrypt message for broadcasting (clients will handle encryption)
+      const decryptedMessage = {
+        ...messageData,
+        message: decryptMessage(encryptedMessage, encryptionKey)
+      };
 
-      // Persist to Supabase asynchronously
-      supabase.from('driver_messages').insert(messageData).then(({ error }) => {
-        if (error) {
-          console.error('Failed to save message to Supabase:', error);
-        } else {
-          console.log('Message saved to Supabase');
+      // Broadcast decrypted message to room
+      socket.to(room).emit('new_message', decryptedMessage);
+
+      // Persist encrypted message to Supabase asynchronously with retry logic
+      const saveMessageWithRetry = async (messageData, retries = 3) => {
+        for (let i = 0; i < retries; i++) {
+          try {
+            const { error } = await supabase.from('driver_messages').insert(messageData);
+            if (!error) {
+              console.log('Encrypted message saved to Supabase');
+              // Emit delivery confirmation
+              socket.emit('message_delivered', { messageId: messageData.id });
+              return;
+            } else {
+              console.error(`Failed to save encrypted message to Supabase (attempt ${i + 1}):`, error);
+              if (i === retries - 1) {
+                // Emit error after all retries failed
+                socket.emit('message_error', {
+                  messageId: messageData.id,
+                  error: 'Failed to save message'
+                });
+              }
+            }
+          } catch (err) {
+            console.error(`Error saving encrypted message (attempt ${i + 1}):`, err);
+            if (i === retries - 1) {
+              socket.emit('message_error', {
+                messageId: messageData.id,
+                error: 'Failed to save message'
+              });
+            }
+          }
+          // Wait before retry
+          if (i < retries - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+          }
         }
-      });
+      };
+
+      saveMessageWithRetry(messageData);
 
     } catch (err) {
-      console.error('Error handling message:', err);
+      console.error('Error handling encrypted message:', err);
     }
   });
 
@@ -255,9 +331,66 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle typing indicators
+  socket.on('typing_start', (data) => {
+    socket.to(data.room).emit('user_typing', {
+      userId: socket.userId,
+      room: data.room
+    });
+  });
+
+  socket.on('typing_stop', (data) => {
+    socket.to(data.room).emit('user_stopped_typing', {
+      userId: socket.userId,
+      room: data.room
+    });
+  });
+
+  // Handle read receipts
+  socket.on('mark_as_read', async (data) => {
+    try {
+      const { messageId, room } = data;
+
+      // Update message as read in Supabase
+      const { error } = await supabase
+        .from('driver_messages')
+        .update({ read: true, read_at: new Date().toISOString() })
+        .eq('id', messageId);
+
+      if (error) {
+        console.error('Failed to mark message as read:', error);
+      } else {
+        // Notify sender that message was read
+        socket.to(room).emit('message_read', {
+          messageId,
+          readBy: socket.userId,
+          readAt: new Date().toISOString()
+        });
+      }
+    } catch (err) {
+      console.error('Error marking message as read:', err);
+    }
+  });
+
   // Handle disconnection
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.userEmail}`);
+
+    // Update presence to offline
+    if (userPresence.has(socket.userId)) {
+      userPresence.set(socket.userId, {
+        ...userPresence.get(socket.userId),
+        status: 'offline',
+        lastSeen: new Date()
+      });
+
+      // Broadcast presence update
+      socket.broadcast.emit('presence_update', {
+        userId: socket.userId,
+        status: 'offline',
+        lastSeen: new Date()
+      });
+    }
   });
 });
 
