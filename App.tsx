@@ -232,12 +232,17 @@ const AppContent: React.FC = () => {
             setRideLog(prev => [mappedRide, ...prev]);
           })
           .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-            // Only process important status changes to reduce traffic
+            // Only process important status changes to reduce traffic, skip completed/cancelled rides
             const oldStatus = payload.old?.status?.toLowerCase();
             const newStatus = payload.new?.status?.toLowerCase();
 
+            // Skip updates for already completed or cancelled rides
+            if (oldStatus === 'completed' || oldStatus === 'cancelled' || newStatus === 'completed' || newStatus === 'cancelled') {
+              return;
+            }
+
             // Only update for significant status changes
-            const importantStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
+            const importantStatuses = ['pending', 'accepted', 'in_progress'];
             if (!importantStatuses.includes(newStatus) || oldStatus === newStatus) {
               return; // Skip minor updates
             }

@@ -243,19 +243,21 @@ const Dashboard: React.FC = () => {
 
         setLicensePlate(vehicleData.licensePlate);
 
-        // Get pending rides for this vehicle (queue: oldest first)
-        console.log('🔍 Querying for rides with vehicle_id:', vehicleNum, 'status: pending');
-        try {
-          const pending = await supabaseService.getRideLogsByVehicle(vehicleNum, 'pending');
-          console.log('📋 Found pending rides:', pending.length, 'rides');
-          if (pending.length > 0) {
-            console.log('📋 Pending ride details:', pending.map(r => ({ id: r.id, customer: r.customerName, status: r.status })));
-          }
-          setPendingRides(pending);
-        } catch (error) {
-          console.warn('❌ Could not load pending rides:', error);
-          setPendingRides([]);
-        }
+        // Get pending and accepted rides for this vehicle (queue: oldest first)
+         console.log('🔍 Querying for rides with vehicle_id:', vehicleNum, 'status: pending/accepted');
+         try {
+           const pending = await supabaseService.getRideLogsByVehicle(vehicleNum, 'pending');
+           const accepted = await supabaseService.getRideLogsByVehicle(vehicleNum, 'accepted');
+           const activeRides = [...pending, ...accepted];
+           console.log('📋 Found active rides:', activeRides.length, 'rides');
+           if (activeRides.length > 0) {
+             console.log('📋 Active ride details:', activeRides.map(r => ({ id: r.id, customer: r.customerName, status: r.status })));
+           }
+           setPendingRides(activeRides);
+         } catch (error) {
+           console.warn('❌ Could not load active rides:', error);
+           setPendingRides([]);
+         }
 
         // Debug: Get all rides for this vehicle to see what's in the database
         try {
@@ -281,10 +283,14 @@ const Dashboard: React.FC = () => {
           console.warn('Could not load active rides:', error);
         }
 
-        // Get all rides for this vehicle (completed, pending, accepted, etc.)
-        try {
-          const history = await supabaseService.getRideLogsByVehicle(vehicleNum, undefined, 20);
-          setRideHistory(history);
+        // Get recent rides for this vehicle (exclude completed/cancelled to reduce data)
+         try {
+           const recentRides = await supabaseService.getRideLogsByVehicle(vehicleNum, undefined, 10);
+           // Filter out completed and cancelled rides to focus on active/recent ones
+           const activeHistory = recentRides.filter(ride =>
+             ride.status !== RideStatus.Completed && ride.status !== 'CANCELLED'
+           );
+           setRideHistory(activeHistory);
 
           // Calculate shift cash from completed rides since shift start
           if (shiftStartTime) {
@@ -296,49 +302,48 @@ const Dashboard: React.FC = () => {
           setRideHistory([]);
         }
 
-        // Get other drivers for chat
-        console.log('Getting other drivers...');
-        try {
-          const allVehicles = await supabaseService.getVehicles();
-          const otherVehicles = allVehicles.filter(v => v.id !== vehicleNum);
-          console.log('Other vehicles:', otherVehicles.length);
-          // Get driver names
-          const driverIds = otherVehicles.map(v => v.driverId).filter(id => id);
-          console.log('Getting driver names for IDs:', driverIds);
-          const allPeople = await supabaseService.getPeople();
-          const driversData = allPeople.filter(p => driverIds.includes(p.id));
-          console.log('Driver names query result:', { count: driversData?.length });
-          const driversMap = (driversData || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
-          const otherDriversList = otherVehicles.map(v => ({
-            id: v.id,
-            name: driversMap[v.driverId] || v.name,
-            vehicleId: v.id
-          })).filter(d => d.name);
-          setOtherDrivers(otherDriversList);
-         } catch (error) {
-           console.warn('Could not load other vehicles and drivers:', error);
-         }
-
-          // Load messages
-          try {
-             const msgs = await supabaseService.getDriverMessages();
-             console.log('All messages from DB:', msgs);
-             console.log('Filtering for vehicleNumber:', vehicleNumber, 'type:', typeof vehicleNumber);
-             const filtered = msgs.filter((m: any) => {
-               const isForThisDriver = m.receiver_id === `driver_${vehicleNumber}` ||
-                                      m.receiver_id === vehicleNumber?.toString() ||
-                                      m.sender_id === `driver_${vehicleNumber}` ||
-                                      m.receiver_id === 'general' ||
-                                      (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
-                                      (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString());
-               console.log('Message:', m.id, 'sender:', m.sender_id, 'receiver:', m.receiver_id, 'accepted:', isForThisDriver);
-               return isForThisDriver;
-             }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-            console.log('Filtered messages count:', filtered.length);
-            setMessages(filtered);
+        // Get other drivers for chat (limit to reduce data transfer)
+         console.log('Getting other drivers...');
+         try {
+           const allVehicles = await supabaseService.getVehicles();
+           const otherVehicles = allVehicles.filter(v => v.id !== vehicleNum).slice(0, 10); // Limit to 10 other vehicles
+           console.log('Other vehicles:', otherVehicles.length);
+           // Get driver names
+           const driverIds = otherVehicles.map(v => v.driverId).filter(id => id);
+           console.log('Getting driver names for IDs:', driverIds);
+           const allPeople = await supabaseService.getPeople();
+           const driversData = allPeople.filter(p => driverIds.includes(p.id));
+           console.log('Driver names query result:', { count: driversData?.length });
+           const driversMap = (driversData || []).reduce((acc, d) => ({ ...acc, [d.id]: d.name }), {});
+           const otherDriversList = otherVehicles.map(v => ({
+             id: v.id,
+             name: driversMap[v.driverId] || v.name,
+             vehicleId: v.id
+           })).filter(d => d.name);
+           setOtherDrivers(otherDriversList);
           } catch (error) {
-            console.warn('Could not load messages:', error);
+            console.warn('Could not load other vehicles and drivers:', error);
           }
+
+           // Load recent messages (limit to reduce data)
+           try {
+              const msgs = await supabaseService.getDriverMessages();
+              console.log('All messages from DB:', msgs.length);
+              const filtered = msgs.filter((m: any) => {
+                const isForThisDriver = m.receiver_id === `driver_${vehicleNumber}` ||
+                                       m.receiver_id === vehicleNumber?.toString() ||
+                                       m.sender_id === `driver_${vehicleNumber}` ||
+                                       m.receiver_id === 'general' ||
+                                       (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
+                                       (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString());
+                return isForThisDriver;
+              }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                .slice(0, 50); // Limit to 50 most recent messages
+             console.log('Filtered messages count:', filtered.length);
+             setMessages(filtered);
+           } catch (error) {
+             console.warn('Could not load messages:', error);
+           }
 
           console.log('getVehicleInfo completed successfully');
 
@@ -435,27 +440,7 @@ const Dashboard: React.FC = () => {
               }
             }
           })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-            // Only process important status changes for rides assigned to this vehicle
-            const oldStatus = payload.old?.status?.toLowerCase();
-            const newStatus = payload.new?.status?.toLowerCase();
 
-            // Only update for significant status changes
-            const importantStatuses = ['pending', 'accepted', 'in_progress', 'completed', 'cancelled'];
-            if (!importantStatuses.includes(newStatus) || oldStatus === newStatus || payload.new.vehicle_id !== vehicleNumber) {
-              return; // Skip minor updates or updates for other vehicles
-            }
-
-            console.log('Ride status updated for our vehicle:', { id: payload.new.id, oldStatus, newStatus });
-
-            const now = Date.now();
-            if (now - lastSubscriptionRefresh > 10000) {
-              setLastSubscriptionRefresh(now);
-              refreshVehicleData();
-            } else {
-              console.log('⏳ Skipping status update refresh due to rate limiting');
-            }
-          })
          .subscribe((status, err) => {
            console.log('🚗 Ride assignments channel status:', status, err);
            if (status === 'SUBSCRIBED') {
