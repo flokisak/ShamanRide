@@ -18,12 +18,46 @@ const Dashboard: React.FC = () => {
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
   const [shiftCash, setShiftCash] = useState<number>(0);
   const [shiftStartTime, setShiftStartTime] = useState<number | null>(null);
+  const [customShiftStart, setCustomShiftStart] = useState<string>('');
+  const [customShiftEnd, setCustomShiftEnd] = useState<string>('');
+  const [useCustomShift, setUseCustomShift] = useState<boolean>(false);
 
-  // Calculate shift cash from completed rides since shift start
-  const calculateShiftCash = (rides: RideLog[], shiftStart: number) => {
+  // Calculate shift cash from completed rides within shift time range
+  const calculateShiftCash = (rides: RideLog[], shiftStart?: number, shiftEnd?: number) => {
+    let startTime: number;
+    let endTime: number;
+
+    if (useCustomShift && customShiftStart && customShiftEnd) {
+      // Use custom shift times
+      const today = new Date();
+      const [startHours, startMinutes] = customShiftStart.split(':').map(Number);
+      const [endHours, endMinutes] = customShiftEnd.split(':').map(Number);
+
+      const shiftStartDate = new Date(today);
+      shiftStartDate.setHours(startHours, startMinutes, 0, 0);
+
+      const shiftEndDate = new Date(today);
+      shiftEndDate.setHours(endHours, endMinutes, 0, 0);
+
+      // If end time is before start time, assume it's next day
+      if (shiftEndDate <= shiftStartDate) {
+        shiftEndDate.setDate(shiftEndDate.getDate() + 1);
+      }
+
+      startTime = shiftStartDate.getTime();
+      endTime = shiftEndDate.getTime();
+    } else if (shiftStart) {
+      // Use automatic shift start time
+      startTime = shiftStart;
+      endTime = Date.now();
+    } else {
+      return 0;
+    }
+
     const shiftCompleted = rides.filter(ride =>
       ride.status === RideStatus.Completed &&
-      new Date(ride.timestamp).getTime() >= shiftStart
+      new Date(ride.timestamp).getTime() >= startTime &&
+      new Date(ride.timestamp).getTime() <= endTime
     );
     return shiftCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
   };
@@ -101,6 +135,15 @@ const Dashboard: React.FC = () => {
     if (savedNavApp) {
       setPreferredNavApp(savedNavApp);
     }
+
+    // Load custom shift settings from localStorage
+    const savedCustomShift = localStorage.getItem('useCustomShift') === 'true';
+    const savedShiftStart = localStorage.getItem('customShiftStart') || '';
+    const savedShiftEnd = localStorage.getItem('customShiftEnd') || '';
+
+    setUseCustomShift(savedCustomShift);
+    setCustomShiftStart(savedShiftStart);
+    setCustomShiftEnd(savedShiftEnd);
 
     // Monitor real-time connection status
     const checkRealtimeConnection = () => {
@@ -649,11 +692,11 @@ const Dashboard: React.FC = () => {
 
    // Update shift cash when ride history changes
    useEffect(() => {
-     if (shiftStartTime && rideHistory.length > 0) {
-       const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime);
+     if ((shiftStartTime || (useCustomShift && customShiftStart && customShiftEnd)) && rideHistory.length > 0) {
+       const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime || undefined);
        setShiftCash(shiftCashAmount);
      }
-   }, [rideHistory, shiftStartTime]);
+   }, [rideHistory, shiftStartTime, useCustomShift, customShiftStart, customShiftEnd]);
 
    // Handle break timer
   useEffect(() => {
@@ -1388,16 +1431,20 @@ const Dashboard: React.FC = () => {
                <div className="flex justify-between items-center mb-3">
                  <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
                  <div className="flex items-center space-x-2">
-                   <div className="text-sm text-slate-300">
-                     <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
-                     {shiftStartTime && (
+                 <div className="text-sm text-slate-300">
+                   <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
+                     {useCustomShift && customShiftStart && customShiftEnd ? (
+                       <div className="text-xs text-slate-400 mt-1">
+                         {customShiftStart} - {customShiftEnd}
+                       </div>
+                     ) : shiftStartTime ? (
                        <div className="text-xs text-slate-400 mt-1">
                          Od: {new Date(shiftStartTime).toLocaleTimeString('cs-CZ', {
                            hour: '2-digit',
                            minute: '2-digit'
                          })}
                        </div>
-                     )}
+                     ) : null}
                    </div>
                    <button
                      onClick={() => setShowRideHistory(false)}
@@ -1443,6 +1490,11 @@ const Dashboard: React.FC = () => {
                <div className="flex items-center space-x-2">
                  <div className="text-sm text-slate-300">
                    <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
+                   {useCustomShift && customShiftStart && customShiftEnd && (
+                     <div className="text-xs text-slate-400">
+                       {customShiftStart} - {customShiftEnd}
+                     </div>
+                   )}
                  </div>
                  <button
                    onClick={() => setShowRideHistory(true)}
@@ -1493,8 +1545,76 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-         {/* Logout */}
-         <button
+        {/* Shift Time Settings */}
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <h2 className="text-lg font-semibold mb-3 text-white">Nastavení směny</h2>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="useCustomShift"
+                checked={useCustomShift}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setUseCustomShift(enabled);
+                  localStorage.setItem('useCustomShift', enabled.toString());
+                  // Recalculate cash when switching modes
+                  if (rideHistory.length > 0) {
+                    const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime || undefined);
+                    setShiftCash(shiftCashAmount);
+                  }
+                }}
+                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="useCustomShift" className="text-sm font-medium text-slate-300">
+                Použít vlastní časové rozmezí pro výpočet tržby
+              </label>
+            </div>
+
+            {useCustomShift && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Začátek směny
+                  </label>
+                  <input
+                    type="time"
+                    value={customShiftStart}
+                    onChange={(e) => {
+                      setCustomShiftStart(e.target.value);
+                      localStorage.setItem('customShiftStart', e.target.value);
+                    }}
+                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Konec směny
+                  </label>
+                  <input
+                    type="time"
+                    value={customShiftEnd}
+                    onChange={(e) => {
+                      setCustomShiftEnd(e.target.value);
+                      localStorage.setItem('customShiftEnd', e.target.value);
+                    }}
+                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="text-xs text-slate-400">
+              {useCustomShift
+                ? "Tržba se počítá pouze z jízd dokončených v zadaném časovém rozmezí."
+                : "Tržba se počítá od okamžiku přihlášení do odhlášení."
+              }
+            </div>
+          </div>
+        </div>
+
+          {/* Logout */}
+          <button
            onClick={() => supabase.auth.signOut()}
            className="w-full bg-danger hover:bg-red-700 py-3 rounded-2xl btn-modern text-white font-medium shadow-frost"
          >
