@@ -332,22 +332,23 @@ const Dashboard: React.FC = () => {
           }
 
         // Load recent messages (limit to reduce data)
-           try {
-              const msgs = await supabaseService.getDriverMessages();
-              console.log('All messages from DB:', msgs.length);
-              const filtered = msgs.filter((m: any) => {
-                const isForThisDriver = m.receiver_id === `driver_${vehicleNumber}` ||
-                                       m.sender_id === `driver_${vehicleNumber}` ||
-                                       m.receiver_id === 'general' ||
-                                       (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`);
-                return isForThisDriver;
-              }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                .slice(0, 50); // Limit to 50 most recent messages
-             console.log('Filtered messages count:', filtered.length);
-             setMessages(filtered);
-           } catch (error) {
-             console.warn('Could not load messages:', error);
-           }
+            try {
+               const msgs = await supabaseService.getDriverMessages();
+               console.log('All messages from DB:', msgs.length, 'vehicleNumber:', vehicleNumber);
+               const filtered = msgs.filter((m: any) => {
+                 const isForThisDriver = m.receiver_id === `driver_${vehicleNumber}` ||
+                                        m.sender_id === `driver_${vehicleNumber}` ||
+                                        m.receiver_id === 'general' ||
+                                        (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`);
+                 console.log('Message check:', m.id, 'sender:', m.sender_id, 'receiver:', m.receiver_id, 'isForThisDriver:', isForThisDriver);
+                 return isForThisDriver;
+               }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                 .slice(0, 50); // Limit to 50 most recent messages
+              console.log('Filtered messages count:', filtered.length, 'filtered messages:', filtered.map(m => ({ id: m.id, sender: m.sender_id, receiver: m.receiver_id })));
+              setMessages(filtered);
+            } catch (error) {
+              console.warn('Could not load messages:', error);
+            }
 
           console.log('getVehicleInfo completed successfully');
 
@@ -394,39 +395,46 @@ const Dashboard: React.FC = () => {
          transports: ['websocket', 'polling']
        });
 
-       socketInstance.on('connect', () => {
-         console.log('Driver app connected to server');
-         setSocketConnected(true);
+        socketInstance.on('connect', () => {
+          console.log('Driver app connected to server, vehicleNumber:', vehicleNumber);
+          setSocketConnected(true);
 
-         // Join shift room for ride updates
-         socketInstance.emit('join_shift', `driver_shift_${vehicleNumber}`);
+          // Join shift room for ride updates
+          socketInstance.emit('join_shift', `driver_shift_${vehicleNumber}`);
+          console.log('Joined shift room:', `driver_shift_${vehicleNumber}`);
 
-         // Join group chat for shift messages
-         socketInstance.emit('join_group_chat', `driver_shift_${vehicleNumber}`);
+          // Join group chat for shift messages (same room as dispatcher)
+          socketInstance.emit('join_group_chat', 'dispatcher_shift');
+          console.log('Joined group chat room:', 'dispatcher_shift');
 
-         // Join dispatcher chat room
-         socketInstance.emit('join_chat_dispatcher_driver', {
-           dispatcherId: 'dispatcher', // Assuming dispatcher ID is 'dispatcher'
-           driverId: vehicleNumber
-         });
-       });
+          // Join dispatcher chat room
+          socketInstance.emit('join_chat_dispatcher_driver', {
+            dispatcherId: 'dispatcher',
+            driverId: vehicleNumber
+          });
+          console.log('Joined dispatcher chat room for driver:', vehicleNumber);
+        });
 
        socketInstance.on('disconnect', () => {
          console.log('Driver app disconnected from server');
          setSocketConnected(false);
        });
 
-        // Listen for new messages
-        socketInstance.on('new_message', (messageData) => {
-          console.log('Driver app received message:', messageData);
-          setMessages(prev => {
-            // Check if message already exists
-            const exists = prev.some(m => m.id === messageData.id);
-            if (!exists) {
-              return [messageData, ...prev];
-            }
-            return prev;
-          });
+         // Listen for new messages
+         socketInstance.on('new_message', (messageData) => {
+           console.log('Driver app received message:', messageData);
+           setMessages(prev => {
+             // Check if message already exists
+             const exists = prev.some(m => m.id === messageData.id);
+             console.log('Message exists in current state:', exists, 'Current messages count:', prev.length);
+             if (!exists) {
+               // Save to localStorage for persistence
+               supabaseService.addDriverMessage(messageData);
+               console.log('Added new message to state. New count:', prev.length + 1);
+               return [messageData, ...prev];
+             }
+             return prev;
+           });
 
           // Notify user for new messages from dispatcher or other drivers
           if (messageData.sender_id !== `driver_${vehicleNumber}`) {
@@ -1000,7 +1008,7 @@ const Dashboard: React.FC = () => {
         room = `chat:Ddispatcher_R${vehicleNumber}`;
         chatType = 'dispatcher_driver';
       } else if (selectedRecipient === 'general') {
-        room = `shift_chat:driver_shift_${vehicleNumber}`;
+        room = 'shift_chat:dispatcher_shift';
         chatType = 'group';
       } else {
         room = `chat:R${vehicleNumber}_R${selectedRecipient}`;
@@ -1017,14 +1025,27 @@ const Dashboard: React.FC = () => {
 
       console.log('Sending message via Socket.io:', messageData);
 
-      try {
-        socket.emit('message', messageData);
-        console.log('Message sent successfully via Socket.io');
-        setNewMessage('');
-      } catch (error) {
-        console.error('Failed to send message via Socket.io:', error);
-        alert('Failed to send message. Please try again.');
-      }
+       try {
+         socket.emit('message', messageData);
+         console.log('Message sent successfully via Socket.io');
+
+         // Save sent message locally for immediate UI update
+         const localMessageData = {
+           id: `temp-${Date.now()}`,
+           sender_id: `driver_${vehicleNumber}`,
+           receiver_id: receiverId,
+           message: newMessage.trim(),
+           timestamp: new Date().toISOString(),
+           read: true
+         };
+         setMessages(prev => [localMessageData, ...prev]);
+         supabaseService.addDriverMessage(localMessageData);
+
+         setNewMessage('');
+       } catch (error) {
+         console.error('Failed to send message via Socket.io:', error);
+         alert('Failed to send message. Please try again.');
+       }
     };
 
   const getSenderName = (senderId: string) => {
