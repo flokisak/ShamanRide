@@ -16,7 +16,17 @@ const Dashboard: React.FC = () => {
   const [pendingRides, setPendingRides] = useState<RideLog[]>([]);
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
-  const [dailyCash, setDailyCash] = useState<number>(0);
+  const [shiftCash, setShiftCash] = useState<number>(0);
+  const [shiftStartTime, setShiftStartTime] = useState<number | null>(null);
+
+  // Calculate shift cash from completed rides since shift start
+  const calculateShiftCash = (rides: RideLog[], shiftStart: number) => {
+    const shiftCompleted = rides.filter(ride =>
+      ride.status === RideStatus.Completed &&
+      new Date(ride.timestamp).getTime() >= shiftStart
+    );
+    return shiftCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
+  };
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [selectedRecipient, setSelectedRecipient] = useState<string>('dispatcher');
@@ -146,11 +156,26 @@ const Dashboard: React.FC = () => {
         console.log('Vehicle number set to:', vehicleNum);
 
         // Get vehicle status and license plate
-        console.log('Vehicle data:', vehicleData);
-        setDriverStatus(vehicleData.status === 'AVAILABLE' ? 'available' :
-                        vehicleData.status === 'BUSY' ? 'on_ride' :
-                        vehicleData.status === 'BREAK' ? 'break' :
-                        vehicleData.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline');
+        const newStatus = vehicleData.status === 'AVAILABLE' ? 'available' :
+                         vehicleData.status === 'BUSY' ? 'on_ride' :
+                         vehicleData.status === 'BREAK' ? 'break' :
+                         vehicleData.status === 'OUT_OF_SERVICE' ? 'offline' : 'offline';
+        setDriverStatus(newStatus);
+
+        // Set shift start time when driver becomes available (starts shift)
+        if (newStatus === 'available' && !shiftStartTime) {
+          const now = Date.now();
+          setShiftStartTime(now);
+          console.log('Shift started at:', new Date(now).toLocaleString());
+        }
+
+        // Reset shift when driver goes offline
+        if (newStatus === 'offline' && shiftStartTime) {
+          setShiftStartTime(null);
+          setShiftCash(0);
+          console.log('Shift ended - cash reset');
+        }
+
         setLicensePlate(vehicleData.licensePlate);
 
         // Get pending rides for this vehicle (queue: oldest first)
@@ -193,15 +218,11 @@ const Dashboard: React.FC = () => {
           const history = await supabaseService.getRideLogsByVehicle(vehicleNum, undefined, 20);
           setRideHistory(history);
 
-          // Calculate daily cash from completed rides today
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const todayCompleted = history.filter(ride =>
-            ride.status === RideStatus.Completed &&
-            new Date(ride.timestamp) >= today
-          );
-          const totalCash = todayCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
-          setDailyCash(totalCash);
+          // Calculate shift cash from completed rides since shift start
+          if (shiftStartTime) {
+            const shiftCashAmount = calculateShiftCash(history, shiftStartTime);
+            setShiftCash(shiftCashAmount);
+          }
         } catch (error) {
           console.warn('Could not load ride history:', error);
           setRideHistory([]);
@@ -628,6 +649,14 @@ const Dashboard: React.FC = () => {
      };
    }, [driverStatus, currentRide, wakeLockActive]);
 
+   // Update shift cash when ride history changes
+   useEffect(() => {
+     if (shiftStartTime && rideHistory.length > 0) {
+       const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime);
+       setShiftCash(shiftCashAmount);
+     }
+   }, [rideHistory, shiftStartTime]);
+
    // Handle break timer
   useEffect(() => {
     if (breakEndTime && driverStatus === 'break' && vehicleNumber) {
@@ -674,6 +703,19 @@ const Dashboard: React.FC = () => {
         else if (status === 'on_ride') vehicleStatus = 'BUSY';
         else if (status === 'offline') vehicleStatus = 'OUT_OF_SERVICE';
         else vehicleStatus = status.toUpperCase();
+
+        // Manage shift timing
+        if (status === 'available' && !shiftStartTime) {
+          // Start new shift when becoming available
+          const now = Date.now();
+          setShiftStartTime(now);
+          console.log('Shift started at:', new Date(now).toLocaleString());
+        } else if (status === 'offline') {
+          // End shift when going offline
+          setShiftStartTime(null);
+          setShiftCash(0);
+          console.log('Shift ended - cash reset');
+        }
       }
 
       console.log(`Updating vehicle ${vehicleNumber} status to ${vehicleStatus}`);
@@ -1345,23 +1387,31 @@ const Dashboard: React.FC = () => {
         {/* Ride History */}
         {showRideHistory && (
           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
-              <div className="flex items-center space-x-2">
-                <div className="text-sm text-slate-300">
-                  <span className="font-medium">Denní tržba:</span> {dailyCash} Kč
-                </div>
-                <button
-                  onClick={() => setShowRideHistory(false)}
-                  className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                  title="Hide ride history"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
+               <div className="flex justify-between items-center mb-3">
+                 <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
+                 <div className="flex items-center space-x-2">
+                   <div className="text-sm text-slate-300">
+                     <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
+                     {shiftStartTime && (
+                       <div className="text-xs text-slate-400 mt-1">
+                         Od: {new Date(shiftStartTime).toLocaleTimeString('cs-CZ', {
+                           hour: '2-digit',
+                           minute: '2-digit'
+                         })}
+                       </div>
+                     )}
+                   </div>
+                   <button
+                     onClick={() => setShowRideHistory(false)}
+                     className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                     title="Hide ride history"
+                   >
+                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                     </svg>
+                   </button>
+                 </div>
+               </div>
             {rideHistory.length > 0 ? (
               <ul className="space-y-2">
                 {rideHistory.map((ride) => (
@@ -1388,23 +1438,28 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {!showRideHistory && (
-          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
-              <button
-                onClick={() => setShowRideHistory(true)}
-                className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                title="Show ride history"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
+         {!showRideHistory && (
+           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+             <div className="flex justify-between items-center">
+               <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
+               <div className="flex items-center space-x-2">
+                 <div className="text-sm text-slate-300">
+                   <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
+                 </div>
+                 <button
+                   onClick={() => setShowRideHistory(true)}
+                   className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                   title="Show ride history"
+                 >
+                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                   </svg>
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
 
         {/* Navigation Settings */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
