@@ -34,9 +34,10 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // Auto-scroll disabled to prevent focus stealing
+  // useEffect(() => {
+  //   scrollToBottom();
+  // }, [messages]);
 
   // Initialize socket connection
   useEffect(() => {

@@ -238,6 +238,7 @@ const AppContent: React.FC = () => {
   
   const [routeToPreview, setRouteToPreview] = useState<string[] | null>(null);
   const [showCompletedRides, setShowCompletedRides] = useState(true); // Show completed rides by default for debugging
+  const [hasNewRides, setHasNewRides] = useState(false); // Track new rides from drivers
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('today');
   const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
@@ -252,6 +253,7 @@ const AppContent: React.FC = () => {
   // Gamification modal
   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
   const [socketRidesExpanded, setSocketRidesExpanded] = useState(false);
+  const [rideHistoryExpanded, setRideHistoryExpanded] = useState(true);
 
 
 
@@ -1640,7 +1642,7 @@ const AppContent: React.FC = () => {
     dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
     vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} locations={locations} />,
     map: <OpenStreetMap vehicles={vehicles} people={people} locations={locations} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
-      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} onResendRide={handleResendRide} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} />,
+      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} onResendRide={handleResendRide} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} hasNewRides={hasNewRides} onMarkRidesViewed={() => setHasNewRides(false)} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
@@ -1708,11 +1710,12 @@ const AppContent: React.FC = () => {
              }
            });
 
-           // Notify dispatcher of new ride from driver
-           if (isNewRide && rideData.status?.toLowerCase() === 'pending') {
-             notifyUser('ride', {
-               title: 'Nová jízda od řidiče!',
-               body: `${rideData.customerName} - ${rideData.stops?.[0]} → ${rideData.stops?.[rideData.stops.length - 1]}`
+            // Notify dispatcher of new ride from driver
+            if (isNewRide && rideData.status?.toLowerCase() === 'pending') {
+              setHasNewRides(true); // Mark that there are new rides
+              notifyUser('ride', {
+                title: 'Nová jízda od řidiče!',
+                body: `${rideData.customerName} - ${rideData.stops?.[0]} → ${rideData.stops?.[rideData.stops.length - 1]}`
              });
            }
          }}
@@ -1993,78 +1996,95 @@ const AppContent: React.FC = () => {
                     </div>
                   )}
 
-                {/* Ride History - Column 1-2, Row 2 */}
-                {widgetVisibility.rideLog && (
-                  <div className="col-start-1 row-start-2 col-span-2">
-                  <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
-                    <div className="p-3 border-b border-slate-700">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-semibold text-white flex items-center">
-                          <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
-                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                           </svg>
+                 {/* Ride History - Column 1-2, Row 2 */}
+                 {widgetVisibility.rideLog && (
+                   <div className="col-start-1 row-start-2 col-span-2">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full flex flex-col">
+                       <div className="p-3 border-b border-slate-700 flex-shrink-0">
+                         <div className="flex justify-between items-center">
+                           <h3 className="text-sm font-semibold text-white flex items-center">
+                             <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
+                               <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                               </svg>
+                             </div>
+                             Historie jízd
+                           </h3>
+                           <div className="flex items-center space-x-2">
+                             <button
+                               onClick={reloadRideLogs}
+                               className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                               title="Reload ride history"
+                             >
+                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                               </svg>
+                             </button>
+                             <button
+                               onClick={() => setRideHistoryExpanded(!rideHistoryExpanded)}
+                               className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                               title={rideHistoryExpanded ? "Collapse ride history" : "Expand ride history"}
+                             >
+                               <svg
+                                 className={`w-4 h-4 transition-transform ${rideHistoryExpanded ? 'rotate-180' : ''}`}
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke="currentColor"
+                               >
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                               </svg>
+                             </button>
+                             <button
+                               onClick={handleAddRideClick}
+                               className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
+                             >
+                               <PlusIcon size={14} />
+                               <span>Přidat jízdu</span>
+                             </button>
+                           </div>
                          </div>
-                         Historie jízd
-                       </h3>
-                         <div className="flex items-center space-x-2">
-                           <button
-                             onClick={reloadRideLogs}
-                             className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                             title="Reload ride history"
-                           >
-                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                             </svg>
-                           </button>
-                           <button
-                             onClick={handleAddRideClick}
-                             className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
-                           >
-                          <PlusIcon size={14} />
-                          <span>Přidat jízdu</span>
-                        </button>
+                       </div>
+
+                       {rideHistoryExpanded && (
+                         <div className="flex-1 min-h-0 p-4">
+                           {widgetMap.rideLog}
+
+                           {/* Collapsible Socket Rides Section */}
+                           <div className="mt-4 border-t border-slate-700 pt-4">
+                             <button
+                               onClick={() => setSocketRidesExpanded(!socketRidesExpanded)}
+                               className="flex items-center justify-between w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                             >
+                               <div className="flex items-center space-x-2">
+                                 <div className="w-4 h-4 bg-[#81A1C1]/80 rounded flex items-center justify-center">
+                                   <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                   </svg>
+                                 </div>
+                                 <span className="text-sm font-medium text-white">Real-time jízdy</span>
+                                 <span className="text-xs text-slate-400">({recentRideLog.length})</span>
+                               </div>
+                               <svg
+                                 className={`w-4 h-4 text-slate-400 transition-transform ${socketRidesExpanded ? 'rotate-180' : ''}`}
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke="currentColor"
+                               >
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                               </svg>
+                             </button>
+
+                             {socketRidesExpanded && widgetVisibility.socketRides && (
+                               <div className="mt-3">
+                                 {widgetMap.socketRides}
+                               </div>
+                             )}
+                           </div>
                          </div>
+                       )}
                      </div>
                    </div>
-                     <div className="p-4">
-                          {widgetMap.rideLog}
-
-                          {/* Collapsible Socket Rides Section */}
-                          <div className="mt-4 border-t border-slate-700 pt-4">
-                            <button
-                              onClick={() => setSocketRidesExpanded(!socketRidesExpanded)}
-                              className="flex items-center justify-between w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
-                            >
-                              <div className="flex items-center space-x-2">
-                                <div className="w-4 h-4 bg-[#81A1C1]/80 rounded flex items-center justify-center">
-                                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                  </svg>
-                                </div>
-                                <span className="text-sm font-medium text-white">Real-time jízdy</span>
-                                <span className="text-xs text-slate-400">({recentRideLog.length})</span>
-                              </div>
-                              <svg
-                                className={`w-4 h-4 text-slate-400 transition-transform ${socketRidesExpanded ? 'rotate-180' : ''}`}
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-
-                            {socketRidesExpanded && widgetVisibility.socketRides && (
-                              <div className="mt-3">
-                                {widgetMap.socketRides}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                    </div>
-                  </div>
-                )}
+                  )}
 
                 {/* Vehicles Status - Column 3, Row 2 */}
                 {widgetVisibility.vehicles && (

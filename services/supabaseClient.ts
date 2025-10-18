@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { DEFAULT_FUEL_PRICES } from '../types';
+import { DEFAULT_FUEL_PRICES, RideStatus } from '../types';
 
 const isBrowser = typeof window !== 'undefined';
 const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;

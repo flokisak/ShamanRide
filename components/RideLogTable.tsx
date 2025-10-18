@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { RideLog, VehicleType, RideStatus, MessagingApp, Person, Vehicle } from '../types';
-import { CarIcon, ArrowUpIcon, ArrowDownIcon, TrashIcon, EditIcon, MessageIcon, CalendarIcon } from './icons';
+import { CarIcon, TrashIcon, EditIcon, MessageIcon, CalendarIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 
 interface RideLogTableProps {
@@ -8,11 +8,6 @@ interface RideLogTableProps {
     vehicles: Vehicle[];
     people: Person[];
     messagingApp: MessagingApp;
-    onSort: (key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime') => void;
-    sortConfig: {
-      key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime';
-      direction: 'asc' | 'desc';
-    };
      onStatusChange: (logId: string, newStatus: RideStatus) => void;
     onDelete: (logId: string) => void;
     onEdit: (logId: string) => void;
@@ -24,42 +19,25 @@ interface RideLogTableProps {
     onDateFilterChange: (date: string) => void;
     timeFilter: 'all' | 'morning' | 'afternoon' | 'evening' | 'night';
     onTimeFilterChange: (time: 'all' | 'morning' | 'afternoon' | 'evening' | 'night') => void;
+    hasNewRides?: boolean;
+    onMarkRidesViewed?: () => void;
   }
 
-const SortableHeader: React.FC<{
-   label: string;
-   sortKey: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType' | 'pickupTime';
-   onSort: (key: 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'distance' | 'rideType') => void;
-   sortConfig: RideLogTableProps['sortConfig'];
-   className?: string;
- }> = ({ label, sortKey, onSort, sortConfig, className }) => {
-  const { t } = useTranslation();
-  const isSorted = sortConfig.key === sortKey;
-  const direction = isSorted ? sortConfig.direction : null;
-
-  return (
-     <th scope="col" className={`py-1 text-left text-sm font-semibold text-gray-300 ${className}`}>
-        <button
-          onClick={() => onSort(sortKey)}
-          className="flex items-center space-x-1 group"
-          aria-label={t('rideLog.table.sortBy', { label })}
-        >
-          <span>{label}</span>
-          <span className="opacity-50 group-hover:opacity-100 transition-opacity">
-            {direction === 'asc' && <ArrowUpIcon size={14} />}
-            {direction === 'desc' && <ArrowDownIcon size={14} />}
-          </span>
-        </button>
-      </th>
-  );
-};
 
 
-export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onSort, sortConfig, onStatusChange, onDelete, onEdit, onSendSms, onResendRide, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange }) => {
+
+export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onStatusChange, onDelete, onEdit, onSendSms, onResendRide, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange, hasNewRides, onMarkRidesViewed }) => {
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
   const selectedDate = dateFilter.startsWith('custom') ? new Date(dateFilter.split('-')[1]) : null;
+
+  // Mark rides as viewed when component mounts
+  React.useEffect(() => {
+    if (hasNewRides && onMarkRidesViewed) {
+      onMarkRidesViewed();
+    }
+  }, [hasNewRides, onMarkRidesViewed]);
 
 
   const getStatusSelectClass = (status: RideStatus) => {
@@ -218,10 +196,15 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
 
 
   return (
-    <div className="bg-slate-800 p-2 rounded-lg shadow-2xl flex flex-col h-full">
+    <div className={`p-2 rounded-lg shadow-2xl flex flex-col h-full ${hasNewRides ? 'bg-slate-800 border border-blue-400/30' : 'bg-slate-800'}`}>
       <div className="flex-shrink-0 mb-1 border-b border-slate-700 pb-1">
         <div className="flex justify-between items-center mb-2">
-          <h2 className="text-md font-semibold">{t('rideLog.title')}</h2>
+           <h2 className="text-md font-semibold flex items-center gap-2">
+             {t('rideLog.title')}
+             {hasNewRides && (
+               <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+             )}
+           </h2>
           <div className="flex items-center space-x-3">
               <label htmlFor="show-inactive" className="text-sm font-medium text-gray-300 cursor-pointer">
               {t('rideLog.showInactive')}
@@ -344,110 +327,123 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                : `Žádné jízdy pro vybraný ${dateFilter === 'custom' ? 'datum' : 'filtr'}`
              }
          </p>
-      ) : (
-        <div className="flex-grow overflow-y-auto -mr-2 -ml-2 pr-2 pl-2">
-           <table className="min-w-full">
-            <thead className="bg-slate-800 sticky top-0 z-10">
-                <tr>
-                  <SortableHeader label={t('rideLog.table.time')} sortKey="timestamp" onSort={onSort} sortConfig={sortConfig} className="pl-4 pr-3 sm:pl-0" />
-                  <SortableHeader label={t('rideLog.table.pickupTime')} sortKey="pickupTime" onSort={onSort} sortConfig={sortConfig} className="px-3" />
-                  <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.driver')}</th>
-                   <SortableHeader label={t('rideLog.table.customer')} sortKey="customerName" onSort={onSort} sortConfig={sortConfig} className="px-3" />
-                  <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.passengers')}</th>
-                  <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.route')}</th>
-                  <th scope="col" className="px-3 py-1 text-left text-sm font-semibold text-gray-300">{t('rideLog.table.status')}</th>
-                  <th scope="col" className="relative py-1 pl-3 pr-4 sm:pr-0 text-right text-sm font-semibold text-gray-300">{t('rideLog.table.actions')}</th>
-               </tr>
-            </thead>
-             <tbody>
-                {logs.map((log) => {
-                const vehicle = vehicles.find(v => v.id === log.vehicleId);
-                const driver = vehicle ? people.find(p => p.id === vehicle.driverId) : null;
-                
-                return (
-                <tr key={log.id} className={`${log.status === RideStatus.Scheduled ? 'bg-sky-900' : ''} hover:bg-slate-700`}>
-                   <td className="whitespace-nowrap py-2 pl-4 pr-3 text-sm text-gray-400 sm:pl-0">
-                     {new Date(log.timestamp).toLocaleString(language, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                   </td>
-                   <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-400">
-                     {log.pickupTime === 'ihned' ? t('dispatch.immediate') : log.pickupTime ? new Date(log.pickupTime).toLocaleString(language, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
-                   </td>
-                   <td className="whitespace-nowrap px-3 py-2 text-sm">
-                    <div className="flex items-center">
-                      {log.vehicleType && (
-                        <div className={`${log.vehicleType === VehicleType.Car ? 'text-gray-400' : 'text-gray-200'} mr-3 flex-shrink-0`}>
-                          <CarIcon />
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-medium text-white">{log.driverName || <span className="text-sky-400 italic">{t('rideLog.table.awaitingAssignment')}</span>}</div>
-                        {log.vehicleName && <div className="text-gray-400 text-xs">{log.vehicleName} ({log.vehicleLicensePlate})</div>}
-                      </div>
-                    </div>
-                  </td>
-                   <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-400">
-                     <div className="font-medium text-white">{log.customerName}</div>
-                     <div className="text-gray-400 text-xs">{log.customerPhone}</div>
-                   </td>
-                   <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-200">{log.passengers}</td>
-                    <td className="px-3 py-2 text-sm text-gray-400 max-w-xs">
-                     {renderRoute(log.stops, log.notes)}
-                   </td>
-                   <td className="whitespace-nowrap px-3 py-2 text-sm text-gray-400">
-                     <select
-                        value={log.status}
-                        onChange={(e) => onStatusChange(log.id, e.target.value as RideStatus)}
-                        className={getStatusSelectClass(log.status)}
-                        aria-label={t('rideLog.table.changeStatusFor', { customerName: log.customerName })}
-                    >
-                        {Object.values(RideStatus).map(status => (
-                            <option key={status} value={status} className="bg-slate-800 text-white">
-                                {t(`rideStatus.${status}`)}
-                            </option>
-                        ))}
-                    </select>
-                   </td>
-                     <td className="relative whitespace-nowrap py-2 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-                      <div className="flex items-center justify-end space-x-1">
-                        <button
-                          onClick={() => onEdit(log.id)}
-                          className="text-gray-500 hover:text-blue-500 transition-colors p-2 -m-2 rounded-full"
-                          aria-label={t('rideLog.table.editRideFor', { customerName: log.customerName })}
-                        >
-                          <EditIcon size={18} />
-                        </button>
-                        <button
-                          onClick={() => onSendSms(log.id)}
-                          className="text-gray-500 hover:text-green-500 transition-colors p-2 -m-2 rounded-full"
-                          aria-label={t('rideLog.table.sendSmsFor', { customerName: log.customerName })}
-                        >
-                          <MessageIcon size={18} />
-                        </button>
-                        {onResendRide && log.status === RideStatus.Pending && (Date.now() - log.timestamp) > (5 * 60 * 1000) && (
-                          <button
-                            onClick={() => onResendRide(log.id)}
-                            className="text-gray-500 hover:text-orange-500 transition-colors p-2 -m-2 rounded-full"
-                            aria-label={`Re-send ride for ${log.customerName}`}
-                            title="Re-send ride assignment to driver"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onDelete(log.id)}
-                          className="text-gray-500 hover:text-red-500 transition-colors p-2 -m-2 rounded-full"
-                          aria-label={t('rideLog.table.deleteRideFor', { customerName: log.customerName })}
-                        >
-                          <TrashIcon size={18} />
-                        </button>
-                      </div>
-                    </td>
-                </tr>
-              )})}
-            </tbody>
-          </table>
+       ) : (
+         <div className="flex-1 overflow-y-auto">
+           <div className="p-2">
+             {/* Header */}
+             <div className="grid grid-cols-12 gap-2 mb-2 px-3 py-2 bg-slate-800 rounded-lg text-xs font-medium text-slate-300 border-b border-slate-700">
+               <div className="col-span-3">{t('rideLog.table.customer')}</div>
+               <div className="col-span-2">{t('rideLog.table.route')}</div>
+               <div className="col-span-2">{t('rideLog.table.driver')}</div>
+               <div className="col-span-2">{t('rideLog.table.time')}</div>
+               <div className="col-span-2">{t('rideLog.table.status')}</div>
+               <div className="col-span-1">{t('rideLog.table.actions')}</div>
+             </div>
+
+             {/* Rides rows */}
+             <div className="space-y-1">
+               {logs.map((log) => {
+                 const vehicle = vehicles.find(v => v.id === log.vehicleId);
+                 const driver = vehicle ? people.find(p => p.id === vehicle.driverId) : null;
+
+                 return (
+                   <div
+                     key={log.id}
+                     className={`grid grid-cols-12 gap-2 px-3 py-3 bg-slate-800/50 rounded-lg border border-slate-700 hover:bg-slate-800/70 transition-colors ${log.status === RideStatus.Scheduled ? 'bg-sky-900/50' : ''}`}
+                   >
+                     {/* Customer */}
+                     <div className="col-span-3">
+                       <div className="font-medium text-white text-sm">{log.customerName}</div>
+                       <div className="text-xs text-slate-400">{log.customerPhone}</div>
+                       <div className="text-xs text-slate-500">{log.passengers} pax</div>
+                     </div>
+
+                     {/* Route */}
+                     <div className="col-span-2">
+                       {renderRoute(log.stops, log.notes)}
+                     </div>
+
+                     {/* Driver/Vehicle */}
+                     <div className="col-span-2">
+                       <div className="flex items-center">
+                         {log.vehicleType && (
+                           <div className={`${log.vehicleType === VehicleType.Car ? 'text-gray-400' : 'text-gray-200'} mr-2 flex-shrink-0`}>
+                             <CarIcon />
+                           </div>
+                         )}
+                         <div>
+                           <div className="text-xs text-slate-300">{log.driverName || <span className="text-sky-400 italic">{t('rideLog.table.awaitingAssignment')}</span>}</div>
+                           {log.vehicleName && <div className="text-xs text-slate-400">{log.vehicleName}</div>}
+                         </div>
+                       </div>
+                     </div>
+
+                     {/* Time */}
+                     <div className="col-span-2">
+                       <div className="text-xs text-slate-300">{new Date(log.timestamp).toLocaleString(language, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                       <div className="text-xs text-slate-400">
+                         {log.pickupTime === 'ihned' ? t('dispatch.immediate') : log.pickupTime ? new Date(log.pickupTime).toLocaleString(language, { hour: '2-digit', minute: '2-digit' }) : '-'}
+                       </div>
+                     </div>
+
+                     {/* Status */}
+                     <div className="col-span-2">
+                       <select
+                         value={log.status}
+                         onChange={(e) => onStatusChange(log.id, e.target.value as RideStatus)}
+                         className={getStatusSelectClass(log.status)}
+                         aria-label={t('rideLog.table.changeStatusFor', { customerName: log.customerName })}
+                       >
+                         {Object.values(RideStatus).map(status => (
+                           <option key={status} value={status} className="bg-slate-800 text-white">
+                             {t(`rideStatus.${status}`)}
+                           </option>
+                         ))}
+                       </select>
+                     </div>
+
+                     {/* Actions */}
+                     <div className="col-span-1 flex flex-col gap-1">
+                       <button
+                         onClick={() => onEdit(log.id)}
+                         className="px-1 py-1 text-gray-500 hover:text-blue-500 transition-colors rounded text-xs"
+                         aria-label={t('rideLog.table.editRideFor', { customerName: log.customerName })}
+                         title="Edit"
+                       >
+                         ✏️
+                       </button>
+                       <button
+                         onClick={() => onSendSms(log.id)}
+                         className="px-1 py-1 text-gray-500 hover:text-green-500 transition-colors rounded text-xs"
+                         aria-label={t('rideLog.table.sendSmsFor', { customerName: log.customerName })}
+                         title="Send SMS"
+                       >
+                         💬
+                       </button>
+                       {onResendRide && log.status === RideStatus.Pending && (Date.now() - log.timestamp) > (5 * 60 * 1000) && (
+                         <button
+                           onClick={() => onResendRide(log.id)}
+                           className="px-1 py-1 text-gray-500 hover:text-orange-500 transition-colors rounded text-xs"
+                           aria-label={`Re-send ride for ${log.customerName}`}
+                           title="Re-send ride"
+                         >
+                           ↻
+                         </button>
+                       )}
+                       <button
+                         onClick={() => onDelete(log.id)}
+                         className="px-1 py-1 text-gray-500 hover:text-red-500 transition-colors rounded text-xs"
+                         aria-label={t('rideLog.table.deleteRideFor', { customerName: log.customerName })}
+                         title="Delete"
+                       >
+                         🗑️
+                       </button>
+                     </div>
+                   </div>
+                 );
+               })}
+             </div>
+           </div>
         </div>
       )}
     </div>

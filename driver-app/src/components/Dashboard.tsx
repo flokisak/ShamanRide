@@ -36,7 +36,11 @@ const Dashboard: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [selectedRecipient, setSelectedRecipient] = useState<string>('dispatcher');
   const [newMessage, setNewMessage] = useState<string>('');
-  const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy' | 'waze'>('google');
+  const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy' | 'waze'>(() => {
+    // Load saved preference from localStorage, default to 'google'
+    const saved = localStorage.getItem('preferredNavApp');
+    return (saved === 'google' || saved === 'mapy' || saved === 'waze') ? saved : 'google';
+  });
   const [showManualRideModal, setShowManualRideModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
@@ -807,10 +811,7 @@ const Dashboard: React.FC = () => {
    // Auto-refresh ride data every 15 seconds (for local mode without real-time)
 
 
-   // Save preferred navigation app to localStorage
-   useEffect(() => {
-     localStorage.setItem('preferredNavApp', preferredNavApp);
-   }, [preferredNavApp]);
+
 
     // Manage screen wake lock based on driver status and ride activity
     useEffect(() => {
@@ -1146,16 +1147,40 @@ const Dashboard: React.FC = () => {
           }
           url = wazeUrl;
         } else if (appToUse === 'mapy') {
-          // For Mapy.cz, use the destination with waypoints (pickup as first waypoint)
-          const destination = stopsCoords[stopsCoords.length - 1];
-          const waypoints = stopsCoords.slice(0, -1); // All stops except destination
+          // For Mapy.cz, create a route with all stops
+          // Mapy.cz uses x=lon, y=lat format and supports route planning
+          const allPoints = stopsCoords;
 
-          let mapyUrl = `https://mapy.cz/zakladni?x=${destination.lon}&y=${destination.lat}&z=15`;
-          if (waypoints.length > 0) {
-            const routePoints = waypoints.map((wp, index) => `&rl${index + 1}=${wp.lon}%2C${wp.lat}`);
-            mapyUrl += routePoints.join('');
+          if (allPoints.length === 1) {
+            // Single destination
+            const dest = allPoints[0];
+            url = `https://mapy.cz/zakladni?x=${dest.lon}&y=${dest.lat}&z=15`;
+          } else if (allPoints.length === 2) {
+            // Simple route from A to B
+            const start = allPoints[0];
+            const end = allPoints[1];
+            url = `https://mapy.cz/zakladni?x=${end.lon}&y=${end.lat}&z=13&rl1=${start.lon}%2C${start.lat}&rs=1&rc=1&ri=1&rt=1`;
+          } else {
+            // Complex route with multiple waypoints
+            // Mapy.cz supports up to several waypoints
+            const start = allPoints[0];
+            const end = allPoints[allPoints.length - 1];
+            const waypoints = allPoints.slice(1, -1); // Middle points as waypoints
+
+            let mapyUrl = `https://mapy.cz/zakladni?x=${end.lon}&y=${end.lat}&z=13&rl1=${start.lon}%2C${start.lat}`;
+
+            // Add intermediate waypoints
+            waypoints.forEach((wp, index) => {
+              mapyUrl += `&rl${index + 2}=${wp.lon}%2C${wp.lat}`;
+            });
+
+            // Add route settings: rs=1 (route), rc=1 (car), ri=1 (fastest), rt=1 (route type)
+            mapyUrl += '&rs=1&rc=1&ri=1&rt=1';
+
+            url = mapyUrl;
           }
-          url = mapyUrl;
+
+          console.log(`Generated ${appToUse} navigation URL:`, url);
         } else {
           // Use Google Maps - let app use current location as origin
           const destination = `${stopsCoords[stopsCoords.length - 1].lat},${stopsCoords[stopsCoords.length - 1].lon}`;
@@ -1177,7 +1202,15 @@ const Dashboard: React.FC = () => {
           url = `https://waze.com/ul?q=${encodeURIComponent(destination)}&navigate=yes`;
         } else if (appToUse === 'mapy') {
           const destination = targetRide.stops[targetRide.stops.length - 1];
-          url = `https://mapy.cz/zakladni?q=${encodeURIComponent(destination)}`;
+          // Try to geocode the destination for better accuracy
+          try {
+            const destCoords = await geocodeAddress(destination, 'cs');
+            url = `https://mapy.cz/zakladni?x=${destCoords.lon}&y=${destCoords.lat}&z=15`;
+          } catch (geocodeError) {
+            // Fallback to text search
+            url = `https://mapy.cz/zakladni?q=${encodeURIComponent(destination)}`;
+            console.log('Using fallback Mapy.cz URL:', url);
+          }
         } else {
           if (targetRide.navigationUrl) {
             url = targetRide.navigationUrl;
@@ -1809,36 +1842,45 @@ const Dashboard: React.FC = () => {
                 Preferovaná navigační aplikace
               </label>
                <div className="grid grid-cols-3 gap-2">
-                 <button
-                   onClick={() => setPreferredNavApp('google')}
-                   className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
-                     preferredNavApp === 'google'
-                       ? 'bg-blue-600 hover:bg-blue-700'
-                       : 'bg-slate-700 hover:bg-slate-600'
-                   }`}
-                 >
-                   Google Maps
-                 </button>
-                 <button
-                   onClick={() => setPreferredNavApp('mapy')}
-                   className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
-                     preferredNavApp === 'mapy'
-                       ? 'bg-green-600 hover:bg-green-700'
-                       : 'bg-slate-700 hover:bg-slate-600'
-                   }`}
-                 >
-                   Mapy.cz
-                 </button>
-                 <button
-                   onClick={() => setPreferredNavApp('waze')}
-                   className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
-                     preferredNavApp === 'waze'
-                       ? 'bg-purple-600 hover:bg-purple-700'
-                       : 'bg-slate-700 hover:bg-slate-600'
-                   }`}
-                 >
-                   Waze
-                 </button>
+                  <button
+                    onClick={() => {
+                      setPreferredNavApp('google');
+                      localStorage.setItem('preferredNavApp', 'google');
+                    }}
+                    className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                      preferredNavApp === 'google'
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-slate-700 hover:bg-slate-600'
+                    }`}
+                  >
+                    Google Maps
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPreferredNavApp('mapy');
+                      localStorage.setItem('preferredNavApp', 'mapy');
+                    }}
+                    className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                      preferredNavApp === 'mapy'
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : 'bg-slate-700 hover:bg-slate-600'
+                    }`}
+                  >
+                    Mapy.cz
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPreferredNavApp('waze');
+                      localStorage.setItem('preferredNavApp', 'waze');
+                    }}
+                    className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                      preferredNavApp === 'waze'
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'bg-slate-700 hover:bg-slate-600'
+                    }`}
+                  >
+                    Waze
+                  </button>
                </div>
             </div>
           </div>

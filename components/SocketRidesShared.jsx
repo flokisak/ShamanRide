@@ -333,30 +333,30 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
                      </select>
                    </div>
 
-                   {/* Actions */}
-                   <div className="col-span-1 flex flex-col gap-1">
-                     {isDispatcher ? (
-                       <>
-                         {ride.status === 'pending' && (
-                           <button
-                             onClick={() => updateRide({ ...ride, status: 'assigned' })}
-                             className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium"
-                             title="Assign ride"
-                           >
-                             ✓
-                           </button>
-                         )}
-                         {ride.status !== 'completed' && ride.status !== 'cancelled' && (
-                           <button
-                             onClick={() => cancelRide(ride.id)}
-                             className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-medium"
-                             title="Cancel ride"
-                           >
-                             ✕
-                           </button>
-                         )}
-                       </>
-                     ) : (
+                    {/* Actions */}
+                    <div className="col-span-1 flex flex-col gap-1">
+                      {isDispatcher ? (
+                        <>
+                          {ride.status === 'pending' && (
+                            <button
+                              onClick={() => updateRide({ ...ride, status: 'assigned' })}
+                              className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium"
+                              title="Assign ride"
+                            >
+                              ✓
+                            </button>
+                          )}
+                          {ride.status !== 'completed' && ride.status !== 'cancelled' && (
+                            <button
+                              onClick={() => cancelRide(ride.id)}
+                              className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-medium"
+                              title="Cancel ride"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </>
+                      ) : (
                        <>
                          {ride.status === 'assigned' && (
                            <button

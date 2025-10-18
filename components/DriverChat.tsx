@@ -61,8 +61,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [socket, setSocket] = useState<any>(null);
   const [socketConnected, setSocketConnected] = useState(false);
-  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
-  const [hasNewMessages, setHasNewMessages] = useState(false);
+   const [totalUnreadCount, setTotalUnreadCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -136,11 +135,11 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           setAllMessages(prev => {
             const exists = prev.some(m => m.id === messageData.id);
             if (!exists) {
-              // Trigger visual indicator for new messages
-              if (messageData.sender_id !== 'dispatcher') {
-                setHasNewMessages(true);
-                setTimeout(() => setHasNewMessages(false), 2000); // Clear after 2 seconds
-              }
+              // Trigger visual indicator for new messages (disabled to prevent focus stealing)
+              // if (messageData.sender_id !== 'dispatcher') {
+              //   setHasNewMessages(true);
+              //   setTimeout(() => setHasNewMessages(false), 2000); // Clear after 2 seconds
+              // }
               return [messageData, ...prev];
             }
             return prev;
@@ -520,10 +519,10 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
 
 
-  // Scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  // Auto-scroll disabled to prevent focus stealing
+  // useEffect(() => {
+  //   messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // }, [messages]);
 
   const sendMessage = async () => {
     console.log('DriverChat sendMessage called:', { newMessage: newMessage.trim(), selectedVehicleId, sending, socket: !!socket, socketConnected });
@@ -695,7 +694,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   }
 
   return (
-    <div className={`bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full transition-all duration-300 ${hasNewMessages ? 'ring-2 ring-blue-400 ring-opacity-50 shadow-blue-400/20' : ''}`} tabIndex={-1}>
+    <div className={`p-3 rounded-lg shadow-2xl flex flex-col h-full ${totalUnreadCount > 0 ? 'bg-slate-800 border border-blue-400/30' : 'bg-slate-800'}`} tabIndex={-1} style={{ scrollBehavior: 'auto', overflowAnchor: 'none' }}>
        {/* Header */}
        <div className="flex-shrink-0 mb-4">
          <div className="flex items-center justify-between">
@@ -704,11 +703,11 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                </svg>
-               {totalUnreadCount > 0 && (
-                 <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 animate-pulse">
-                   {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
-                 </div>
-               )}
+                {totalUnreadCount > 0 && (
+                  <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                    {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                  </div>
+                )}
              </div>
              Chat s vozidly ({vehicles.length} vozidel, {chatHistory.length} chatů)
            </h3>
@@ -747,11 +746,13 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                       console.log('Clicked on chat:', chat.vehicleId, chat.vehicleName);
                       setSelectedVehicleId(chat.vehicleId);
                     }}
-                    className={`mx-2 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                      selectedVehicleId === chat.vehicleId
-                        ? 'bg-primary text-slate-900 shadow-md'
-                        : 'hover:bg-slate-700/50 text-white'
-                    }`}
+                     className={`mx-2 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                       selectedVehicleId === chat.vehicleId
+                         ? 'bg-primary text-slate-900 shadow-md'
+                         : chat.unreadCount > 0
+                         ? 'bg-slate-600/70 text-white border-l-2 border-blue-400'
+                         : 'hover:bg-slate-700/50 text-white'
+                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
@@ -823,8 +824,8 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
               </div>
 
                {/* Messages */}
-               <div className="flex-1 overflow-hidden flex flex-col min-h-0 max-h-96">
-                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                <div className="flex-1 overflow-hidden flex flex-col min-h-0 max-h-96">
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{ scrollBehavior: 'auto', overflowAnchor: 'none' }}>
                    {messages.length === 0 ? (
                      <p className="text-sm text-slate-400 italic text-center py-4">
                        {selectedVehicleId === 'general'
@@ -837,8 +838,10 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                         {messages
                           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                           .map((msg, index) => {
-                            const isNewestMessage = index === 0; // First message is the newest
-                            const shouldFlash = isNewestMessage && !msg.read; // Only flash if newest AND unread
+                            // Message flashing disabled to prevent focus stealing
+                            // const isNewestMessage = index === 0; // First message is the newest
+                            // const shouldFlash = isNewestMessage && !msg.read; // Only flash if newest AND unread
+                            const shouldFlash = false;
                             return (
                               <div
                                 key={msg.id}
@@ -849,16 +852,9 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                                     msg.sender_id === currentUserId
                                       ? 'bg-primary text-slate-900'
                                       : 'bg-slate-700 text-white'
-                                  } ${
-                                    shouldFlash
-                                      ? 'ring-2 ring-blue-400 ring-opacity-60 shadow-lg shadow-blue-400/20 animate-pulse'
-                                      : ''
-                                  }`}
-                                >
-                                  {shouldFlash && (
-                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>
-                                  )}
-                                  <div className="text-xs opacity-75 mb-1">
+                                   }`}
+                                 >
+                                   <div className="text-xs opacity-75 mb-1">
                                     {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
                                   </div>
                                   <div className="break-words">{msg.message}</div>

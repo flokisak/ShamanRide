@@ -84,7 +84,7 @@ class BackgroundSyncManager {
       this.statusCallback?.onSyncStart?.(tag);
 
       if ('sync' in this.registration && this.registration.sync) {
-        await this.registration.sync.register(tag);
+        await (this.registration as any).sync.register(tag);
         console.log(`Background sync requested: ${tag}`);
       } else {
         // Fallback: perform sync directly
