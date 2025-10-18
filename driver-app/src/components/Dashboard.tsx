@@ -21,7 +21,8 @@ const Dashboard: React.FC = () => {
   const [breakEndTime, setBreakEndTime] = useState<number | null>(null);
   const [currentRide, setCurrentRide] = useState<RideLog | null>(null);
   const [pendingRides, setPendingRides] = useState<RideLog[]>([]);
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+   const [lastLocationUpdate, setLastLocationUpdate] = useState<number | null>(null);
   const [rideHistory, setRideHistory] = useState<RideLog[]>([]);
   const [shiftCash, setShiftCash] = useState<number>(0);
   const [shiftStartTime, setShiftStartTime] = useState<number | null>(null);
@@ -66,10 +67,19 @@ const Dashboard: React.FC = () => {
       const messagesCount = pendingMessages ? JSON.parse(pendingMessages).length : 0;
       const updatesCount = pendingUpdates ? JSON.parse(pendingUpdates).length : 0;
 
-      setQueuedDataCount(locationsCount + messagesCount + updatesCount);
+      const totalQueued = locationsCount + messagesCount + updatesCount;
+      setQueuedDataCount(totalQueued);
+
+      console.log('Sync status update:', {
+        locations: locationsCount,
+        messages: messagesCount,
+        updates: updatesCount,
+        total: totalQueued,
+        currentStatus: syncStatus
+      });
 
       // Update sync status to idle if no queued data and not currently syncing
-      if (locationsCount + messagesCount + updatesCount === 0 && syncStatus !== 'syncing') {
+      if (totalQueued === 0 && syncStatus !== 'syncing') {
         setSyncStatus('idle');
       }
     } catch (error) {
@@ -343,17 +353,22 @@ const Dashboard: React.FC = () => {
        return session?.access_token;
      };
 
-     const initSocket = async () => {
-       const token = await getToken();
+      const initSocket = async () => {
+        setRealtimeConnectionStatus('connecting');
+        const token = await getToken();
+        const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
 
-        const socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000', {
-         auth: { token },
-         transports: ['websocket', 'polling']
-       });
+        console.log('Initializing socket connection to:', socketUrl);
+
+         const socketInstance = io(socketUrl, {
+          auth: { token },
+          transports: ['websocket', 'polling']
+        });
 
         socketInstance.on('connect', () => {
-          console.log('Driver app connected to server, vehicleNumber:', vehicleNumber);
-          setSocketConnected(true);
+           console.log('Driver app connected to server, vehicleNumber:', vehicleNumber);
+           setSocketConnected(true);
+           setRealtimeConnectionStatus('connected');
 
           // Join shift room for ride updates
           socketInstance.emit('join_shift', `driver_shift_${vehicleNumber}`);
@@ -372,9 +387,10 @@ const Dashboard: React.FC = () => {
         });
 
        socketInstance.on('disconnect', () => {
-         console.log('Driver app disconnected from server');
-         setSocketConnected(false);
-       });
+          console.log('Driver app disconnected from server');
+          setSocketConnected(false);
+          setRealtimeConnectionStatus('disconnected');
+        });
 
           // Listen for new messages
           socketInstance.on('new_message', (messageData) => {
@@ -546,6 +562,7 @@ const Dashboard: React.FC = () => {
         const { latitude, longitude } = position.coords;
         currentPosition = { lat: latitude, lng: longitude };
         setLocation(currentPosition);
+        setLastLocationUpdate(Date.now());
         console.log('GPS position updated:', currentPosition, 'Accuracy:', position.coords.accuracy);
       },
       (error) => {
@@ -690,25 +707,33 @@ const Dashboard: React.FC = () => {
      localStorage.setItem('preferredNavApp', preferredNavApp);
    }, [preferredNavApp]);
 
-   // Manage screen wake lock based on driver status and ride activity
-   useEffect(() => {
-     const shouldKeepScreenOn = driverStatus === 'available' || driverStatus === 'on_ride' || currentRide !== null;
+    // Manage screen wake lock based on driver status and ride activity
+    useEffect(() => {
+      const shouldKeepScreenOn = driverStatus === 'available' || driverStatus === 'on_ride' || currentRide !== null;
 
-     const manageWakeLock = async () => {
-       if (shouldKeepScreenOn && !wakeLockActive && isWakeLockSupported()) {
-         const success = await requestWakeLock();
-         if (success) {
-           setWakeLockActive(true);
-           console.log('Screen wake lock activated - display will stay on');
-         }
-       } else if (!shouldKeepScreenOn && wakeLockActive) {
-         await releaseWakeLock();
-         setWakeLockActive(false);
-         console.log('Screen wake lock released - display can turn off');
-       }
-     };
+      console.log('Wake lock check:', {
+        driverStatus,
+        currentRide: !!currentRide,
+        shouldKeepScreenOn,
+        wakeLockActive,
+        isWakeLockSupported: isWakeLockSupported()
+      });
 
-     manageWakeLock();
+      const manageWakeLock = async () => {
+        if (shouldKeepScreenOn && !wakeLockActive && isWakeLockSupported()) {
+          const success = await requestWakeLock();
+          if (success) {
+            setWakeLockActive(true);
+            console.log('Screen wake lock activated - display will stay on');
+          }
+        } else if (!shouldKeepScreenOn && wakeLockActive) {
+          await releaseWakeLock();
+          setWakeLockActive(false);
+          console.log('Screen wake lock released - display can turn off');
+        }
+      };
+
+      manageWakeLock();
 
      // Re-request wake lock when page becomes visible again
      const handleVisibilityChange = () => {
@@ -1710,11 +1735,11 @@ const Dashboard: React.FC = () => {
           <p className="text-slate-300">
             {location ? `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}` : t('dashboard.locationNotAvailable')}
           </p>
-          {location && (
-            <p className="text-xs text-slate-400 mt-1">
-              Last updated: {new Date().toLocaleTimeString()}
-            </p>
-          )}
+           {location && lastLocationUpdate && (
+             <p className="text-xs text-slate-400 mt-1">
+               Last updated: {new Date(lastLocationUpdate).toLocaleTimeString()}
+             </p>
+           )}
 
             {/* Network Status Indicator */}
             <div className="flex items-center gap-2 mt-2">
