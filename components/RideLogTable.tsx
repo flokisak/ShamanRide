@@ -402,8 +402,8 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                        </select>
                      </div>
 
-                     {/* Actions */}
-                     <div className="col-span-1 flex flex-col gap-1">
+                      {/* Actions */}
+                      <div className="col-span-1 flex flex-row gap-1">
                        <button
                          onClick={() => onEdit(log.id)}
                          className="px-1 py-1 text-gray-500 hover:text-blue-500 transition-colors rounded text-xs"
