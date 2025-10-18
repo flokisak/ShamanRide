@@ -6,6 +6,7 @@ import io from 'socket.io-client';
 
 interface DriverChatProps {
   vehicles: Vehicle[];
+  people: Person[];
   onNewMessage?: (vehicleId: number, message: string, options?: { focusStealing?: boolean }) => void;
 }
 
@@ -48,8 +49,17 @@ interface ChatHistoryItem {
   unreadCount: number;
 }
 
-export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }) => {
+export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, people, onNewMessage }) => {
   const { t } = useTranslation();
+
+  const getDriverNameForVehicle = (vehicleId: number): string => {
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    if (vehicle && vehicle.driverId) {
+      const driver = people.find(p => p.id === vehicle.driverId);
+      return driver ? driver.name : `Vozidlo ${vehicleId}`;
+    }
+    return `Vozidlo ${vehicleId}`;
+  };
 
   const getStatusDotClass = (status: VehicleStatus) => {
     switch (status) {
@@ -347,7 +357,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
         historyMap.set(vehicle.id, {
           vehicleId: vehicle.id,
-          vehicleName: vehicle.name,
+          vehicleName: getDriverNameForVehicle(vehicle.id),
           lastMessage: lastMessage.message,
           timestamp: lastMessage.timestamp,
           unreadCount
@@ -356,7 +366,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
         // Include vehicle in history even if no messages yet
         historyMap.set(vehicle.id, {
           vehicleId: vehicle.id,
-          vehicleName: vehicle.name,
+          vehicleName: getDriverNameForVehicle(vehicle.id),
           lastMessage: '',
           timestamp: '',
           unreadCount: 0

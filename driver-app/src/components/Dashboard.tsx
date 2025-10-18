@@ -465,19 +465,41 @@ const Dashboard: React.FC = () => {
               return prev;
             });
 
-          // Notify user for new messages from dispatcher or other drivers
-          if (messageData.sender_id !== `driver_${vehicleNumber}`) {
-            if (messageData.sender_id === 'dispatcher') {
-              notifyUser('message', {
-                title: 'Zpráva od dispečera',
-                body: messageData.message.length > 50 ? messageData.message.substring(0, 50) + '...' : messageData.message
-              });
-            } else {
-              notifyUser('message', {
-                title: 'Nová zpráva',
-                body: messageData.message.length > 50 ? messageData.message.substring(0, 50) + '...' : messageData.message
-              });
-            }
+           // Notify user for new messages from dispatcher or other drivers and auto-switch chat
+           if (messageData.sender_id !== `driver_${vehicleNumber}`) {
+             let newRecipient = selectedRecipient;
+             let notificationTitle = 'Nová zpráva';
+             let notificationBody = messageData.message.length > 50 ? messageData.message.substring(0, 50) + '...' : messageData.message;
+
+             if (messageData.sender_id === 'dispatcher') {
+               newRecipient = 'dispatcher';
+               notificationTitle = 'Zpráva od dispečera';
+             } else if (messageData.receiver_id === 'general') {
+               newRecipient = 'general';
+               notificationTitle = 'Zpráva ve všeobecném chatu';
+             } else {
+               // Message from another driver - extract the sender's vehicle ID
+               const senderMatch = messageData.sender_id.match(/^driver_(\d+)$/);
+               if (senderMatch) {
+                 const senderVehicleId = parseInt(senderMatch[1]);
+                 newRecipient = senderVehicleId.toString();
+                 // Try to get driver name for notification
+                 const senderDriver = otherDrivers.find(d => d.id === senderVehicleId);
+                 notificationTitle = senderDriver ? `Zpráva od ${senderDriver.name}` : 'Zpráva od řidiče';
+               }
+             }
+
+             // Auto-switch to the chat room where the message was received
+             if (newRecipient !== selectedRecipient) {
+               console.log('Auto-switching chat to:', newRecipient);
+               setSelectedRecipient(newRecipient);
+             }
+
+             // Show notification
+             notifyUser('message', {
+               title: notificationTitle,
+               body: notificationBody
+             });
           }
         });
 
@@ -1156,16 +1178,30 @@ const Dashboard: React.FC = () => {
         }
     };
 
-  const navigateToDestination = async (ride?: RideLog, navApp?: 'google' | 'mapy' | 'waze') => {
-    const targetRide = ride || currentRide;
-    if (targetRide) {
+  const navigateToDestination = async (rideOrStops?: RideLog | string[], navApp?: 'google' | 'mapy' | 'waze') => {
+    let stops: string[];
+
+    if (Array.isArray(rideOrStops)) {
+      // Direct stops array from ManualRideModal
+      stops = rideOrStops;
+    } else {
+      // RideLog object
+      const targetRide = rideOrStops || currentRide;
+      if (targetRide) {
+        stops = targetRide.stops;
+      } else {
+        return;
+      }
+    }
+
+    if (stops && stops.length > 0) {
       // Use provided navApp or fall back to preferred navigation app
       const appToUse = navApp || preferredNavApp;
       let url: string;
 
       try {
         // Geocode all stops
-        const stopsCoords = await Promise.all(targetRide.stops.map(stop => geocodeAddress(stop, 'cs')));
+        const stopsCoords = await Promise.all(stops.map(stop => geocodeAddress(stop, 'cs')));
 
         if (appToUse === 'waze') {
           // For Waze, use destination with origin and waypoints
@@ -1231,10 +1267,10 @@ const Dashboard: React.FC = () => {
         console.error('Error generating navigation URL:', error);
         // Fallback to simple destination navigation
         if (appToUse === 'waze') {
-          const destination = targetRide.stops[targetRide.stops.length - 1];
+          const destination = stops[stops.length - 1];
           url = `https://waze.com/ul?q=${encodeURIComponent(destination)}&navigate=yes`;
         } else if (appToUse === 'mapy') {
-          const destination = targetRide.stops[targetRide.stops.length - 1];
+          const destination = stops[stops.length - 1];
           // Try to geocode the destination for better accuracy
           try {
             const destCoords = await geocodeAddress(destination, 'cs');
@@ -1245,12 +1281,9 @@ const Dashboard: React.FC = () => {
             console.log('Using fallback Mapy.cz URL:', url);
           }
         } else {
-          if (targetRide.navigationUrl) {
-            url = targetRide.navigationUrl;
-          } else {
-            const destination = targetRide.stops[targetRide.stops.length - 1];
-            url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
-          }
+          // For direct stops array (from ManualRideModal), just navigate to destination
+          const destination = stops[stops.length - 1];
+          url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
         }
       }
 

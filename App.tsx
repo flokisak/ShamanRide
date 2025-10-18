@@ -1671,7 +1671,7 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-      driverChat: <DriverChat vehicles={vehicles} onNewMessage={(vehicleId, message, options) => {
+      driverChat: <DriverChat vehicles={vehicles} people={people} onNewMessage={(vehicleId, message, options) => {
         // Trigger browser notification for new messages (non-focus-stealing)
         const vehicle = vehicles.find(v => v.id === vehicleId);
         const vehicleName = vehicle ? vehicle.name : `Vozidlo ${vehicleId}`;
