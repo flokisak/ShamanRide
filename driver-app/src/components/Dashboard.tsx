@@ -180,26 +180,27 @@ const Dashboard: React.FC = () => {
         // Find the vehicle that matches this authenticated user's email
         const assignedVehicle = vehicles.find(v => v.email === user.email);
 
-        if (assignedVehicle) {
-          setVehicleNumber(assignedVehicle.id);
-          setLicensePlate(assignedVehicle.licensePlate || '');
+      if (assignedVehicle) {
+        setVehicleNumber(assignedVehicle.id);
+        setLicensePlate(assignedVehicle.licensePlate || '');
 
-          // Load current driver status from vehicle status
-          const vehicleStatus = assignedVehicle.status;
-          if (vehicleStatus === 'AVAILABLE') {
-            setDriverStatus('available');
-          } else if (vehicleStatus === 'BUSY') {
-            setDriverStatus('on_ride');
-          } else if (vehicleStatus === 'BREAK') {
-            setDriverStatus('break');
-          } else if (vehicleStatus === 'OUT_OF_SERVICE') {
-            setDriverStatus('offline');
-          } else {
-            setDriverStatus('offline'); // Default to offline for unknown statuses
-          }
+        // Always start with offline status when app opens
+        setDriverStatus('offline');
 
-          console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate, 'Status:', vehicleStatus);
-        } else {
+        // Update vehicle status to OUT_OF_SERVICE to reflect offline status in dispatcher
+        try {
+          const vehicles = await supabaseService.getVehicles();
+          const updatedVehicles = vehicles.map(v =>
+            v.id === assignedVehicle.id ? { ...v, status: 'OUT_OF_SERVICE' } : v
+          );
+          await supabaseService.updateVehicles(updatedVehicles);
+          console.log('Vehicle status updated to OUT_OF_SERVICE on app start');
+        } catch (statusError) {
+          console.warn('Failed to update vehicle status on app start:', statusError);
+        }
+
+        console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate, 'Starting with offline status');
+      } else {
           console.warn('No vehicle found with email:', user.email);
           console.warn('Available vehicle emails:', vehicles.map(v => v.email).filter(Boolean));
           setError('No vehicle assigned to this driver account. Please contact your dispatcher.');
