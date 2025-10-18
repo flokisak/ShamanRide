@@ -882,11 +882,15 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                     disabled={sending}
                     tabIndex={-1}
                   />
-                  <button
-                    onClick={sendMessage}
-                    disabled={!newMessage.trim() || sending || !socketConnected}
-                    className="px-4 py-2 bg-primary hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg btn-modern text-slate-900 font-medium text-sm whitespace-nowrap"
-                  >
+                   <button
+                     onClick={sendMessage}
+                     disabled={!newMessage.trim() || sending || !socketConnected}
+                     className={`px-4 py-2 rounded-lg btn-modern font-medium text-sm whitespace-nowrap ${
+                       !newMessage.trim() || sending || !socketConnected
+                         ? 'bg-slate-600 text-slate-400 cursor-not-allowed opacity-50'
+                         : 'bg-primary hover:bg-primary/80 text-slate-900'
+                     }`}
+                   >
                     {sending ? 'Odesílání...' : 'Odeslat'}
                   </button>
                 </div>

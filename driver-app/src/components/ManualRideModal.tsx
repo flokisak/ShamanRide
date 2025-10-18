@@ -11,6 +11,7 @@ interface ManualRideModalProps {
     onRideAdded: (ride?: RideLog) => void;
     onNavigateToDestination?: (stops: string[], navApp?: 'google' | 'mapy' | 'waze') => void;
     preferredNavApp?: 'google' | 'mapy' | 'waze';
+    currentLocation?: { lat: number; lng: number } | null;
 }
 
 type ModalState = 'form' | 'loading' | 'success' | 'error';
@@ -21,16 +22,24 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
     licensePlate,
     onRideAdded,
     onNavigateToDestination,
-    preferredNavApp = 'google'
+    preferredNavApp = 'google',
+    currentLocation
 }) => {
     console.log('ManualRideModal opened with:', { vehicleNumber, licensePlate });
     console.log('SUPABASE_ENABLED:', SUPABASE_ENABLED);
     const { t } = useTranslation();
-    const [stops, setStops] = useState<string[]>(['', '']);
-    const [customerName, setCustomerName] = useState('');
-    const [customerPhone, setCustomerPhone] = useState('');
-    const [passengers, setPassengers] = useState(1);
-    const [notes, setNotes] = useState('');
+    // Initialize stops with current location as start if available
+    const [stops, setStops] = useState<string[]>(() => {
+        const initialStops = ['']; // destination
+        if (currentLocation) {
+            initialStops.unshift(`${currentLocation.lat.toFixed(6)}, ${currentLocation.lng.toFixed(6)}`);
+        } else {
+            initialStops.unshift('Aktuální poloha'); // Fallback if no GPS
+        }
+        return initialStops;
+    });
+    const [destination, setDestination] = useState('');
+    const [waypoints, setWaypoints] = useState<string[]>([]);
     const [estimatedDistance, setEstimatedDistance] = useState<number | undefined>();
     const [estimatedPrice, setEstimatedPrice] = useState<number | undefined>();
     const [modalState, setModalState] = useState<ModalState>('form');
@@ -53,14 +62,41 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
         }
     }, [estimatedDistance]);
 
-    const handleStopChange = (index: number, value: string) => {
+    const handleDestinationChange = (value: string) => {
+        setDestination(value);
         const newStops = [...stops];
-        newStops[index] = value;
+        newStops[stops.length - 1] = value; // Last element is destination
+        setStops(newStops);
+    };
+
+    const addWaypoint = () => {
+        setWaypoints([...waypoints, '']);
+        const newStops = [...stops];
+        newStops.splice(newStops.length - 1, 0, ''); // Insert before destination
+        setStops(newStops);
+    };
+
+    const handleWaypointChange = (index: number, value: string) => {
+        const newWaypoints = [...waypoints];
+        newWaypoints[index] = value;
+        setWaypoints(newWaypoints);
+
+        const newStops = [...stops];
+        newStops[index + 1] = value; // Waypoints start at index 1
+        setStops(newStops);
+    };
+
+    const removeWaypoint = (index: number) => {
+        const newWaypoints = waypoints.filter((_, i) => i !== index);
+        setWaypoints(newWaypoints);
+
+        const newStops = [...stops];
+        newStops.splice(index + 1, 1); // Remove the waypoint
         setStops(newStops);
     };
 
     const validate = () => {
-        if (!stops[0].trim() || !stops[1].trim()) {
+        if (!destination.trim()) {
             return false;
         }
         return true;
@@ -94,14 +130,14 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 driverName: null, // Will be set by the system
                 vehicleType: null,
                 rideType: RideType.BUSINESS,
-                customerName: customerName || 'Neznámý zákazník',
-                customerPhone: customerPhone || '',
+                customerName: 'Přímý zákazník',
+                customerPhone: '',
                 stops,
-                passengers: passengers || 1,
+                passengers: 1,
                 pickupTime: 'ihned',
                 status: RideStatus.Pending, // Create as pending first so dispatcher can see it's assigned
                 vehicleId: vehicleNumber,
-                notes: notes || 'Přímá objednávka řidiče',
+                notes: 'Přímá objednávka řidiče',
                 estimatedPrice,
                 estimatedPickupTimestamp: Date.now(),
                 estimatedCompletionTimestamp,
@@ -175,9 +211,17 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                     <div className="text-center p-8">
                         <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
                         <h3 className="text-2xl font-bold text-white mb-2">Jízda byla přidána!</h3>
-                        <p className="text-gray-300">
-                            Jízda pro {customerName} byla úspěšně přidána a zahájena.
+                        <p className="text-gray-300 mb-4">
+                            Přímá jízda byla úspěšně přidána a zahájena.
                         </p>
+                        {onNavigateToDestination && (
+                            <button
+                                onClick={() => onNavigateToDestination(stops, preferredNavApp)}
+                                className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-lg btn-modern text-white font-medium text-lg shadow-lg"
+                            >
+                                🗺️ Otevřít navigaci ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
+                            </button>
+                        )}
                     </div>
                 );
             case 'error':
@@ -196,126 +240,96 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 return (
                     <form onSubmit={handleSubmit}>
                         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odkud</label>
-                                 <input
-                                     type="text"
-                                     value={stops[0]}
-                                     onChange={(e) => handleStopChange(0, e.target.value)}
-                                     placeholder="Adresa vyzvednutí"
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                     required
-                                 />
-                             </div>
+                              {/* Starting point info */}
+                              {currentLocation && (
+                                  <div className="bg-slate-700/50 rounded-lg p-3">
+                                      <p className="text-sm text-gray-300">
+                                          <span className="font-medium">Začátek:</span> Aktuální poloha řidiče ({currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)})
+                                      </p>
+                                  </div>
+                              )}
 
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Kam</label>
-                                 <input
-                                     type="text"
-                                     value={stops[1]}
-                                     onChange={(e) => handleStopChange(1, e.target.value)}
-                                     placeholder="Adresa cíle"
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                     required
-                                 />
-                             </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">Cíl</label>
+                                  <input
+                                      type="text"
+                                      value={destination}
+                                      onChange={(e) => handleDestinationChange(e.target.value)}
+                                      placeholder="Adresa cíle"
+                                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                      required
+                                  />
+                              </div>
 
-                             {/* Navigation Button */}
-                             {stops[0] && stops[1] && onNavigateToDestination && (
-                                 <div className="mt-2">
-                                     <button
-                                         type="button"
-                                         onClick={() => onNavigateToDestination(stops, preferredNavApp)}
-                                         className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium text-sm"
-                                     >
-                                          🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
-                                     </button>
-                                 </div>
-                             )}
+                              {/* Waypoints */}
+                              {waypoints.map((waypoint, index) => (
+                                  <div key={index}>
+                                      <div className="flex items-center justify-between mb-1">
+                                          <label className="block text-sm font-medium text-gray-300">Mezizastávka {index + 1}</label>
+                                          <button
+                                              type="button"
+                                              onClick={() => removeWaypoint(index)}
+                                              className="text-red-400 hover:text-red-300 text-sm"
+                                          >
+                                              Odebrat
+                                          </button>
+                                      </div>
+                                      <input
+                                          type="text"
+                                          value={waypoint}
+                                          onChange={(e) => handleWaypointChange(index, e.target.value)}
+                                          placeholder="Adresa mezizastávky"
+                                          className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                      />
+                                  </div>
+                              ))}
 
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná vzdálenost (km) - volitelné</label>
-                                 <input
-                                     type="number"
-                                     value={estimatedDistance || ''}
-                                     onChange={(e) => setEstimatedDistance(e.target.value ? parseFloat(e.target.value) : undefined)}
-                                     placeholder="Např. 15.5"
-                                     min="0"
-                                     step="0.1"
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                 />
-                                  <p className="text-xs text-gray-400 mt-1">
-                                      Volitelné - slouží pouze pro automatický výpočet ceny podle tarifů
-                                  </p>
-                             </div>
+                              <button
+                                  type="button"
+                                  onClick={addWaypoint}
+                                  className="w-full bg-slate-600 hover:bg-slate-500 py-2 rounded-lg text-white font-medium text-sm"
+                              >
+                                  ➕ Přidat mezizastávku
+                              </button>
 
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Jméno zákazníka (volitelné)</label>
-                                <input
-                                    type="text"
-                                    value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
-                                    placeholder="Jméno a příjmení"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná vzdálenost (km) - volitelné</label>
+                                  <input
+                                      type="number"
+                                      value={estimatedDistance || ''}
+                                      onChange={(e) => setEstimatedDistance(e.target.value ? parseFloat(e.target.value) : undefined)}
+                                      placeholder="Např. 15.5"
+                                      min="0"
+                                      step="0.1"
+                                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                  />
+                                   <p className="text-xs text-gray-400 mt-1">
+                                       Volitelné - slouží pouze pro automatický výpočet ceny podle tarifů
+                                   </p>
+                              </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Telefon (volitelné)</label>
-                                <input
-                                    type="tel"
-                                    value={customerPhone}
-                                    onChange={(e) => setCustomerPhone(e.target.value)}
-                                    placeholder="+420 XXX XXX XXX"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                                      Odhadovaná cena {estimatedDistance ? '(vypočítáno z vzdálenosti)' : '(volitelné)'}
+                                  </label>
+                                  <input
+                                      type="number"
+                                      value={estimatedPrice || ''}
+                                      onChange={(e) => setEstimatedPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                                      placeholder={estimatedDistance ? `${calculatePrice(estimatedDistance)} Kč` : "Zadejte částku v Kč"}
+                                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                  />
+                                  {estimatedDistance && estimatedPrice && (
+                                      <p className="text-xs text-green-400 mt-1">
+                                          Automaticky vypočítáno: {calculatePrice(estimatedDistance)} Kč
+                                          {estimatedPrice !== calculatePrice(estimatedDistance) && (
+                                              <span className="text-yellow-400 ml-2">(manuálně upraveno)</span>
+                                          )}
+                                      </p>
+                                  )}
+                              </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Počet cestujících (volitelné)</label>
-                                <input
-                                    type="number"
-                                    value={passengers}
-                                    onChange={(e) => setPassengers(parseInt(e.target.value, 10) || 1)}
-                                    min="1"
-                                    max="8"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
-
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                                     Odhadovaná cena {estimatedDistance ? '(vypočítáno z vzdálenosti)' : '(volitelné)'}
-                                 </label>
-                                 <input
-                                     type="number"
-                                     value={estimatedPrice || ''}
-                                     onChange={(e) => setEstimatedPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                                     placeholder={estimatedDistance ? `${calculatePrice(estimatedDistance)} Kč` : "Zadejte částku v Kč"}
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                 />
-                                 {estimatedDistance && estimatedPrice && (
-                                     <p className="text-xs text-green-400 mt-1">
-                                         Automaticky vypočítáno: {calculatePrice(estimatedDistance)} Kč
-                                         {estimatedPrice !== calculatePrice(estimatedDistance) && (
-                                             <span className="text-yellow-400 ml-2">(manuálně upraveno)</span>
-                                         )}
-                                     </p>
-                                 )}
-                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Poznámky (volitelné)</label>
-                                <textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Další informace o jízdě..."
-                                    rows={3}
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
-
-                            {error && <p className="text-sm text-red-400">{error}</p>}
+                             {error && <p className="text-sm text-red-400">{error}</p>}
                         </div>
 
                         <div className="flex justify-end items-center p-6 bg-slate-900 border-t border-slate-700 rounded-b-lg space-x-3">

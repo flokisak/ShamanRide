@@ -1115,13 +1115,42 @@ const Dashboard: React.FC = () => {
       }
     };
 
-     const endRide = async () => {
-       if (currentRide) {
-         // Show completion modal instead of immediately completing
-         setRideToComplete(currentRide);
-         setShowCompletionModal(true);
-       }
-     };
+    const endRide = async () => {
+        if (currentRide) {
+            // Show completion modal instead of immediately completing
+            setRideToComplete(currentRide);
+            setShowCompletionModal(true);
+        }
+    };
+
+    const cancelRide = async () => {
+        if (!currentRide || !vehicleNumber) return;
+
+        try {
+            // Update ride status to cancelled
+            const cancelledRide = { ...currentRide, status: RideStatus.Cancelled };
+            await supabaseService.addRideLog(cancelledRide);
+
+            // Update vehicle status back to AVAILABLE
+            const vehicles = await supabaseService.getVehicles();
+            const updatedVehicles = vehicles.map(v =>
+                v.id === vehicleNumber ? { ...v, status: 'AVAILABLE', freeAt: null } : v
+            );
+            await supabaseService.updateVehicles(updatedVehicles);
+
+            // Clear current ride
+            setCurrentRide(null);
+
+            // Refresh data
+            setTimeout(() => {
+                refreshVehicleData();
+            }, 1000);
+
+        } catch (error) {
+            console.error('Error cancelling ride:', error);
+            alert('Chyba při rušení jízdy. Zkuste to znovu.');
+        }
+    };
 
   const navigateToDestination = async (ride?: RideLog, navApp?: 'google' | 'mapy' | 'waze') => {
     const targetRide = ride || currentRide;
@@ -1515,16 +1544,19 @@ const Dashboard: React.FC = () => {
                      </button>
                    </div>
                  )}
-                  {currentRide.status === RideStatus.InProgress && (
-                   <div className="space-y-2">
-                     <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
-                       {t('dashboard.completeRide')}
-                     </button>
-                      <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                        🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
+                   {currentRide.status === RideStatus.InProgress && (
+                    <div className="space-y-2">
+                      <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
+                        {t('dashboard.completeRide')}
                       </button>
-                   </div>
-                 )}
+                      <button onClick={cancelRide} className="w-full bg-orange-600 hover:bg-orange-700 py-2 rounded-lg btn-modern text-white font-medium">
+                        ❌ Zrušit jízdu
+                      </button>
+                       <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                         🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
+                       </button>
+                    </div>
+                  )}
              </div>
           </div>
         )}
@@ -2031,18 +2063,15 @@ const Dashboard: React.FC = () => {
 
        {/* Manual Ride Modal */}
        {showManualRideModal && vehicleNumber && (
-         <ManualRideModal
-           onClose={() => setShowManualRideModal(false)}
-           vehicleNumber={vehicleNumber}
-           licensePlate={licensePlate || `Vehicle ${vehicleNumber}`}
-           onRideAdded={handleManualRideAdded}
-           onNavigateToDestination={async (stops, navApp) => {
-             // Create a temporary ride object for navigation
-             const tempRide = { stops } as any;
-             await navigateToDestination(tempRide, navApp);
-           }}
-           preferredNavApp={preferredNavApp}
-         />
+          <ManualRideModal
+            onClose={() => setShowManualRideModal(false)}
+            vehicleNumber={vehicleNumber}
+            licensePlate={licensePlate}
+            onRideAdded={handleManualRideAdded}
+            onNavigateToDestination={navigateToDestination}
+            preferredNavApp={preferredNavApp}
+            currentLocation={location}
+          />
        )}
 
        {/* Ride Completion Modal */}
