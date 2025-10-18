@@ -2028,90 +2028,6 @@ const Dashboard: React.FC = () => {
             vehicleMileage={vehicles.find(v => v.id === vehicleNumber)?.mileage}
           />
 
-        {/* Shift Time Settings */}
-        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-          <h2 className="text-lg font-semibold mb-3 text-white">Nastavení směny</h2>
-          <div className="space-y-3">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="useCustomShift"
-                checked={useCustomShift}
-                onChange={(e) => {
-                  const enabled = e.target.checked;
-                  setUseCustomShift(enabled);
-                  localStorage.setItem('useCustomShift', enabled.toString());
-                  // Recalculate cash when switching modes
-                  if (rideHistory.length > 0) {
-                    const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime || undefined);
-                    setShiftCash(shiftCashAmount);
-                  }
-                }}
-                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
-              />
-              <label htmlFor="useCustomShift" className="text-sm font-medium text-slate-300">
-                Použít vlastní časové rozmezí pro výpočet tržby
-              </label>
-            </div>
-
-            {useCustomShift && (
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Datum směny
-                  </label>
-                  <input
-                    type="date"
-                    value={customShiftDate}
-                    onChange={(e) => {
-                      setCustomShiftDate(e.target.value);
-                      localStorage.setItem('customShiftDate', e.target.value);
-                    }}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Začátek směny
-                    </label>
-                    <input
-                      type="time"
-                      value={customShiftStart}
-                      onChange={(e) => {
-                        setCustomShiftStart(e.target.value);
-                        localStorage.setItem('customShiftStart', e.target.value);
-                      }}
-                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                      Konec směny
-                    </label>
-                    <input
-                      type="time"
-                      value={customShiftEnd}
-                      onChange={(e) => {
-                        setCustomShiftEnd(e.target.value);
-                        localStorage.setItem('customShiftEnd', e.target.value);
-                      }}
-                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="text-xs text-slate-400">
-              {useCustomShift
-                ? "Tržba se počítá pouze z jízd dokončených v zadaném časovém rozmezí pro vybraný den."
-                : "Tržba se počítá od okamžiku přihlášení do odhlášení."
-              }
-            </div>
-          </div>
-         </div>
-
         {/* Navigation Settings */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
           <h2 className="text-lg font-semibold mb-3 text-white">Nastavení navigace</h2>
@@ -2195,6 +2111,90 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* Shift Time Settings */}
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <h2 className="text-lg font-semibold mb-3 text-white">Nastavení směny</h2>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="useCustomShift"
+                checked={useCustomShift}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  setUseCustomShift(enabled);
+                  localStorage.setItem('useCustomShift', enabled.toString());
+                  // Recalculate cash when switching modes
+                  if (rideHistory.length > 0) {
+                    const shiftCashAmount = calculateShiftCash(rideHistory, shiftStartTime || undefined);
+                    setShiftCash(shiftCashAmount);
+                  }
+                }}
+                className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+              />
+              <label htmlFor="useCustomShift" className="text-sm font-medium text-slate-300">
+                Použít vlastní časové rozmezí pro výpočet tržby
+              </label>
+            </div>
+
+            {useCustomShift && (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Datum směny
+                  </label>
+                  <input
+                    type="date"
+                    value={customShiftDate}
+                    onChange={(e) => {
+                      setCustomShiftDate(e.target.value);
+                      localStorage.setItem('customShiftDate', e.target.value);
+                    }}
+                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Začátek směny
+                    </label>
+                    <input
+                      type="time"
+                      value={customShiftStart}
+                      onChange={(e) => {
+                        setCustomShiftStart(e.target.value);
+                        localStorage.setItem('customShiftStart', e.target.value);
+                      }}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                      Konec směny
+                    </label>
+                    <input
+                      type="time"
+                      value={customShiftEnd}
+                      onChange={(e) => {
+                        setCustomShiftEnd(e.target.value);
+                        localStorage.setItem('customShiftEnd', e.target.value);
+                      }}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="text-xs text-slate-400">
+              {useCustomShift
+                ? "Tržba se počítá pouze z jízd dokončených v zadaném časovém rozmezí pro vybraný den."
+                : "Tržba se počítá od okamžiku přihlášení do odhlášení."
+              }
+            </div>
+          </div>
+         </div>
 
         {/* Location */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
