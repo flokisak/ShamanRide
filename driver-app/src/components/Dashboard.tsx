@@ -101,7 +101,7 @@ const Dashboard: React.FC = () => {
   // Initialize vehicle number when user changes
   useEffect(() => {
     const initializeVehicle = async () => {
-      if (!user) {
+      if (!user || !user.email) {
         setVehicleNumber(null);
         setIsLoading(false);
         return;
@@ -110,43 +110,24 @@ const Dashboard: React.FC = () => {
       try {
         setIsLoading(true);
 
-        // First, try to find the person record for this authenticated user
-        const people = await supabaseService.getPeople();
-        const person = people.find(p => p.authUserId === user.id);
+        // Get vehicles (we don't need people for vehicle assignment)
+        const vehicles = await supabaseService.getVehicles();
 
-        if (person && person.vehicleId) {
-          // Person has a vehicle assigned
-          setVehicleNumber(person.vehicleId);
-          console.log('Initialized vehicle number from person.vehicleId:', person.vehicleId);
+        console.log('Looking for vehicle with email:', user.email);
+        console.log('Available vehicles:', vehicles.map(v => ({ id: v.id, email: v.email, name: v.name, licensePlate: v.licensePlate })));
 
-          // Also get vehicle details
-          const vehicles = await supabaseService.getVehicles();
-          const vehicle = vehicles.find(v => v.id === person.vehicleId);
-          if (vehicle) {
-            setLicensePlate(vehicle.licensePlate || '');
-          }
+        // Find the vehicle that matches this authenticated user's email
+        const assignedVehicle = vehicles.find(v => v.email === user.email);
+
+        if (assignedVehicle) {
+          setVehicleNumber(assignedVehicle.id);
+          setLicensePlate(assignedVehicle.licensePlate || '');
+          console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate);
         } else {
-          // Fallback: try to find vehicle by driverId (for backward compatibility)
-          const vehicles = await supabaseService.getVehicles();
-
-          // Check if driver_id is in the format "driver_{vehicle_id}"
-          const driverVehicle = vehicles.find(v => {
-            if (typeof v.driverId === 'string' && v.driverId.startsWith('driver_')) {
-              // Extract vehicle id from "driver_{id}"
-              const vehicleIdFromDriverId = parseInt(v.driverId.replace('driver_', ''));
-              return vehicleIdFromDriverId === v.id; // This driver is assigned to this vehicle
-            }
-            return v.driverId === user.id || v.driverId === parseInt(user.id);
-          });
-
-          if (driverVehicle) {
-            setVehicleNumber(driverVehicle.id);
-            setLicensePlate(driverVehicle.licensePlate || '');
-            console.log('Initialized vehicle number from fallback method:', driverVehicle.id);
-          } else {
-            console.warn('No vehicle found for driver:', user.id);
-            setError('No vehicle assigned to this driver account. Please contact your dispatcher.');
-          }
+          console.warn('No vehicle found with email:', user.email);
+          console.warn('Available vehicle emails:', vehicles.map(v => v.email).filter(Boolean));
+          setError('No vehicle assigned to this driver account. Please contact your dispatcher.');
+          setVehicleNumber(null);
         }
       } catch (error) {
         console.error('Error initializing vehicle:', error);
