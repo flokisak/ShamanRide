@@ -5,7 +5,7 @@ import { SUPABASE_ENABLED as SUPABASE_ENABLED_SERVICES } from '../supabaseClient
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useAuth } from '../AuthContext';
-import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
+import { notifyUser, initializeNotifications, requestNotificationPermission, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
 import { queueLocationData, queueMessage, queueRideUpdate, requestBackgroundSync, initializeBackgroundSync, backgroundSyncManager } from '../utils/backgroundSync';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
@@ -236,8 +236,38 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       if (user?.id) {
-        const permission = await initializeNotifications(user.id);
-        setNotificationPermission(permission ? 'granted' : 'denied');
+        console.log('Initializing notifications, current permission:', Notification.permission);
+
+        // Check current permission status
+        if ('Notification' in window) {
+          const currentPermission = Notification.permission;
+          console.log('Setting notification permission to:', currentPermission);
+          setNotificationPermission(currentPermission);
+
+          // If already granted, initialize push notifications
+          if (currentPermission === 'granted') {
+            try {
+              const subscription = await navigator.serviceWorker.ready.then(reg =>
+                reg.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: undefined
+                }).catch(err => {
+                  console.warn('Push subscription failed:', err);
+                  return null;
+                })
+              );
+              if (subscription) {
+                console.log('Push notification subscription maintained');
+              }
+            } catch (error) {
+              console.warn('Error with push notifications:', error);
+            }
+          }
+          // Don't request permission automatically - let user click the button
+        } else {
+          console.warn('Notifications not supported');
+          setNotificationPermission('denied');
+        }
       }
     };
     init();
@@ -1806,24 +1836,51 @@ const Dashboard: React.FC = () => {
                )}
              </div>
 
-            {/* Notification Permission Indicator */}
-            {notificationPermission !== 'granted' && (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
-                <span className="text-xs text-yellow-400">
-                  Upozornění: Povolte notifikace pro lepší zážitek
-                </span>
-                <button
-                  onClick={async () => {
-                    const granted = await initializeNotifications(user?.id || undefined);
-                    setNotificationPermission(Notification.permission as NotificationPermission);
-                  }}
-                  className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
-                >
-                  Povolit
-                </button>
-              </div>
-            )}
+             {/* Notification Permission Indicator */}
+             {notificationPermission !== 'granted' && (
+               <div className="flex items-center gap-2 mt-2">
+                 <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                 <span className="text-xs text-yellow-400">
+                   Upozornění: Povolte notifikace pro lepší zážitek
+                 </span>
+                 <button
+                   onClick={async () => {
+                     console.log('Requesting notification permission, current status:', Notification.permission);
+                     try {
+                       if ('Notification' in window) {
+                         const permission = await Notification.requestPermission();
+                         console.log('Permission result:', permission);
+                         setNotificationPermission(permission);
+
+                         if (permission === 'granted') {
+                           console.log('Permission granted, setting up push notifications');
+                           // Try to register for push notifications
+                           try {
+                             const registration = await navigator.serviceWorker.ready;
+                             const subscription = await registration.pushManager.subscribe({
+                               userVisibleOnly: true,
+                               applicationServerKey: undefined
+                             });
+                             console.log('Push subscription created:', subscription ? 'success' : 'failed');
+                           } catch (pushError) {
+                             console.warn('Push subscription failed:', pushError);
+                           }
+                         }
+                       } else {
+                         console.warn('Notifications not supported');
+                         setNotificationPermission('denied');
+                       }
+                     } catch (error) {
+                       console.error('Error requesting permission:', error);
+                       setNotificationPermission('denied');
+                     }
+                   }}
+                   className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
+                 >
+                   Povolit
+                 </button>
+               </div>
+             )}
 
             {/* Screen Wake Lock Indicator */}
             {isWakeLockSupported() && (
