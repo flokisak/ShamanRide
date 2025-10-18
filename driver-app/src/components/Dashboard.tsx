@@ -1581,9 +1581,9 @@ const Dashboard: React.FC = () => {
                       <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
                         {t('dashboard.completeRide')}
                       </button>
-                      <button onClick={cancelRide} className="w-full bg-orange-600 hover:bg-orange-700 py-2 rounded-lg btn-modern text-white font-medium">
-                        ❌ Zrušit jízdu
-                      </button>
+                       <button onClick={cancelRide} className="w-full bg-transparent hover:bg-red-900/20 py-1 px-2 rounded text-red-400 hover:text-red-300 text-sm font-normal border border-red-800/30 hover:border-red-700/50 transition-colors">
+                         ❌ Zrušit jízdu
+                       </button>
                        <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
                          🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
                        </button>
