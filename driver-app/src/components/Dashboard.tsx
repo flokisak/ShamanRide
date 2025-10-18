@@ -641,8 +641,8 @@ const Dashboard: React.FC = () => {
                 isRelevant
               });
               return isRelevant;
-            }).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-              .slice(-50); // Keep 50 most recent messages (oldest first)
+            }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+              .slice(0, 50); // Keep 50 most recent messages (newest first)
             console.log('Filtered messages for vehicle', vehicleNumber, ':', filtered.length);
             setMessages(filtered);
           } catch (err) {
@@ -670,8 +670,8 @@ const Dashboard: React.FC = () => {
                (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
                (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString()) ||
                (m.sender_id === 'dispatcher' && m.receiver_id === 'general')
-             ).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-               .slice(-50); // Keep 50 most recent messages (oldest first)
+              ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                .slice(0, 50); // Keep 50 most recent messages (newest first)
 
             // Only update if we have new messages or different data
             const currentMessageIds = messages.map(m => m.id).sort();
@@ -1367,11 +1367,11 @@ const Dashboard: React.FC = () => {
                    return (
                      <div
                        key={msg.id || idx}
-                       className={`text-sm text-slate-300 mb-2 p-2 rounded relative ${
-                         isNewestMessage
-                           ? 'bg-blue-900/40 ring-1 ring-blue-400/50 shadow-lg shadow-blue-400/10'
-                           : 'bg-slate-800/30'
-                       }`}
+                        className={`text-sm text-slate-300 mb-2 p-2 rounded relative ${
+                          isNewestMessage
+                            ? 'ring-2 ring-blue-400 ring-opacity-60 shadow-lg shadow-blue-400/20 animate-pulse'
+                            : 'bg-slate-800/30'
+                        }`}
                      >
                        {isNewestMessage && (
                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>

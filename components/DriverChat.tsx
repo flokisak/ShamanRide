@@ -673,62 +673,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
        {/* Two-column layout */}
        <div className="flex-1 flex gap-4 min-h-0">
          {/* Left Column: Compact Chat List */}
-         <div className="w-64 flex flex-col bg-slate-900/30 rounded-lg min-h-0">
-          {/* Quick Chat Selection - Horizontal Scroll */}
-          <div className="flex-shrink-0 p-3 border-b border-slate-600">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-sm font-medium text-white">Rychlá volba:</h4>
-              <button
-                onClick={() => {
-                  console.log('Test message send');
-                  const testMessage = "Test zpráva - " + new Date().toLocaleTimeString();
-                  setNewMessage(testMessage);
-                  setTimeout(() => sendMessage(), 100);
-                }}
-                className="text-xs px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded"
-                title="Odeslat test zprávu"
-              >
-                Test
-              </button>
-            </div>
-            <div className="relative">
-              <div className="flex gap-2 overflow-x-auto pb-1 pr-4" style={{ scrollbarWidth: 'thin', scrollbarColor: '#475569 transparent' }}>
-                <button
-                  onClick={() => {
-                    console.log('Selected general chat');
-                    setSelectedVehicleId('general');
-                  }}
-                  className={`flex-shrink-0 px-3 py-2 text-xs rounded-lg whitespace-nowrap transition-colors ${
-                    selectedVehicleId === 'general'
-                      ? 'bg-primary text-slate-900 font-medium'
-                      : 'bg-slate-700 text-white hover:bg-slate-600'
-                  }`}
-                >
-                  Všeobecný
-                </button>
-                {vehicles.map(vehicle => (
-                  <button
-                    key={vehicle.id}
-                    onClick={() => {
-                      console.log('Selected vehicle chat:', vehicle.id, vehicle.name);
-                      setSelectedVehicleId(vehicle.id);
-                    }}
-                    className={`flex-shrink-0 px-3 py-2 text-xs rounded-lg whitespace-nowrap transition-colors ${
-                      selectedVehicleId === vehicle.id
-                        ? 'bg-primary text-slate-900 font-medium'
-                        : 'bg-slate-700 text-white hover:bg-slate-600'
-                    }`}
-                    title={`Chat s ${vehicle.name}`}
-                  >
-                    {vehicle.name}
-                  </button>
-                ))}
-              </div>
-              {vehicles.length > 3 && (
-                <div className="absolute right-0 top-0 bottom-1 w-8 bg-gradient-to-l from-slate-900/30 to-transparent pointer-events-none rounded-r-lg"></div>
-              )}
-            </div>
-          </div>
+          <div className="w-48 flex flex-col bg-slate-900/30 rounded-lg min-h-0">
 
           {/* Chat History - Compact List */}
           <div className="flex-1 overflow-y-auto">
