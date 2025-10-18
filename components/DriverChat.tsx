@@ -6,7 +6,7 @@ import io from 'socket.io-client';
 
 interface DriverChatProps {
   vehicles: Vehicle[];
-  onNewMessage?: (vehicleId: number, message: string) => void;
+  onNewMessage?: (vehicleId: number, message: string, options?: { focusStealing?: boolean }) => void;
 }
 
 interface ChatMessage {
@@ -61,6 +61,8 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [socket, setSocket] = useState<any>(null);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [totalUnreadCount, setTotalUnreadCount] = useState(0);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -130,14 +132,19 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
            addDriverMessage(messageData);
          }
 
-         // Update allMessages for chat history
-         setAllMessages(prev => {
-           const exists = prev.some(m => m.id === messageData.id);
-           if (!exists) {
-             return [messageData, ...prev];
-           }
-           return prev;
-         });
+          // Update allMessages for chat history
+          setAllMessages(prev => {
+            const exists = prev.some(m => m.id === messageData.id);
+            if (!exists) {
+              // Trigger visual indicator for new messages
+              if (messageData.sender_id !== 'dispatcher') {
+                setHasNewMessages(true);
+                setTimeout(() => setHasNewMessages(false), 2000); // Clear after 2 seconds
+              }
+              return [messageData, ...prev];
+            }
+            return prev;
+          });
 
          // Add to current chat messages if it's relevant to the selected chat
          if (selectedVehicleId) {
@@ -161,14 +168,14 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
            }
          }
 
-         // Notify parent component
-         if (onNewMessage && messageData.sender_id !== 'dispatcher') {
-           const vehicleId = messageData.sender_id.startsWith('driver_') ?
-             parseInt(messageData.sender_id.replace('driver_', '')) : null;
-           if (vehicleId) {
-             onNewMessage(vehicleId, messageData.message);
-           }
-         }
+          // Notify parent component with non-focus-stealing notification
+          if (onNewMessage && messageData.sender_id !== 'dispatcher') {
+            const vehicleId = messageData.sender_id.startsWith('driver_') ?
+              parseInt(messageData.sender_id.replace('driver_', '')) : null;
+            if (vehicleId) {
+              onNewMessage(vehicleId, messageData.message, { focusStealing: false });
+            }
+          }
        });
 
       setSocket(socketInstance);
@@ -353,6 +360,10 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
     console.log('DriverChat: Setting chatHistory with', history.length, 'items:', history.map(h => ({ id: h.vehicleId, name: h.vehicleName })));
     setChatHistory(history);
+
+    // Calculate total unread count for visual indicator
+    const totalUnread = history.reduce((sum, chat) => sum + chat.unreadCount, 0);
+    setTotalUnreadCount(totalUnread);
   }, [vehicles, allMessages, currentUserId]);
 
   // Load messages for selected vehicle or general chat - improved with better error handling
@@ -684,18 +695,23 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
   }
 
   return (
-    <div className="bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full" tabIndex={-1}>
-      {/* Header */}
-      <div className="flex-shrink-0 mb-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white flex items-center">
-            <div className="w-6 h-6 bg-[#8FBCBB]/80 rounded-lg flex items-center justify-center mr-2">
-              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
-            Chat s vozidly ({vehicles.length} vozidel, {chatHistory.length} chatů)
-          </h3>
+    <div className={`bg-slate-800 p-3 rounded-lg shadow-2xl flex flex-col h-full transition-all duration-300 ${hasNewMessages ? 'ring-2 ring-blue-400 ring-opacity-50 shadow-blue-400/20' : ''}`} tabIndex={-1}>
+       {/* Header */}
+       <div className="flex-shrink-0 mb-4">
+         <div className="flex items-center justify-between">
+           <h3 className="text-sm font-semibold text-white flex items-center">
+             <div className="w-6 h-6 bg-[#8FBCBB]/80 rounded-lg flex items-center justify-center mr-2 relative">
+               <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+               </svg>
+               {totalUnreadCount > 0 && (
+                 <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 animate-pulse">
+                   {totalUnreadCount > 99 ? '99+' : totalUnreadCount}
+                 </div>
+               )}
+             </div>
+             Chat s vozidly ({vehicles.length} vozidel, {chatHistory.length} chatů)
+           </h3>
           <div className="flex items-center gap-3">
             <div className="text-xs text-slate-400">
               {vehicles.filter(v => v.status === 'AVAILABLE' || v.status === 'BUSY').length} online

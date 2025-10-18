@@ -1627,13 +1627,14 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-      driverChat: <DriverChat vehicles={vehicles} onNewMessage={(vehicleId, message) => {
-        // Trigger browser notification for new messages
+      driverChat: <DriverChat vehicles={vehicles} onNewMessage={(vehicleId, message, options) => {
+        // Trigger browser notification for new messages (non-focus-stealing)
         const vehicle = vehicles.find(v => v.id === vehicleId);
         const vehicleName = vehicle ? vehicle.name : `Vozidlo ${vehicleId}`;
         notifyUser('message', {
           title: 'Nová zpráva od řidiče',
-          body: `${vehicleName}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`
+          body: `${vehicleName}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`,
+          focusStealing: options?.focusStealing ?? false
         });
       }} />,
        socketRides: <SocketRides

@@ -32,7 +32,7 @@ const Dashboard: React.FC = () => {
   const [socketConnected, setSocketConnected] = useState(false);
   const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
-  const [selectedRecipient, setSelectedRecipient] = useState<string>('general');
+  const [selectedRecipient, setSelectedRecipient] = useState<string>('dispatcher');
   const [newMessage, setNewMessage] = useState<string>('');
   const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
   const [showManualRideModal, setShowManualRideModal] = useState(false);
@@ -1319,17 +1319,17 @@ const Dashboard: React.FC = () => {
             )}
           </div>
             <div className="space-y-2">
-               <select
-                 value={selectedRecipient}
-                 onChange={(e) => setSelectedRecipient(e.target.value)}
-                 className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
-               >
-                 <option value="general">Všeobecný chat (celá směna)</option>
-                 <option value="dispatcher">Dispečer</option>
-                 {otherDrivers.map(driver => (
-                   <option key={driver.id} value={driver.id}>{driver.name}</option>
-                 ))}
-               </select>
+                <select
+                  value={selectedRecipient}
+                  onChange={(e) => setSelectedRecipient(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-primary focus:border-primary"
+                >
+                  <option value="dispatcher">Dispečer</option>
+                  <option value="general">Všeobecný chat (celá směna)</option>
+                  {otherDrivers.map(driver => (
+                    <option key={driver.id} value={driver.id}>{driver.name}</option>
+                  ))}
+                </select>
               <input
                 type="text"
                 value={newMessage}

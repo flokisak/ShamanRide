@@ -25,22 +25,22 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   }
 };
 
-// Show system notification
+// Show system notification (non-focus-stealing)
 export const showSystemNotification = (title: string, options: NotificationOptions = {}) => {
   try {
     if (Notification.permission === 'granted') {
       const notification = new Notification(title, {
         icon: '/favicon.svg',
         badge: '/favicon.svg',
-        requireInteraction: false,
-        silent: false,
+        requireInteraction: false, // Don't steal focus
+        silent: true, // Don't play system sound
         ...options
       });
 
-      // Auto-close after 5 seconds
+      // Auto-close after 3 seconds (shorter for non-intrusive)
       setTimeout(() => {
         notification.close();
-      }, 5000);
+      }, 3000);
 
       return notification;
     }
@@ -106,6 +106,7 @@ export const notifyUser = (type: 'ride' | 'message' | 'general' = 'general', cus
   sound?: boolean;
   vibration?: boolean;
   systemNotification?: boolean;
+  focusStealing?: boolean;
   title?: string;
   body?: string;
 }) => {
@@ -144,16 +145,26 @@ export const notifyUser = (type: 'ride' | 'message' | 'general' = 'general', cus
 
   const finalOptions = { ...options, ...customOptions };
 
-  // Play sound
+  // Play sound (softer for non-focus-stealing notifications)
   if (finalOptions.sound) {
-    if (type === 'ride') {
-      // Different sound for rides (higher pitch)
-      playNotificationSound(1000, 0.3);
-    } else if (type === 'message') {
-      // Different sound for messages (lower pitch)
-      playNotificationSound(600, 0.2);
+    if (finalOptions.focusStealing === false) {
+      // Softer sound for non-focus-stealing notifications
+      if (type === 'ride') {
+        playNotificationSound(800, 0.15);
+      } else if (type === 'message') {
+        playNotificationSound(500, 0.1);
+      } else {
+        playNotificationSound(600, 0.1);
+      }
     } else {
-      playNotificationSound(800, 0.2);
+      // Normal sound for focus-stealing notifications
+      if (type === 'ride') {
+        playNotificationSound(1000, 0.3);
+      } else if (type === 'message') {
+        playNotificationSound(600, 0.2);
+      } else {
+        playNotificationSound(800, 0.2);
+      }
     }
   }
 
@@ -162,8 +173,8 @@ export const notifyUser = (type: 'ride' | 'message' | 'general' = 'general', cus
     vibrateDevice(finalOptions.vibrationPattern);
   }
 
-  // Show system notification
-  if (finalOptions.systemNotification && finalOptions.title) {
+  // Show system notification (only if not disabled for focus stealing)
+  if (finalOptions.systemNotification && finalOptions.title && !finalOptions.focusStealing) {
     showSystemNotification(finalOptions.title, {
       body: finalOptions.body,
       icon: '/favicon.svg',
