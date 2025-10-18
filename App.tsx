@@ -39,6 +39,13 @@ import { DailyStats } from './components/DailyStats';
 import { GamificationModal } from './components/GamificationModal';
 import { GamificationService } from './services/gamificationService';
 
+// Extend window interface for socket storage
+declare global {
+  interface Window {
+    dispatcherSocket: any;
+  }
+}
+
 
 // Initial data for people
 const initialPeople: Person[] = [
@@ -244,6 +251,7 @@ const AppContent: React.FC = () => {
 
   // Gamification modal
   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
+  const [socketRidesExpanded, setSocketRidesExpanded] = useState(false);
 
 
 
@@ -1170,6 +1178,15 @@ const AppContent: React.FC = () => {
       if (SUPABASE_ENABLED) {
         try {
           await supabaseService.deleteRideLog(logId);
+
+          // Emit ride deletion event via socket.io
+          if (window.dispatcherSocket) {
+            console.log('Emitting ride deletion event for:', logId);
+            window.dispatcherSocket.emit('ride_deleted', {
+              rideId: logId,
+              shiftId: 'dispatcher_shift'
+            });
+          }
         } catch (err) {
           console.error('Failed to delete ride log from supabase:', err);
         }
@@ -1637,11 +1654,15 @@ const AppContent: React.FC = () => {
           focusStealing: options?.focusStealing ?? false
         });
       }} />,
-       socketRides: <SocketRides
-         currentUser={user}
-         shiftId="dispatcher_shift"
-         isDispatcher={true}
-         onRideUpdate={(rideData) => {
+        socketRides: <SocketRides
+          currentUser={user}
+          shiftId="dispatcher_shift"
+          isDispatcher={true}
+          onSocketReady={(socketInstance) => {
+            // Store socket instance for emitting events
+            window.dispatcherSocket = socketInstance;
+          }}
+          onRideUpdate={(rideData) => {
            // Handle ride updates from Socket.io
            const mappedRide = {
              id: rideData.id,
@@ -1719,11 +1740,17 @@ const AppContent: React.FC = () => {
         onVehicleStatusUpdate={(data) => {
           // Handle vehicle status updates from Socket.io
           console.log('Vehicle status update received:', data);
-          setVehicles(prev => prev.map(vehicle =>
-            vehicle.id === data.vehicleId
-              ? { ...vehicle, status: data.status }
-              : vehicle
-          ));
+          console.log('Current vehicles before update:', vehicles.map(v => ({ id: v.id, status: v.status })));
+
+          setVehicles(prev => {
+            const updated = prev.map(vehicle =>
+              vehicle.id === data.vehicleId
+                ? { ...vehicle, status: data.status }
+                : vehicle
+            );
+            console.log('Vehicles after update:', updated.map(v => ({ id: v.id, status: v.status })));
+            return updated;
+          });
         }}
       />,
   };
@@ -1937,8 +1964,8 @@ const AppContent: React.FC = () => {
                 {/* Map Widget - Column 3, Row 1 */}
                 {widgetVisibility.map && (
                   <div className="col-start-3 row-start-1">
-                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
-                       <div className="p-3 border-b border-slate-700">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full flex flex-col">
+                       <div className="p-3 border-b border-slate-700 flex-shrink-0">
                          <h3 className="text-sm font-semibold text-white flex items-center">
                            <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1948,10 +1975,8 @@ const AppContent: React.FC = () => {
                            Mapa vozového parku
                          </h3>
                        </div>
-                       <div className="p-4">
-                         <div className="h-96">
-                           {widgetMap.map}
-                         </div>
+                       <div className="flex-1 min-h-0">
+                         {widgetMap.map}
                        </div>
                      </div>
                    </div>
@@ -2002,14 +2027,41 @@ const AppContent: React.FC = () => {
                          </div>
                      </div>
                    </div>
-                    <div className="p-4">
-                         {widgetMap.rideLog}
-                         {widgetVisibility.socketRides && (
-                           <div className="mt-4">
-                             {widgetMap.socketRides}
-                           </div>
-                         )}
-                       </div>
+                     <div className="p-4">
+                          {widgetMap.rideLog}
+
+                          {/* Collapsible Socket Rides Section */}
+                          <div className="mt-4 border-t border-slate-700 pt-4">
+                            <button
+                              onClick={() => setSocketRidesExpanded(!socketRidesExpanded)}
+                              className="flex items-center justify-between w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                            >
+                              <div className="flex items-center space-x-2">
+                                <div className="w-4 h-4 bg-[#81A1C1]/80 rounded flex items-center justify-center">
+                                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                  </svg>
+                                </div>
+                                <span className="text-sm font-medium text-white">Real-time jízdy</span>
+                                <span className="text-xs text-slate-400">({recentRideLog.length})</span>
+                              </div>
+                              <svg
+                                className={`w-4 h-4 text-slate-400 transition-transform ${socketRidesExpanded ? 'rotate-180' : ''}`}
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+
+                            {socketRidesExpanded && widgetVisibility.socketRides && (
+                              <div className="mt-3">
+                                {widgetMap.socketRides}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                     </div>
                   </div>
                 )}

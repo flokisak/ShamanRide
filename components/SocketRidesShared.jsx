@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { supabase } from '../services/supabaseClient';
 
-const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onStatusChange, onRideCancel, onVehicleStatusUpdate, supabaseClient = supabase }) => {
+const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onStatusChange, onRideCancel, onVehicleStatusUpdate, supabaseClient = supabase, onSocketReady }) => {
   const [rides, setRides] = useState([]);
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -73,14 +73,20 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
         ));
       });
 
-      // Listen for ride cancellations
-      socketInstance.on('ride_cancelled', (data) => {
-        console.log('Ride cancelled:', data);
-        if (onRideCancel) {
-          onRideCancel(data.rideId);
-        }
-        setRides(prev => prev.filter(ride => ride.id !== data.rideId));
-      });
+       // Listen for ride cancellations
+       socketInstance.on('ride_cancelled', (data) => {
+         console.log('Ride cancelled:', data);
+         if (onRideCancel) {
+           onRideCancel(data.rideId);
+         }
+         setRides(prev => prev.filter(ride => ride.id !== data.rideId));
+       });
+
+       // Listen for ride deletions
+       socketInstance.on('ride_deleted', (data) => {
+         console.log('Ride deleted:', data);
+         setRides(prev => prev.filter(ride => ride.id !== data.rideId));
+       });
 
        // Listen for position updates (dispatcher only)
        if (isDispatcher) {
@@ -105,6 +111,11 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
        });
 
       setSocket(socketInstance);
+
+      // Notify parent that socket is ready
+      if (onSocketReady) {
+        onSocketReady(socketInstance);
+      }
     };
 
     initSocket();

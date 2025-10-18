@@ -408,6 +408,27 @@ const Dashboard: React.FC = () => {
           socketInstance.emit('join_group_chat', 'dispatcher_shift');
           console.log('Joined group chat room:', 'dispatcher_shift');
 
+          // Broadcast current driver status when connecting
+          if (vehicleNumber && driverStatus) {
+            const vehicleStatus = driverStatus === 'available' ? 'AVAILABLE' :
+                                 driverStatus === 'on_ride' ? 'BUSY' :
+                                 driverStatus === 'break' ? 'BREAK' :
+                                 driverStatus === 'offline' ? 'OUT_OF_SERVICE' : 'OUT_OF_SERVICE';
+
+            console.log('Broadcasting current driver status on connect:', {
+              vehicleId: vehicleNumber,
+              status: vehicleStatus,
+              driverStatus: driverStatus
+            });
+
+            socketInstance.emit('vehicle_status_changed', {
+              vehicleId: vehicleNumber,
+              status: vehicleStatus,
+              driverStatus: driverStatus,
+              timestamp: Date.now()
+            });
+          }
+
           // Join dispatcher chat room
           socketInstance.emit('join_chat_dispatcher_driver', {
             dispatcherId: 'dispatcher',
@@ -693,41 +714,95 @@ const Dashboard: React.FC = () => {
         loadMessages();
       }, [vehicleNumber]);
 
-      // Auto-refresh messages every 5 minutes
-      useEffect(() => {
-        if (!vehicleNumber) return;
+       // Auto-refresh messages every 5 minutes
+       useEffect(() => {
+         if (!vehicleNumber) return;
 
-        const refreshInterval = setInterval(async () => {
-          try {
-             const msgs = await supabaseService.getDriverMessages();
-             // Filter for this driver (more flexible)
-             const filtered = msgs.filter((m: any) =>
-               m.receiver_id === `driver_${vehicleNumber}` ||
-               m.receiver_id === vehicleNumber?.toString() ||
-               m.sender_id === `driver_${vehicleNumber}` ||
-               m.sender_id === vehicleNumber?.toString() ||
-               m.receiver_id === 'general' ||
-               (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
-               (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString()) ||
-               (m.sender_id === 'dispatcher' && m.receiver_id === 'general')
+         const refreshInterval = setInterval(async () => {
+           try {
+              const msgs = await supabaseService.getDriverMessages();
+              // Filter for this driver (more flexible)
+              const filtered = msgs.filter((m: any) =>
+                m.receiver_id === `driver_${vehicleNumber}` ||
+                m.receiver_id === vehicleNumber?.toString() ||
+                m.sender_id === `driver_${vehicleNumber}` ||
+                m.sender_id === vehicleNumber?.toString() ||
+                m.receiver_id === 'general' ||
+                (m.sender_id === 'dispatcher' && m.receiver_id === `driver_${vehicleNumber}`) ||
+                (m.sender_id === 'dispatcher' && m.receiver_id === vehicleNumber?.toString()) ||
+                (m.sender_id === 'dispatcher' && m.receiver_id === 'general')
               ).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                 .slice(0, 50); // Keep 50 most recent messages (newest first)
 
-            // Only update if we have new messages or different data
-            const currentMessageIds = messages.map(m => m.id).sort();
-            const newMessageIds = filtered.map(m => m.id).sort();
+             // Only update if we have new messages or different data
+             const currentMessageIds = messages.map(m => m.id).sort();
+             const newMessageIds = filtered.map(m => m.id).sort();
 
-            if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
-              setMessages(filtered);
-              console.log('Messages refreshed automatically');
-            }
-          } catch (err) {
-            console.warn('Error refreshing messages:', err);
-          }
-        }, 300000); // Refresh every 5 minutes to reduce data transfer
+             if (JSON.stringify(currentMessageIds) !== JSON.stringify(newMessageIds)) {
+               setMessages(filtered);
+               console.log('Messages refreshed automatically');
+             }
+           } catch (err) {
+             console.warn('Error refreshing messages:', err);
+           }
+         }, 300000); // Refresh every 5 minutes to reduce data transfer
 
-        return () => clearInterval(refreshInterval);
-      }, [vehicleNumber, messages]);
+         return () => clearInterval(refreshInterval);
+       }, [vehicleNumber, messages]);
+
+       // Periodic ride data validation to detect manual deletions
+       useEffect(() => {
+         if (!vehicleNumber) return;
+
+         const validateRidesInterval = setInterval(async () => {
+           try {
+             console.log('Validating ride data for manual deletions...');
+             const [currentRides, pendingRidesData, rideHistoryData] = await Promise.all([
+               supabaseService.getRideLogsByVehicle(vehicleNumber, 'in_progress', 1),
+               supabaseService.getRideLogsByVehicle(vehicleNumber, 'pending', 10),
+               supabaseService.getRideLogsByVehicle(vehicleNumber, undefined, 100)
+             ]);
+
+             const dbCurrentRide = currentRides[0] || null;
+             const dbPendingRides = pendingRidesData;
+             const dbRideHistory = rideHistoryData;
+
+             // Check if current ride still exists in database
+             if (currentRide && (!dbCurrentRide || dbCurrentRide.id !== currentRide.id)) {
+               console.log('Current ride was deleted from database, clearing local state');
+               setCurrentRide(null);
+             }
+
+             // Check if any pending rides were deleted
+             const deletedPendingRides = pendingRides.filter(ride =>
+               !dbPendingRides.some(dbRide => dbRide.id === ride.id)
+             );
+             if (deletedPendingRides.length > 0) {
+               console.log('Pending rides deleted from database:', deletedPendingRides.map(r => r.id));
+               setPendingRides(prev => prev.filter(ride =>
+                 !deletedPendingRides.some(deleted => deleted.id === ride.id)
+               ));
+             }
+
+             // Check if any completed rides were deleted
+             const localCompletedRides = rideHistory.filter(ride => ride.status === RideStatus.Completed);
+             const deletedCompletedRides = localCompletedRides.filter(ride =>
+               !dbRideHistory.some(dbRide => dbRide.id === ride.id)
+             );
+             if (deletedCompletedRides.length > 0) {
+               console.log('Completed rides deleted from database:', deletedCompletedRides.map(r => r.id));
+               setRideHistory(prev => prev.filter(ride =>
+                 !deletedCompletedRides.some(deleted => deleted.id === ride.id)
+               ));
+             }
+
+           } catch (error) {
+             console.warn('Error validating ride data:', error);
+           }
+         }, 60000); // Check every minute for manual deletions
+
+         return () => clearInterval(validateRidesInterval);
+       }, [vehicleNumber, currentRide, pendingRides, rideHistory]);
 
    // Auto-refresh ride data every 15 seconds (for local mode without real-time)
 
@@ -902,6 +977,14 @@ const Dashboard: React.FC = () => {
         setDriverStatus(status);
 
         // Broadcast status change via socket.io
+        console.log('Attempting to broadcast vehicle status change:', {
+          socket: !!socket,
+          socketConnected,
+          vehicleId: vehicleNumber,
+          status: vehicleStatus,
+          driverStatus: status
+        });
+
         if (socket && socketConnected) {
           console.log('Broadcasting vehicle status change via socket:', { vehicleId: vehicleNumber, status: vehicleStatus });
           socket.emit('vehicle_status_changed', {
@@ -910,6 +993,8 @@ const Dashboard: React.FC = () => {
             driverStatus: status,
             timestamp: Date.now()
           });
+        } else {
+          console.warn('Socket not connected, status change not broadcasted');
         }
 
         // Show success feedback

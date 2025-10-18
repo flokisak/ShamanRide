@@ -272,6 +272,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle ride deletions
+  socket.on('ride_deleted', async (data) => {
+    try {
+      const { rideId, shiftId } = data;
+
+      console.log(`Ride ${rideId} deleted`);
+
+      // Broadcast to shift room
+      socket.to(`shift:${shiftId}`).emit('ride_deleted', {
+        rideId
+      });
+
+    } catch (err) {
+      console.error('Error handling ride deletion:', err);
+    }
+  });
+
   // Handle status changes
   socket.on('status_change', async (data) => {
     try {
