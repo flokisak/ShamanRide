@@ -1359,32 +1359,45 @@ const Dashboard: React.FC = () => {
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
           <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.messages')}</h2>
           <div className="h-40 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
-            {messages.length > 0 ? (
-              messages
-                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                .map((msg, idx) => (
-                  <div key={msg.id || idx} className="text-sm text-slate-300 mb-2 p-2 bg-slate-800/30 rounded">
-                     <div className="flex justify-between items-start mb-1">
-                       <div className="flex items-center gap-2">
-                         <strong className="text-primary text-xs">
-                           {getSenderName(msg.sender_id)}
-                         </strong>
-                         {msg.receiver_id === 'general' && (
-                           <span className="text-xs bg-aurora-4 text-slate-900 px-1.5 py-0.5 rounded-full font-medium">
-                             VŠEOBECNÝ
-                           </span>
-                         )}
+             {messages.length > 0 ? (
+               messages
+                 .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                 .map((msg, idx) => {
+                   const isNewestMessage = idx === 0; // First message is the newest
+                   return (
+                     <div
+                       key={msg.id || idx}
+                       className={`text-sm text-slate-300 mb-2 p-2 rounded relative ${
+                         isNewestMessage
+                           ? 'bg-blue-900/40 ring-1 ring-blue-400/50 shadow-lg shadow-blue-400/10'
+                           : 'bg-slate-800/30'
+                       }`}
+                     >
+                       {isNewestMessage && (
+                         <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>
+                       )}
+                       <div className="flex justify-between items-start mb-1">
+                         <div className="flex items-center gap-2">
+                           <strong className={`text-xs ${isNewestMessage ? 'text-blue-300' : 'text-primary'}`}>
+                             {getSenderName(msg.sender_id)}
+                           </strong>
+                           {msg.receiver_id === 'general' && (
+                             <span className="text-xs bg-aurora-4 text-slate-900 px-1.5 py-0.5 rounded-full font-medium">
+                               VŠEOBECNÝ
+                             </span>
+                           )}
+                         </div>
+                         <span className={`text-xs ${isNewestMessage ? 'text-blue-200' : 'text-slate-400'}`}>
+                           {formatMessageTime(msg.timestamp)}
+                         </span>
                        </div>
-                       <span className="text-xs text-slate-400">
-                         {formatMessageTime(msg.timestamp)}
-                       </span>
+                       <div className={`text-sm leading-relaxed ${isNewestMessage ? 'text-white font-medium' : 'text-slate-200'}`}>
+                         {msg.message}
+                       </div>
                      </div>
-                     <div className="text-slate-200 text-sm leading-relaxed">
-                       {msg.message}
-                     </div>
-                  </div>
-                ))
-            ) : (
+                   );
+                 })
+             ) : (
               <p className="text-sm text-slate-400 italic text-center py-8">Žádné zprávy zatím</p>
             )}
           </div>

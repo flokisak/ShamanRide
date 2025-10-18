@@ -112,6 +112,20 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
        socketInstance.on('new_message', (messageData) => {
          console.log('Dispatcher chat received message:', messageData);
 
+         // Save to Supabase for persistence
+         if (SUPABASE_ENABLED) {
+           supabase.from('driver_messages').insert(messageData).then(({ error }) => {
+             if (error) {
+               console.warn('Failed to save message to Supabase:', error);
+               // Fallback to localStorage
+               addDriverMessage(messageData);
+             }
+           });
+         } else {
+           // Save to localStorage
+           addDriverMessage(messageData);
+         }
+
          // Update allMessages for chat history
          setAllMessages(prev => {
            const exists = prev.some(m => m.id === messageData.id);
@@ -498,34 +512,51 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
       // Send via socket
       socket.emit('message', messageData);
 
-      // Create local message object for immediate UI update
-      const localMessageData = {
-        id: `temp-${Date.now()}`,
-        sender_id: 'dispatcher',
-        receiver_id: selectedVehicleId === 'general' ? 'general' : `driver_${selectedVehicleId}`,
-        message: newMessage.trim(),
-        timestamp: new Date().toISOString(),
-        read: true
-      };
+       // Create local message object for immediate UI update
+       const localMessageData = {
+         id: `temp-${Date.now()}`,
+         sender_id: 'dispatcher',
+         receiver_id: selectedVehicleId === 'general' ? 'general' : `driver_${selectedVehicleId}`,
+         message: newMessage.trim(),
+         timestamp: new Date().toISOString(),
+         read: true
+       };
 
-      // Update local state immediately
-      setMessages(prev => [localMessageData, ...prev]);
+       // Save to Supabase for persistence
+       if (SUPABASE_ENABLED) {
+         supabase.from('driver_messages').insert(localMessageData).then(({ error }) => {
+           if (error) {
+             console.warn('Failed to save sent message to Supabase:', error);
+             // Fallback to localStorage
+             addDriverMessage(localMessageData);
+           }
+         });
+       } else {
+         // Save to localStorage
+         addDriverMessage(localMessageData);
+       }
 
-      // Update chat history
-      setChatHistory(prev => prev.map(chat => {
-        if ((selectedVehicleId === 'general' && chat.vehicleId === 'general') ||
-            (chat.vehicleId === selectedVehicleId)) {
-          return {
-            ...chat,
-            lastMessage: newMessage.trim(),
-            timestamp: new Date().toISOString(),
-            unreadCount: 0
-          };
-        }
-        return chat;
-      }));
+       // Update allMessages for chat history
+       setAllMessages(prev => [localMessageData, ...prev]);
 
-      setNewMessage('');
+       // Update local state immediately
+       setMessages(prev => [localMessageData, ...prev]);
+
+       // Update chat history
+       setChatHistory(prev => prev.map(chat => {
+         if ((selectedVehicleId === 'general' && chat.vehicleId === 'general') ||
+             (chat.vehicleId === selectedVehicleId)) {
+           return {
+             ...chat,
+             lastMessage: newMessage.trim(),
+             timestamp: new Date().toISOString(),
+             unreadCount: 0
+           };
+         }
+         return chat;
+       }));
+
+       setNewMessage('');
     } catch (error) {
       console.error('Error sending message:', error);
     } finally {
@@ -801,30 +832,40 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                        }
                      </p>
                    ) : (
-                     <>
-                       {messages
-                         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                         .map((msg) => (
-                           <div
-                             key={msg.id}
-                             className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
-                           >
-                             <div
-                               className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
-                                 msg.sender_id === currentUserId
-                                   ? 'bg-primary text-slate-900'
-                                   : 'bg-slate-700 text-white'
-                               }`}
-                             >
-                               <div className="text-xs opacity-75 mb-1">
-                                 {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
-                               </div>
-                               <div className="break-words">{msg.message}</div>
-                             </div>
-                           </div>
-                         ))}
-                       <div ref={messagesEndRef} />
-                     </>
+                      <>
+                        {messages
+                          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                          .map((msg, index) => {
+                            const isNewestMessage = index === 0; // First message is the newest
+                            return (
+                              <div
+                                key={msg.id}
+                                className={`flex ${msg.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
+                              >
+                                <div
+                                  className={`max-w-xs px-3 py-2 rounded-lg text-sm relative ${
+                                    msg.sender_id === currentUserId
+                                      ? 'bg-primary text-slate-900'
+                                      : 'bg-slate-700 text-white'
+                                  } ${
+                                    isNewestMessage
+                                      ? 'ring-2 ring-blue-400 ring-opacity-60 shadow-lg shadow-blue-400/20 animate-pulse'
+                                      : ''
+                                  }`}
+                                >
+                                  {isNewestMessage && (
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>
+                                  )}
+                                  <div className="text-xs opacity-75 mb-1">
+                                    {getSenderName(msg.sender_id)} • {formatTime(msg.timestamp)}
+                                  </div>
+                                  <div className="break-words">{msg.message}</div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        <div ref={messagesEndRef} />
+                      </>
                    )}
                  </div>
                </div>
