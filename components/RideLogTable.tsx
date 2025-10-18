@@ -13,6 +13,7 @@ interface RideLogTableProps {
     onEdit: (logId: string) => void;
     onSendSms: (logId: string) => void;
     onResendRide?: (logId: string) => void;
+    onSendToDriver?: (logId: string) => void;
     showCompleted: boolean;
     onToggleShowCompleted: () => void;
     dateFilter: string;
@@ -26,7 +27,7 @@ interface RideLogTableProps {
 
 
 
-export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onStatusChange, onDelete, onEdit, onSendSms, onResendRide, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange, hasNewRides, onMarkRidesViewed }) => {
+export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onStatusChange, onDelete, onEdit, onSendSms, onResendRide, onSendToDriver, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange, hasNewRides, onMarkRidesViewed }) => {
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -420,24 +421,34 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                        >
                          💬
                        </button>
-                       {onResendRide && log.status === RideStatus.Pending && (Date.now() - log.timestamp) > (5 * 60 * 1000) && (
-                         <button
-                           onClick={() => onResendRide(log.id)}
-                           className="px-1 py-1 text-gray-500 hover:text-orange-500 transition-colors rounded text-xs"
-                           aria-label={`Re-send ride for ${log.customerName}`}
-                           title="Re-send ride"
-                         >
-                           ↻
-                         </button>
-                       )}
-                       <button
-                         onClick={() => onDelete(log.id)}
-                         className="px-1 py-1 text-gray-500 hover:text-red-500 transition-colors rounded text-xs"
-                         aria-label={t('rideLog.table.deleteRideFor', { customerName: log.customerName })}
-                         title="Delete"
-                       >
-                         🗑️
-                       </button>
+                        {onResendRide && log.status === RideStatus.Pending && (Date.now() - log.timestamp) > (5 * 60 * 1000) && (
+                          <button
+                            onClick={() => onResendRide(log.id)}
+                            className="px-1 py-1 text-gray-500 hover:text-orange-500 transition-colors rounded text-xs"
+                            aria-label={`Re-send ride for ${log.customerName}`}
+                            title="Re-send ride"
+                          >
+                            ↻
+                          </button>
+                        )}
+                        {onSendToDriver && log.status === RideStatus.Scheduled && log.vehicleId && (
+                          <button
+                            onClick={() => onSendToDriver(log.id)}
+                            className="px-1 py-1 text-gray-500 hover:text-blue-500 transition-colors rounded text-xs"
+                            aria-label={`Send ride to driver for ${log.customerName}`}
+                            title="Send to driver"
+                          >
+                            📤
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onDelete(log.id)}
+                          className="px-1 py-1 text-gray-500 hover:text-red-500 transition-colors rounded text-xs"
+                          aria-label={t('rideLog.table.deleteRideFor', { customerName: log.customerName })}
+                          title="Delete"
+                        >
+                          🗑️
+                        </button>
                      </div>
                    </div>
                  );
