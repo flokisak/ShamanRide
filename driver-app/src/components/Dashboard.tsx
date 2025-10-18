@@ -507,9 +507,43 @@ const Dashboard: React.FC = () => {
          socket.disconnect();
        }
      };
-   }, [userId, vehicleNumber]);
+    }, [userId, vehicleNumber]);
 
-   // Join appropriate chat room when recipient changes
+    // Mark messages as read when they are viewed
+    useEffect(() => {
+      if (messages.length === 0 || !vehicleNumber) return;
+
+      const unreadMessages = messages.filter(msg =>
+        msg.sender_id !== `driver_${vehicleNumber}` && !msg.read
+      );
+
+      if (unreadMessages.length > 0) {
+        console.log('Marking', unreadMessages.length, 'messages as read in driver app');
+
+        // Update read status in Supabase
+        if (SUPABASE_ENABLED) {
+          unreadMessages.forEach(async (msg) => {
+            try {
+              await supabase
+                .from('driver_messages')
+                .update({ read: true })
+                .eq('id', msg.id);
+            } catch (error) {
+              console.error('Failed to mark message as read:', error);
+            }
+          });
+        }
+
+        // Update local state
+        setMessages(prev => prev.map(msg =>
+          unreadMessages.some(unread => unread.id === msg.id)
+            ? { ...msg, read: true }
+            : msg
+        ));
+      }
+    }, [messages, vehicleNumber]);
+
+    // Join appropriate chat room when recipient changes
    useEffect(() => {
      if (!socket || !socketConnected || !vehicleNumber) return;
 
@@ -1078,7 +1112,8 @@ const Dashboard: React.FC = () => {
             receiver_id: receiverId,
             message: newMessage.trim(),
             timestamp: new Date().toISOString(),
-            read: true
+            read: true,
+            encrypted: false // Local messages are not encrypted
           };
           setMessages(prev => [...prev, localMessageData]); // Add to end since we sort oldest first
           supabaseService.addDriverMessage(localMessageData);
