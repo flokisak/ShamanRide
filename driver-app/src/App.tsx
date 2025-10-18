@@ -4,12 +4,16 @@ import { AuthContext } from './AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import { initializeBackgroundSync } from './utils/backgroundSync';
 
 function App() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Initialize background sync
+    initializeBackgroundSync();
+
     // Get initial session with timeout
     const getSessionWithTimeout = async () => {
       try {

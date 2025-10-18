@@ -6,6 +6,7 @@ import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useAuth } from '../AuthContext';
 import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
+import { queueLocationData, queueMessage, queueRideUpdate, requestBackgroundSync } from '../utils/backgroundSync';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
 
@@ -50,7 +51,27 @@ const Dashboard: React.FC = () => {
   const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
   const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
   const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+   const [refreshTrigger, setRefreshTrigger] = useState(0);
+   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+   const [queuedDataCount, setQueuedDataCount] = useState(0);
+
+  // Update sync status and queued data count
+  const updateSyncStatus = useCallback(() => {
+    try {
+      const cachedLocations = localStorage.getItem('cached-locations');
+      const pendingMessages = localStorage.getItem('pending-messages');
+      const pendingUpdates = localStorage.getItem('pending-ride-updates');
+
+      const locationsCount = cachedLocations ? JSON.parse(cachedLocations).length : 0;
+      const messagesCount = pendingMessages ? JSON.parse(pendingMessages).length : 0;
+      const updatesCount = pendingUpdates ? JSON.parse(pendingUpdates).length : 0;
+
+      setQueuedDataCount(locationsCount + messagesCount + updatesCount);
+    } catch (error) {
+      console.error('Error updating sync status:', error);
+      setQueuedDataCount(0);
+    }
+  }, []);
 
   // Load ride data for the current vehicle
   const loadRideData = useCallback(async (vehicleId: number) => {
@@ -173,17 +194,29 @@ const Dashboard: React.FC = () => {
 
   // Monitor online status
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Trigger background sync when coming back online
+      requestBackgroundSync();
+      updateSyncStatus();
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      updateSyncStatus();
+    };
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
+    // Update sync status periodically
+    const syncStatusInterval = setInterval(updateSyncStatus, 10000); // Every 10 seconds
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(syncStatusInterval);
     };
-  }, []);
+  }, [updateSyncStatus]);
 
     // Calculate shift cash from completed rides within shift time range
   const calculateShiftCash = (rides: RideLog[], shiftStart?: number, shiftEnd?: number) => {
@@ -499,24 +532,28 @@ const Dashboard: React.FC = () => {
 
     // Send real-time location updates via socket.io
     locationIntervalRef.current = setInterval(() => {
-      if (currentPosition && vehicleNumber && socket && socketConnected) {
-        console.log('Sending real-time location via socket:', {
+      if (currentPosition && vehicleNumber) {
+        const locationData = {
           shiftId: `driver_shift_${vehicleNumber}`,
           vehicleId: vehicleNumber,
           latitude: currentPosition.lat,
-          longitude: currentPosition.lng
-        });
+          longitude: currentPosition.lng,
+          timestamp: Date.now()
+        };
 
-        socket.emit('position_update', {
-          shiftId: `driver_shift_${vehicleNumber}`,
-          vehicleId: vehicleNumber,
-          latitude: currentPosition.lat,
-          longitude: currentPosition.lng
-        });
+        if (socket && socketConnected) {
+          console.log('Sending real-time location via socket:', locationData);
+          socket.emit('position_update', locationData);
+        } else {
+           // Queue location data for background sync when offline
+           console.log('Queueing location data for background sync:', locationData);
+           queueLocationData(locationData);
+           updateSyncStatus();
+         }
       } else {
         console.log('Not sending location - position:', !!currentPosition, 'vehicle:', vehicleNumber, 'socket:', !!socket, 'connected:', socketConnected);
       }
-    }, 30000); // Send every 30 seconds for real-time tracking
+    }, 60000); // Send every 60 seconds to save battery
 
     return () => {
       console.log('Stopping GPS tracking');
@@ -964,8 +1001,8 @@ const Dashboard: React.FC = () => {
   };
 
     const sendMessage = async () => {
-      if (!newMessage.trim() || !vehicleNumber || !socket || !socketConnected) {
-        console.warn('Cannot send message: empty message, no vehicle number, or socket not connected');
+      if (!newMessage.trim() || !vehicleNumber) {
+        console.warn('Cannot send message: empty message or no vehicle number');
         return;
       }
 
@@ -995,30 +1032,37 @@ const Dashboard: React.FC = () => {
         type: chatType
       };
 
-      console.log('Sending message via Socket.io:', messageData);
+      // Save sent message locally for immediate UI update
+      const localMessageData = {
+        id: crypto.randomUUID(),
+        sender_id: `driver_${vehicleNumber}`,
+        receiver_id: receiverId,
+        message: newMessage.trim(),
+        timestamp: new Date().toISOString(),
+        read: true,
+        encrypted: false // Local messages are not encrypted
+      };
+      setMessages(prev => [...prev, localMessageData]); // Add to end since we sort oldest first
+      supabaseService.addDriverMessage(localMessageData);
 
-       try {
-         socket.emit('message', messageData);
-         console.log('Message sent successfully via Socket.io');
+      if (socket && socketConnected) {
+        console.log('Sending message via Socket.io:', messageData);
+        try {
+          socket.emit('message', messageData);
+          console.log('Message sent successfully via Socket.io');
+        } catch (error) {
+          console.error('Failed to send message via Socket.io:', error);
+           // Queue for background sync
+           queueMessage(messageData);
+           updateSyncStatus();
+        }
+      } else {
+        console.log('Socket not connected, queuing message for background sync');
+        // Queue message for background sync
+        queueMessage(messageData);
+      }
 
-          // Save sent message locally for immediate UI update
-          const localMessageData = {
-            id: crypto.randomUUID(),
-            sender_id: `driver_${vehicleNumber}`,
-            receiver_id: receiverId,
-            message: newMessage.trim(),
-            timestamp: new Date().toISOString(),
-            read: true,
-            encrypted: false // Local messages are not encrypted
-          };
-          setMessages(prev => [...prev, localMessageData]); // Add to end since we sort oldest first
-          supabaseService.addDriverMessage(localMessageData);
-
-         setNewMessage('');
-       } catch (error) {
-         console.error('Failed to send message via Socket.io:', error);
-         alert('Failed to send message. Please try again.');
-       }
+      setNewMessage('');
     };
 
   const getSenderName = (senderId: string) => {
@@ -1104,29 +1148,7 @@ const Dashboard: React.FC = () => {
 
 
 
-  // Function to check current table structure
-  const checkTableStructure = async () => {
-    console.log('Checking locations table structure...');
 
-    try {
-      // Try to get table info by describing it
-      const { data, error } = await supabase.rpc('describe_table', {
-        table_name: 'locations'
-      });
-
-      if (error) {
-        console.error('Could not get table structure:', error);
-        console.log('This is expected - describe_table function may not exist');
-        console.log('Please check the table manually in Supabase dashboard');
-        return;
-      }
-
-      console.log('Table structure:', data);
-
-    } catch (err) {
-      console.error('Error checking table structure:', err);
-    }
-  };
 
 
 
@@ -1650,21 +1672,62 @@ const Dashboard: React.FC = () => {
               </span>
             </div>
 
-            {/* Real-time Connection Status Indicator */}
-            <div className="flex items-center gap-2 mt-2">
-              <div className={`w-3 h-3 rounded-full ${
-                realtimeConnectionStatus === 'connected' ? 'bg-blue-400' :
-                realtimeConnectionStatus === 'connecting' ? 'bg-yellow-400' :
-                'bg-red-400'
-              }`}></div>
-              <span className="text-xs text-slate-400">
-                Real-time: {
-                  realtimeConnectionStatus === 'connected' ? 'Connected' :
-                  realtimeConnectionStatus === 'connecting' ? 'Connecting...' :
-                  'Disconnected'
-                }
-              </span>
-            </div>
+             {/* Real-time Connection Status Indicator */}
+             <div className="flex items-center gap-2 mt-2">
+               <div className={`w-3 h-3 rounded-full ${
+                 realtimeConnectionStatus === 'connected' ? 'bg-blue-400' :
+                 realtimeConnectionStatus === 'connecting' ? 'bg-yellow-400' :
+                 'bg-red-400'
+               }`}></div>
+               <span className="text-xs text-slate-400">
+                 Real-time: {
+                   realtimeConnectionStatus === 'connected' ? 'Connected' :
+                   realtimeConnectionStatus === 'connecting' ? 'Connecting...' :
+                   'Disconnected'
+                 }
+               </span>
+             </div>
+
+             {/* Background Sync Status Indicator */}
+             <div className="flex items-center justify-between mt-2">
+               <div className="flex items-center gap-2">
+                 <div className={`w-3 h-3 rounded-full ${
+                   syncStatus === 'syncing' ? 'bg-blue-400 animate-pulse' :
+                   syncStatus === 'success' ? 'bg-green-400' :
+                   syncStatus === 'error' ? 'bg-red-400' :
+                   'bg-gray-400'
+                 }`}></div>
+                 <span className="text-xs text-slate-400">
+                   Sync: {
+                     syncStatus === 'syncing' ? 'Syncing...' :
+                     syncStatus === 'success' ? 'Synced' :
+                     syncStatus === 'error' ? 'Sync failed' :
+                     queuedDataCount > 0 ? `${queuedDataCount} queued` :
+                     'Idle'
+                   }
+                 </span>
+               </div>
+               {queuedDataCount > 0 && (
+                 <button
+                   onClick={async () => {
+                     setSyncStatus('syncing');
+                     try {
+                       await requestBackgroundSync();
+                       setSyncStatus('success');
+                       setTimeout(() => updateSyncStatus(), 1000);
+                     } catch (error) {
+                       console.error('Manual sync failed:', error);
+                       setSyncStatus('error');
+                       setTimeout(() => updateSyncStatus(), 3000);
+                     }
+                   }}
+                   className="text-xs bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded text-white"
+                   disabled={syncStatus === 'syncing'}
+                 >
+                   {syncStatus === 'syncing' ? 'Syncing...' : 'Sync Now'}
+                 </button>
+               )}
+             </div>
 
             {/* Notification Permission Indicator */}
             {notificationPermission !== 'granted' && (
