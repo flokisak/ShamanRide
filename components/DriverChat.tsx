@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Person, Vehicle } from '../types';
+import { Person, Vehicle, VehicleStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { supabase, SUPABASE_ENABLED } from '../services/supabaseClient';
 import io from 'socket.io-client';
@@ -50,6 +50,17 @@ interface ChatHistoryItem {
 
 export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }) => {
   const { t } = useTranslation();
+
+  const getStatusDotClass = (status: VehicleStatus) => {
+    switch (status) {
+      case VehicleStatus.Available: return 'bg-green-500';
+      case VehicleStatus.Busy: return 'bg-yellow-500';
+      case VehicleStatus.Break: return 'bg-orange-500';
+      case VehicleStatus.OutOfService: return 'bg-red-500';
+      case VehicleStatus.NotDrivingToday: return 'bg-sky-500';
+      default: return 'bg-gray-500';
+    }
+  };
 
   console.log('DriverChat component mounted with', vehicles.length, 'vehicles');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -713,7 +724,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
            </h3>
           <div className="flex items-center gap-3">
             <div className="text-xs text-slate-400">
-              {vehicles.filter(v => v.status === 'AVAILABLE' || v.status === 'BUSY').length} online
+              {vehicles.filter(v => v.status === 'AVAILABLE').length} dostupných, {vehicles.filter(v => v.status === 'BUSY').length} obsazených
             </div>
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${socketConnected ? 'bg-green-400' : 'bg-red-400'}`}></div>
@@ -746,20 +757,30 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                       console.log('Clicked on chat:', chat.vehicleId, chat.vehicleName);
                       setSelectedVehicleId(chat.vehicleId);
                     }}
-                     className={`mx-2 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
-                       selectedVehicleId === chat.vehicleId
-                         ? 'bg-primary text-slate-900 shadow-md'
-                         : chat.unreadCount > 0
-                         ? 'bg-slate-600/70 text-white border-l-2 border-blue-400'
-                         : 'hover:bg-slate-700/50 text-white'
-                     }`}
+                      className={`mx-2 px-3 py-2 rounded-lg cursor-pointer transition-all duration-200 ${
+                        selectedVehicleId === chat.vehicleId
+                          ? 'bg-cyan-400 text-slate-900 shadow-md'
+                          : chat.unreadCount > 0
+                          ? 'bg-slate-600/70 text-white border-l-2 border-blue-400'
+                          : 'hover:bg-slate-700/50 text-white'
+                      }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            selectedVehicleId === chat.vehicleId ? 'bg-slate-900' : 'bg-green-400'
-                          }`}></div>
+                          {chat.vehicleId !== 'general' && (() => {
+                            const vehicle = vehicles.find(v => v.id === chat.vehicleId);
+                            return (
+                              <div className={`w-2 h-2 rounded-full ${
+                                selectedVehicleId === chat.vehicleId ? 'bg-slate-900' : getStatusDotClass(vehicle?.status || VehicleStatus.OutOfService)
+                              }`}></div>
+                            );
+                          })()}
+                          {chat.vehicleId === 'general' && (
+                            <div className={`w-2 h-2 rounded-full ${
+                              selectedVehicleId === chat.vehicleId ? 'bg-slate-900' : 'bg-blue-400'
+                            }`}></div>
+                          )}
                           <div className="text-sm font-medium truncate">{chat.vehicleName}</div>
                         </div>
                         {chat.lastMessage && (
@@ -885,11 +906,11 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                    <button
                      onClick={sendMessage}
                      disabled={!newMessage.trim() || sending || !socketConnected}
-                     className={`px-4 py-2 rounded-lg btn-modern font-medium text-sm whitespace-nowrap ${
-                       !newMessage.trim() || sending || !socketConnected
-                         ? 'bg-slate-600 text-slate-400 cursor-not-allowed opacity-50'
-                         : 'bg-primary hover:bg-primary/80 text-slate-900'
-                     }`}
+                      className={`px-4 py-2 rounded-lg btn-modern font-medium text-sm whitespace-nowrap ${
+                        !newMessage.trim() || sending || !socketConnected
+                          ? 'bg-slate-600 text-slate-400 cursor-not-allowed opacity-50'
+                          : 'bg-cyan-400 hover:bg-cyan-500 text-slate-900'
+                      }`}
                    >
                     {sending ? 'Odesílání...' : 'Odeslat'}
                   </button>

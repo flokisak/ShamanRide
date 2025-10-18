@@ -224,7 +224,7 @@ const Dashboard: React.FC = () => {
       try {
         const vehicles = await supabaseService.getVehicles();
         const drivers = vehicles
-          .filter(v => v.id !== vehicleNumber && v.driverId)
+          .filter(v => v.id !== vehicleNumber)
           .map(v => ({ id: v.id, name: v.name || `Vehicle ${v.id}` }));
         setOtherDrivers(drivers);
       } catch (error) {
@@ -571,22 +571,25 @@ const Dashboard: React.FC = () => {
     }, [messages, vehicleNumber]);
 
     // Join appropriate chat room when recipient changes
-   useEffect(() => {
-     if (!socket || !socketConnected || !vehicleNumber) return;
+    useEffect(() => {
+      if (!socket || !socketConnected || !vehicleNumber) return;
 
-     if (selectedRecipient === 'dispatcher') {
-       socket.emit('join_chat_dispatcher_driver', {
-         dispatcherId: 'dispatcher',
-         driverId: vehicleNumber
-       });
-     } else if (selectedRecipient !== 'general' && selectedRecipient !== 'dispatcher') {
-       // Join driver-to-driver chat room
-       socket.emit('join_chat_driver_driver', {
-         driverId1: vehicleNumber,
-         driverId2: parseInt(selectedRecipient)
-       });
-     }
-   }, [selectedRecipient, socket, socketConnected, vehicleNumber]);
+      if (selectedRecipient === 'dispatcher') {
+        socket.emit('join_chat_dispatcher_driver', {
+          dispatcherId: 'dispatcher',
+          driverId: vehicleNumber
+        });
+      } else if (selectedRecipient === 'general') {
+        // Join general shift chat
+        socket.emit('join_group_chat', 'driver_shift');
+      } else if (selectedRecipient !== 'general' && selectedRecipient !== 'dispatcher') {
+        // Join driver-to-driver chat room
+        socket.emit('join_chat_driver_driver', {
+          driverId1: vehicleNumber,
+          driverId2: parseInt(selectedRecipient)
+        });
+      }
+    }, [selectedRecipient, socket, socketConnected, vehicleNumber]);
 
   // GPS Location tracking and sending
   useEffect(() => {
@@ -1271,9 +1274,9 @@ const Dashboard: React.FC = () => {
       if (selectedRecipient === 'dispatcher') {
         room = `chat:Ddispatcher_R${vehicleNumber}`;
         chatType = 'dispatcher_driver';
-      } else if (selectedRecipient === 'general') {
-        room = 'shift_chat:dispatcher_shift';
-        chatType = 'group';
+       } else if (selectedRecipient === 'general') {
+         room = 'shift_chat:driver_shift';
+         chatType = 'group';
       } else {
         room = `chat:R${vehicleNumber}_R${selectedRecipient}`;
         chatType = 'driver_driver';
@@ -1569,11 +1572,26 @@ const Dashboard: React.FC = () => {
         {/* Messaging */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
           <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.messages')}</h2>
-          <div className="h-40 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
-              {messages.length > 0 ? (
-                messages
-                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                  .map((msg, idx) => {
+           <div className="h-40 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
+               {(() => {
+                 // Filter messages based on selected recipient
+                 const filteredMessages = messages.filter(msg => {
+                   if (selectedRecipient === 'dispatcher') {
+                     return (msg.sender_id === `driver_${vehicleNumber}` && msg.receiver_id === 'dispatcher') ||
+                            (msg.sender_id === 'dispatcher' && msg.receiver_id === `driver_${vehicleNumber}`);
+                   } else if (selectedRecipient === 'general') {
+                     return msg.receiver_id === 'general';
+                   } else {
+                     // Driver-to-driver chat
+                     return (msg.sender_id === `driver_${vehicleNumber}` && msg.receiver_id === `driver_${selectedRecipient}`) ||
+                            (msg.sender_id === `driver_${selectedRecipient}` && msg.receiver_id === `driver_${vehicleNumber}`);
+                   }
+                 });
+
+                 return filteredMessages.length > 0 ? (
+                   filteredMessages
+                     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                     .map((msg, idx) => {
                     const isNewestMessage = idx === 0; // First message is the newest
                     const shouldFlash = isNewestMessage && !msg.read; // Only flash if newest AND unread
                     return (
@@ -1607,11 +1625,12 @@ const Dashboard: React.FC = () => {
                          {msg.message}
                        </div>
                      </div>
-                   );
-                 })
-             ) : (
-              <p className="text-sm text-slate-400 italic text-center py-8">Žádné zprávy zatím</p>
-            )}
+                    );
+                  })
+                 ) : (
+                   <p className="text-sm text-slate-400 italic text-center py-8">Žádné zprávy zatím</p>
+                 );
+               })()}
           </div>
             <div className="space-y-2">
                 <select

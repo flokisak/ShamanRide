@@ -13,9 +13,10 @@ interface EditRideLogModalProps {
   onSave: (log: RideLog) => void;
   onSendSms: (logId: string) => void;
   onClose: () => void;
+  onSendToDriver?: (logId: string) => void;
 }
 
-export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicles, people, onSave, onSendSms, onClose }) => {
+export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicles, people, onSave, onSendSms, onClose, onSendToDriver }) => {
   const { t } = useTranslation();
   const [formData, setFormData] = useState<RideLog>(log);
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
@@ -284,14 +285,23 @@ export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicle
               <textarea id="notes" name="notes" value={formData.notes || ''} onChange={handleChange} rows={3} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"/>
             </div>
           </div>
-          <div className="flex justify-end items-center p-6 bg-slate-900 border-t border-slate-700 rounded-b-lg space-x-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md bg-slate-600 text-gray-200 hover:bg-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-slate-800">
-              {t('general.cancel')}
-            </button>
-            <button type="submit" className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-slate-900 bg-cyan-400 hover:bg-cyan-500 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800">
-              {t('general.saveChanges')}
-            </button>
-          </div>
+           <div className="flex justify-end items-center p-6 bg-slate-900 border-t border-slate-700 rounded-b-lg space-x-3">
+             <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md bg-slate-600 text-gray-200 hover:bg-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-slate-800">
+               {t('general.cancel')}
+             </button>
+             {formData.status === RideStatus.Scheduled && formData.vehicleId && onSendToDriver && (
+               <button
+                 type="button"
+                 onClick={() => onSendToDriver(formData.id)}
+                 className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+               >
+                 📤 Odeslat řidiči
+               </button>
+             )}
+             <button type="submit" className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-slate-900 bg-cyan-400 hover:bg-cyan-500 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800">
+               {t('general.saveChanges')}
+             </button>
+           </div>
         </form>
       </div>
     </div>

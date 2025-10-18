@@ -1027,6 +1027,31 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const handleSendToDriver = async (rideId: string) => {
+    const rideToSend = rideLog.find(log => log.id === rideId);
+    if (!rideToSend) return;
+
+    // Change status from SCHEDULED to PENDING
+    const updatedRide = { ...rideToSend, status: RideStatus.Pending };
+
+    try {
+      await supabaseService.addRideLog(updatedRide);
+      setRideLog(prev => prev.map(log => log.id === rideId ? updatedRide : log));
+
+      // Send notification to driver
+      sendStatusChangeMessageToDriver(updatedRide, RideStatus.Scheduled);
+
+      // Close the edit modal
+      setEditingRideLog(null);
+      setIsRideBookOpen(true);
+
+      console.log('Ride sent to driver:', rideId);
+    } catch (err) {
+      console.error('Failed to send ride to driver', err);
+      alert('Failed to send ride to driver. Please try again.');
+    }
+  };
+
   const handleUpdateRideLog = async (updatedLog: RideLog) => {
     const originalLog = rideLog.find(log => log.id === updatedLog.id);
 
@@ -2124,8 +2149,8 @@ const AppContent: React.FC = () => {
       {/* Modals */}
       {editingVehicle && (<EditVehicleModal vehicle={editingVehicle} people={people} onSave={handleUpdateVehicle} onClose={() => setEditingVehicle(null)} onDelete={handleDeleteVehicle}/>)}
       {isAddingVehicle && (<AddVehicleModal onSave={handleAddVehicle} onClose={() => setIsAddingVehicle(false)}/>)}
-      {editingRideLog && (<EditRideLogModal log={editingRideLog} vehicles={vehicles} people={people} onSave={handleUpdateRideLog} onSendSms={handleSendSms} onClose={() => { setEditingRideLog(null); setIsRideBookOpen(true); }}/>)}
-      {isCreatingRide && (<EditRideLogModal log={createDefaultRideLog()} vehicles={vehicles} people={people} onSave={handleCreateRideLog} onSendSms={handleSendSms} onClose={() => { setIsCreatingRide(false); setIsRideBookOpen(true); }}/>)}
+      {editingRideLog && (<EditRideLogModal log={editingRideLog} vehicles={vehicles} people={people} onSave={handleUpdateRideLog} onSendSms={handleSendSms} onSendToDriver={handleSendToDriver} onClose={() => { setEditingRideLog(null); setIsRideBookOpen(true); }}/>)}
+      {isCreatingRide && (<EditRideLogModal log={createDefaultRideLog()} vehicles={vehicles} people={people} onSave={handleCreateRideLog} onSendSms={handleSendSms} onSendToDriver={handleSendToDriver} onClose={() => { setIsCreatingRide(false); setIsRideBookOpen(true); }}/>)}
       {isRideBookOpen && (<RideBookModal rideLogs={rideLog} vehicles={vehicles} people={people} companyInfo={companyInfo} onEdit={(log) => { setEditingRideLog(log); setIsRideBookOpen(false); }} onDelete={handleDeleteRideLog} onAdd={() => { setIsCreatingRide(true); setIsRideBookOpen(false); }} onClose={() => setIsRideBookOpen(false)} />)}
       {manualAssignmentDetails && (<ManualAssignmentModal details={manualAssignmentDetails} people={people} onConfirm={handleManualAssignmentConfirm} onClose={() => setManualAssignmentDetails(null)} messagingApp={messagingApp} />)}
       {isPeopleModalOpen && (<ManagePeopleModal people={people} onAdd={handleAddPerson} onUpdate={handleUpdatePerson} onDelete={handleDeletePerson} onClose={() => setIsPeopleModalOpen(false)}/>)}
