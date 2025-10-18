@@ -59,13 +59,14 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
-  const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
-  const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
-   const [refreshTrigger, setRefreshTrigger] = useState(0);
-   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-   const [queuedDataCount, setQueuedDataCount] = useState(0);
+   const [isOnline, setIsOnline] = useState(navigator.onLine);
+   const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
+   const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
+   const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+    const [queuedDataCount, setQueuedDataCount] = useState(0);
+    const [vehicles, setVehicles] = useState<any[]>([]);
 
   // Update sync status and queued data count
   const updateSyncStatus = useCallback(() => {
@@ -175,13 +176,14 @@ const Dashboard: React.FC = () => {
         setIsLoading(true);
 
         // Get vehicles (we don't need people for vehicle assignment)
-        const vehicles = await supabaseService.getVehicles();
+        const vehiclesData = await supabaseService.getVehicles();
+        setVehicles(vehiclesData);
 
         console.log('Looking for vehicle with email:', user.email);
-        console.log('Available vehicles:', vehicles.map(v => ({ id: v.id, email: v.email, name: v.name, licensePlate: v.licensePlate })));
+        console.log('Available vehicles:', vehiclesData.map(v => ({ id: v.id, email: v.email, name: v.name, licensePlate: v.licensePlate })));
 
         // Find the vehicle that matches this authenticated user's email
-        const assignedVehicle = vehicles.find(v => v.email === user.email);
+        const assignedVehicle = vehiclesData.find(v => v.email === user.email);
 
       if (assignedVehicle) {
         setVehicleNumber(assignedVehicle.id);
