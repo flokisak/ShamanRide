@@ -1635,37 +1635,6 @@ const Dashboard: React.FC = () => {
             </p>
           </div>
 
-          {/* Shift Management Button */}
-          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-            <button
-              onClick={() => setShowShiftModal(true)}
-              className={`w-full py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg ${
-                isShiftActive
-                  ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-green-600 hover:bg-green-700'
-              }`}
-            >
-              {isShiftActive ? '🏁 Ukončit směnu' : '🚗 Začít směnu'}
-            </button>
-            <div className="text-xs text-slate-400 mt-2 text-center space-y-1">
-              {isShiftActive ? (
-                <>
-                  <p>Směna začala: {shiftStartTimestamp ? new Date(shiftStartTimestamp).toLocaleTimeString('cs-CZ') : ''}</p>
-                  <p>Počáteční stav: {shiftStartOdo} km</p>
-                  <p>Aktuální tržba: {currentShiftRevenue} Kč</p>
-                </>
-              ) : shiftEndTimestamp ? (
-                <>
-                  <p>Poslední směna: {new Date(shiftEndTimestamp).toLocaleDateString('cs-CZ')}</p>
-                  <p>Ujetá vzdálenost: {shiftEndOdo && shiftStartOdo ? (shiftEndOdo - shiftStartOdo).toFixed(1) : 0} km</p>
-                  <p>Tržba: {shiftRevenue} Kč</p>
-                </>
-              ) : (
-                <p>Zaznamenejte stav tachometru při začátku a konci směny</p>
-              )}
-            </div>
-          </div>
-
         {/* New Rides */}
         {pendingRides.length > 0 && (
           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
@@ -2193,6 +2162,37 @@ const Dashboard: React.FC = () => {
                   </button>
                </div>
             </div>
+          </div>
+        </div>
+
+        {/* Shift Management Button */}
+        <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+          <button
+            onClick={() => setShowShiftModal(true)}
+            className={`w-full py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg ${
+              isShiftActive
+                ? 'bg-red-600 hover:bg-red-700'
+                : 'bg-green-600 hover:bg-green-700'
+            }`}
+          >
+            {isShiftActive ? '🏁 Ukončit směnu' : '🚗 Začít směnu'}
+          </button>
+          <div className="text-xs text-slate-400 mt-2 text-center space-y-1">
+            {isShiftActive ? (
+              <>
+                <p>Směna začala: {shiftStartTimestamp ? new Date(shiftStartTimestamp).toLocaleTimeString('cs-CZ') : ''}</p>
+                <p>Počáteční stav: {shiftStartOdo} km</p>
+                <p>Aktuální tržba: {currentShiftRevenue} Kč</p>
+              </>
+            ) : shiftEndTimestamp ? (
+              <>
+                <p>Poslední směna: {new Date(shiftEndTimestamp).toLocaleDateString('cs-CZ')}</p>
+                <p>Ujetá vzdálenost: {shiftEndOdo && shiftStartOdo ? (shiftEndOdo - shiftStartOdo).toFixed(1) : 0} km</p>
+                <p>Tržba: {shiftRevenue} Kč</p>
+              </>
+            ) : (
+              <p>Zaznamenejte stav tachometru při začátku a konci směny</p>
+            )}
           </div>
         </div>
 
