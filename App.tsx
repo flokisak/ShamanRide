@@ -1031,15 +1031,64 @@ const AppContent: React.FC = () => {
     const rideToSend = rideLog.find(log => log.id === rideId);
     if (!rideToSend) return;
 
-    // Change status from SCHEDULED to PENDING
-    const updatedRide = { ...rideToSend, status: RideStatus.Pending };
+    // Only change status from SCHEDULED to PENDING if it's not already assigned
+    const shouldChangeStatus = rideToSend.status === RideStatus.Scheduled;
+    const updatedRide = shouldChangeStatus ? { ...rideToSend, status: RideStatus.Pending } : rideToSend;
 
     try {
-      await supabaseService.addRideLog(updatedRide);
-      setRideLog(prev => prev.map(log => log.id === rideId ? updatedRide : log));
+      if (shouldChangeStatus) {
+        await supabaseService.addRideLog(updatedRide);
+        setRideLog(prev => prev.map(log => log.id === rideId ? updatedRide : log));
+      }
 
-      // Send notification to driver
-      sendStatusChangeMessageToDriver(updatedRide, RideStatus.Scheduled);
+      // Send notification to driver via socket
+      if (window.dispatcherSocket && updatedRide.vehicleId) {
+        const rideData = {
+          id: updatedRide.id,
+          timestamp: updatedRide.timestamp,
+          vehicleName: updatedRide.vehicleName,
+          vehicleLicensePlate: updatedRide.vehicleLicensePlate,
+          driverName: updatedRide.driverName,
+          vehicleType: updatedRide.vehicleType,
+          customerName: updatedRide.customerName,
+          rideType: updatedRide.rideType,
+          customerPhone: updatedRide.customerPhone,
+          stops: updatedRide.stops,
+          passengers: updatedRide.passengers,
+          pickupTime: updatedRide.pickupTime,
+          status: updatedRide.status.toLowerCase(),
+          vehicleId: updatedRide.vehicleId,
+          notes: updatedRide.notes,
+          estimatedPrice: updatedRide.estimatedPrice,
+          estimatedPickupTimestamp: updatedRide.estimatedPickupTimestamp,
+          estimatedCompletionTimestamp: updatedRide.estimatedCompletionTimestamp
+        };
+
+        window.dispatcherSocket.emit('ride_update', {
+          shiftId: `dispatcher_shift`,
+          rideData: rideData
+        });
+
+        console.log('Ride notification sent to driver via socket:', rideId);
+      }
+
+      // Send additional message notification to driver
+      const notificationMessage = `🚗 Nová jízda přiřazena!\n\nZákazník: ${updatedRide.customerName}\nTelefon: ${updatedRide.customerPhone}\nTrasa: ${updatedRide.stops[0]} → ${updatedRide.stops[updatedRide.stops.length - 1]}\nČas vyzvednutí: ${updatedRide.pickupTime}\nPočet pasažérů: ${updatedRide.passengers}${updatedRide.estimatedPrice ? `\nCena: ${updatedRide.estimatedPrice} Kč` : ''}`;
+
+      const { error } = await supabase
+        .from('driver_messages')
+        .insert({
+          sender_id: 'dispatcher',
+          receiver_id: `driver_${updatedRide.vehicleId}`,
+          message: notificationMessage,
+          read: false
+        });
+
+      if (error) {
+        console.error('Error sending ride notification to driver:', error);
+      } else {
+        console.log('Ride notification message sent to driver');
+      }
 
       // Close the edit modal
       setEditingRideLog(null);

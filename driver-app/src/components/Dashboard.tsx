@@ -44,6 +44,7 @@ const Dashboard: React.FC = () => {
   const [showManualRideModal, setShowManualRideModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
+  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
   const [showRideHistory, setShowRideHistory] = useState(false);
   const [historyFilter, setHistoryFilter] = useState<'2days' | 'week' | 'month' | 'all'>('all');
   const [licensePlate, setLicensePlate] = useState<string>('');
@@ -1549,8 +1550,19 @@ const Dashboard: React.FC = () => {
 
         {/* Current Ride */}
         {currentRide && (
-          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-            <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.currentRide')}</h2>
+           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+             <div className="flex justify-between items-center mb-3">
+               <h2 className="text-lg font-semibold text-white">{t('dashboard.currentRide')}</h2>
+               {currentRide.status === RideStatus.InProgress && (
+                 <button
+                   onClick={() => setShowCancelConfirmation(true)}
+                   className="text-red-400 hover:text-red-300 text-sm font-normal px-2 py-1 rounded border border-red-800/30 hover:border-red-700/50 hover:bg-red-900/20 transition-colors"
+                   title="Zrušit jízdu"
+                 >
+                   ❌ Zrušit
+                 </button>
+               )}
+             </div>
               <div className="space-y-2 text-slate-300">
                 <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
                 <p><span className="font-medium">{t('dashboard.phone')}:</span> <a href={`tel:${currentRide.customerPhone}`} className="text-blue-600 underline">{currentRide.customerPhone}</a></p>
@@ -1576,19 +1588,16 @@ const Dashboard: React.FC = () => {
                      </button>
                    </div>
                  )}
-                   {currentRide.status === RideStatus.InProgress && (
-                    <div className="space-y-2">
-                      <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
-                        {t('dashboard.completeRide')}
-                      </button>
-                       <button onClick={cancelRide} className="w-full bg-transparent hover:bg-red-900/20 py-1 px-2 rounded text-red-400 hover:text-red-300 text-sm font-normal border border-red-800/30 hover:border-red-700/50 transition-colors">
-                         ❌ Zrušit jízdu
+                    {currentRide.status === RideStatus.InProgress && (
+                     <div className="space-y-2">
+                       <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
+                         {t('dashboard.completeRide')}
                        </button>
-                       <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                         🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
-                       </button>
-                    </div>
-                  )}
+                        <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                          🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
+                        </button>
+                     </div>
+                   )}
              </div>
           </div>
         )}
@@ -1823,6 +1832,35 @@ const Dashboard: React.FC = () => {
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                    </svg>
+                 </button>
+               </div>
+             </div>
+           </div>
+         )}
+
+         {/* Cancel Ride Confirmation Modal */}
+         {showCancelConfirmation && (
+           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 max-w-sm mx-4">
+               <h3 className="text-lg font-semibold text-white mb-4">Potvrdit zrušení jízdy</h3>
+               <p className="text-slate-300 mb-6">
+                 Opravdu chcete zrušit tuto jízdu? Tato akce je nevratná.
+               </p>
+               <div className="flex space-x-3">
+                 <button
+                   onClick={() => setShowCancelConfirmation(false)}
+                   className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
+                 >
+                   Zrušit
+                 </button>
+                 <button
+                   onClick={async () => {
+                     setShowCancelConfirmation(false);
+                     await cancelRide();
+                   }}
+                   className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium transition-colors"
+                 >
+                   Potvrdit zrušení
                  </button>
                </div>
              </div>

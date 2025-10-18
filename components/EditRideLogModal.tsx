@@ -289,14 +289,14 @@ export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicle
              <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md bg-slate-600 text-gray-200 hover:bg-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-slate-800">
                {t('general.cancel')}
              </button>
-             {formData.status === RideStatus.Scheduled && formData.vehicleId && onSendToDriver && (
-               <button
-                 type="button"
-                 onClick={() => onSendToDriver(formData.id)}
-                 className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-800"
-               >
-                 📤 Odeslat řidiči
-               </button>
+              ((formData.status === RideStatus.Scheduled || formData.status === RideStatus.Pending) && formData.vehicleId && onSendToDriver) && (
+                <button
+                  type="button"
+                  onClick={() => onSendToDriver(formData.id)}
+                  className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+                >
+                  📤 {formData.status === RideStatus.Scheduled ? 'Odeslat řidiči' : 'Znovu odeslat řidiči'}
+                </button>
              )}
              <button type="submit" className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-slate-900 bg-cyan-400 hover:bg-cyan-500 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800">
                {t('general.saveChanges')}
