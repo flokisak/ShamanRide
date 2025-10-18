@@ -5,9 +5,20 @@ export interface BackgroundSyncOptions {
   retryOnFailure?: boolean;
 }
 
+export interface SyncStatusCallback {
+  onSyncStart?: (tag: string) => void;
+  onSyncSuccess?: (tag: string) => void;
+  onSyncError?: (tag: string, error: Error) => void;
+}
+
 class BackgroundSyncManager {
   private registration: ServiceWorkerRegistration | null = null;
   private syncInProgress = false;
+  private statusCallback: SyncStatusCallback | null = null;
+
+  setStatusCallback(callback: SyncStatusCallback): void {
+    this.statusCallback = callback;
+  }
 
   async initialize(): Promise<void> {
     if ('serviceWorker' in navigator) {
@@ -70,6 +81,7 @@ class BackgroundSyncManager {
 
     try {
       this.syncInProgress = true;
+      this.statusCallback?.onSyncStart?.(tag);
 
       if ('sync' in this.registration && this.registration.sync) {
         await this.registration.sync.register(tag);
@@ -78,8 +90,11 @@ class BackgroundSyncManager {
         // Fallback: perform sync directly
         await this.performDirectSync(tag);
       }
+
+      this.statusCallback?.onSyncSuccess?.(tag);
     } catch (error) {
       console.error('Failed to request background sync:', error);
+      this.statusCallback?.onSyncError?.(tag, error as Error);
     } finally {
       this.syncInProgress = false;
     }
@@ -88,18 +103,26 @@ class BackgroundSyncManager {
   private async performDirectSync(tag: string): Promise<void> {
     console.log(`Performing direct sync: ${tag}`);
 
-    // Implement direct sync logic here
-    // This would be similar to the service worker sync handlers
-    switch (tag) {
-      case 'background-sync':
-        await this.syncAllData();
-        break;
-      case 'location-sync':
-        await this.syncLocationData();
-        break;
-      case 'message-sync':
-        await this.syncMessageData();
-        break;
+    try {
+      // Implement direct sync logic here
+      // This would be similar to the service worker sync handlers
+      switch (tag) {
+        case 'background-sync':
+          await this.syncAllData();
+          break;
+        case 'location-sync':
+          await this.syncLocationData();
+          break;
+        case 'message-sync':
+          await this.syncMessageData();
+          break;
+      }
+
+      this.statusCallback?.onSyncSuccess?.(tag);
+    } catch (error) {
+      console.error(`Direct sync failed for ${tag}:`, error);
+      this.statusCallback?.onSyncError?.(tag, error as Error);
+      throw error;
     }
   }
 
@@ -224,5 +247,7 @@ export const queueMessage = (data: any): void => {
 export const queueRideUpdate = (data: any): void => {
   backgroundSyncManager.queueRideUpdate(data);
 };
+
+export { backgroundSyncManager };
 
 export default backgroundSyncManager;

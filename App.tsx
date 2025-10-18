@@ -1716,6 +1716,15 @@ const AppContent: React.FC = () => {
           // Handle ride cancellations from Socket.io
           setRideLog(prev => prev.filter(ride => ride.id !== rideId));
         }}
+        onVehicleStatusUpdate={(data) => {
+          // Handle vehicle status updates from Socket.io
+          console.log('Vehicle status update received:', data);
+          setVehicles(prev => prev.map(vehicle =>
+            vehicle.id === data.vehicleId
+              ? { ...vehicle, status: data.status }
+              : vehicle
+          ));
+        }}
       />,
   };
 

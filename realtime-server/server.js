@@ -1,4 +1,5 @@
 const express = require('express');
+require('dotenv').config();
 const http = require('http');
 const socketIo = require('socket.io');
 const cors = require('cors');
@@ -236,6 +237,38 @@ io.on('connection', (socket) => {
 
     } catch (err) {
       console.error('Error handling ride update:', err);
+    }
+  });
+
+  // Handle vehicle status changes
+  socket.on('vehicle_status_changed', async (data) => {
+    try {
+      const { vehicleId, status, driverStatus, timestamp } = data;
+
+      console.log(`Vehicle ${vehicleId} status changed to ${status} by driver`);
+
+      // Update vehicle status in Supabase
+      const { error } = await supabase
+        .from('vehicles')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', vehicleId);
+
+      if (error) {
+        console.error('Failed to update vehicle status in Supabase:', error);
+      } else {
+        console.log(`Vehicle ${vehicleId} status updated to ${status} in database`);
+      }
+
+      // Broadcast to all connected clients (dispatchers and other drivers)
+      socket.broadcast.emit('vehicle_status_updated', {
+        vehicleId: parseInt(vehicleId),
+        status,
+        driverStatus,
+        timestamp
+      });
+
+    } catch (err) {
+      console.error('Error handling vehicle status change:', err);
     }
   });
 

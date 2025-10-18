@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import io from 'socket.io-client';
 import { supabase } from '../services/supabaseClient';
 
-const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onStatusChange, onRideCancel, supabaseClient = supabase }) => {
+const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onStatusChange, onRideCancel, onVehicleStatusUpdate, supabaseClient = supabase }) => {
   const [rides, setRides] = useState([]);
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -82,18 +82,27 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
         setRides(prev => prev.filter(ride => ride.id !== data.rideId));
       });
 
-      // Listen for position updates (dispatcher only)
-      if (isDispatcher) {
-        socketInstance.on('position_updated', (data) => {
-          console.log('Position updated:', data);
-          // Update vehicle position in rides if needed
-          setRides(prev => prev.map(ride =>
-            ride.vehicleId === data.vehicleId
-              ? { ...ride, currentLocation: { lat: data.latitude, lng: data.longitude } }
-              : ride
-          ));
-        });
-      }
+       // Listen for position updates (dispatcher only)
+       if (isDispatcher) {
+         socketInstance.on('position_updated', (data) => {
+           console.log('Position updated:', data);
+           // Update vehicle position in rides if needed
+           setRides(prev => prev.map(ride =>
+             ride.vehicleId === data.vehicleId
+               ? { ...ride, currentLocation: { lat: data.latitude, lng: data.longitude } }
+               : ride
+           ));
+         });
+       }
+
+       // Listen for vehicle status updates
+       socketInstance.on('vehicle_status_updated', (data) => {
+         console.log('Vehicle status updated:', data);
+         // This will be handled by the parent component that manages vehicle state
+         if (onVehicleStatusUpdate) {
+           onVehicleStatusUpdate(data);
+         }
+       });
 
       setSocket(socketInstance);
     };

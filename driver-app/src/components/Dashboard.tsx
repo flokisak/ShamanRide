@@ -6,7 +6,7 @@ import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useAuth } from '../AuthContext';
 import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
-import { queueLocationData, queueMessage, queueRideUpdate, requestBackgroundSync } from '../utils/backgroundSync';
+import { queueLocationData, queueMessage, queueRideUpdate, requestBackgroundSync, initializeBackgroundSync, backgroundSyncManager } from '../utils/backgroundSync';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
 
@@ -67,11 +67,37 @@ const Dashboard: React.FC = () => {
       const updatesCount = pendingUpdates ? JSON.parse(pendingUpdates).length : 0;
 
       setQueuedDataCount(locationsCount + messagesCount + updatesCount);
+
+      // Update sync status to idle if no queued data and not currently syncing
+      if (locationsCount + messagesCount + updatesCount === 0 && syncStatus !== 'syncing') {
+        setSyncStatus('idle');
+      }
     } catch (error) {
       console.error('Error updating sync status:', error);
       setQueuedDataCount(0);
     }
-  }, []);
+  }, [syncStatus]);
+
+  // Set up background sync status callback
+  useEffect(() => {
+    backgroundSyncManager.setStatusCallback({
+      onSyncStart: (tag) => {
+        console.log('Sync started:', tag);
+        setSyncStatus('syncing');
+      },
+      onSyncSuccess: (tag) => {
+        console.log('Sync completed:', tag);
+        setSyncStatus('success');
+        updateSyncStatus();
+        setTimeout(() => setSyncStatus('idle'), 3000);
+      },
+      onSyncError: (tag, error) => {
+        console.error('Sync failed:', tag, error);
+        setSyncStatus('error');
+        setTimeout(() => updateSyncStatus(), 3000);
+      }
+    });
+  }, [updateSyncStatus]);
 
   // Load ride data for the current vehicle
   const loadRideData = useCallback(async (vehicleId: number) => {
@@ -143,7 +169,22 @@ const Dashboard: React.FC = () => {
         if (assignedVehicle) {
           setVehicleNumber(assignedVehicle.id);
           setLicensePlate(assignedVehicle.licensePlate || '');
-          console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate);
+
+          // Load current driver status from vehicle status
+          const vehicleStatus = assignedVehicle.status;
+          if (vehicleStatus === 'AVAILABLE') {
+            setDriverStatus('available');
+          } else if (vehicleStatus === 'BUSY') {
+            setDriverStatus('on_ride');
+          } else if (vehicleStatus === 'BREAK') {
+            setDriverStatus('break');
+          } else if (vehicleStatus === 'OUT_OF_SERVICE') {
+            setDriverStatus('offline');
+          } else {
+            setDriverStatus('offline'); // Default to offline for unknown statuses
+          }
+
+          console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate, 'Status:', vehicleStatus);
         } else {
           console.warn('No vehicle found with email:', user.email);
           console.warn('Available vehicle emails:', vehicles.map(v => v.email).filter(Boolean));
@@ -803,10 +844,21 @@ const Dashboard: React.FC = () => {
       }
 
        console.log(`Vehicle ${vehicleNumber} status updated successfully to ${vehicleStatus}`);
-       setDriverStatus(status);
+        setDriverStatus(status);
 
-       // Show success feedback
-       console.log(`Status updated to ${status}`);
+        // Broadcast status change via socket.io
+        if (socket && socketConnected) {
+          console.log('Broadcasting vehicle status change via socket:', { vehicleId: vehicleNumber, status: vehicleStatus });
+          socket.emit('vehicle_status_changed', {
+            vehicleId: vehicleNumber,
+            status: vehicleStatus,
+            driverStatus: status,
+            timestamp: Date.now()
+          });
+        }
+
+        // Show success feedback
+        console.log(`Status updated to ${status}`);
 
     } catch (err: any) {
       console.error('Error updating vehicle status:', err);
