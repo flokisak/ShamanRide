@@ -50,41 +50,80 @@ export const showSystemNotification = (title: string, options: NotificationOptio
   return null;
 };
 
-// Play a notification sound using Web Audio API
+// Play a notification sound using Web Audio API with background support
 export const playNotificationSound = (frequency: number = 800, duration: number = 0.2) => {
   try {
     // Check if Web Audio API is supported
     if (!window.AudioContext && !(window as any).webkitAudioContext) {
-      console.warn('Web Audio API not supported');
+      console.warn('Web Audio API not supported, trying fallback');
+      // Fallback to system beep or vibration
+      if ('vibrate' in navigator) {
+        navigator.vibrate([100, 50, 100]);
+      }
       return;
     }
 
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     const audioContext = new AudioContext();
 
-    // Resume audio context if suspended (required by some browsers)
+    // Handle suspended audio context (common in background tabs)
+    const playSound = () => {
+      try {
+        // Create oscillator for beep sound
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Configure beep sound
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime); // Louder for background
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + duration);
+
+        // Clean up after sound ends
+        setTimeout(() => {
+          oscillator.disconnect();
+          gainNode.disconnect();
+        }, (duration + 0.1) * 1000);
+      } catch (error) {
+        console.error('Error creating sound:', error);
+        // Fallback to vibration
+        if ('vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200, 100, 200]);
+        }
+      }
+    };
+
+    // Try to resume context and play sound
     if (audioContext.state === 'suspended') {
-      audioContext.resume();
+      audioContext.resume().then(() => {
+        playSound();
+      }).catch((error) => {
+        console.warn('Could not resume audio context:', error);
+        // Fallback: try to play anyway or use vibration
+        try {
+          playSound();
+        } catch {
+          if ('vibrate' in navigator) {
+            navigator.vibrate([300, 100, 300, 100, 300]);
+          }
+        }
+      });
+    } else {
+      playSound();
     }
-
-    // Create oscillator for beep sound
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    // Configure beep sound
-    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-    oscillator.type = 'sine';
-
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + duration);
   } catch (error) {
     console.error('Error playing notification sound:', error);
+    // Ultimate fallback: vibration
+    if ('vibrate' in navigator) {
+      navigator.vibrate([500, 200, 500]);
+    }
   }
 };
 
@@ -144,17 +183,34 @@ export const notifyUser = (type: 'ride' | 'message' | 'general' = 'general', cus
 
   const finalOptions = { ...options, ...customOptions };
 
-  // Play sound
+  // Play sound (with retry for background playback)
   if (finalOptions.sound) {
-    if (type === 'ride') {
-      // Different sound for rides (higher pitch)
-      playNotificationSound(1000, 0.3);
-    } else if (type === 'message') {
-      // Different sound for messages (lower pitch)
-      playNotificationSound(600, 0.2);
-    } else {
-      playNotificationSound(800, 0.2);
-    }
+    const playSoundWithRetry = (retries = 3) => {
+      const playSound = () => {
+        if (type === 'ride') {
+          // Different sound for rides (higher pitch, longer)
+          playNotificationSound(1000, 0.5);
+        } else if (type === 'message') {
+          // Different sound for messages (lower pitch)
+          playNotificationSound(600, 0.3);
+        } else {
+          playNotificationSound(800, 0.3);
+        }
+      };
+
+      playSound();
+
+      // Retry after a short delay if it might be background-related
+      if (retries > 0) {
+        setTimeout(() => {
+          if (document.hidden) { // App is in background
+            playSoundWithRetry(retries - 1);
+          }
+        }, 500);
+      }
+    };
+
+    playSoundWithRetry();
   }
 
   // Vibrate
@@ -167,7 +223,10 @@ export const notifyUser = (type: 'ride' | 'message' | 'general' = 'general', cus
     showSystemNotification(finalOptions.title, {
       body: finalOptions.body,
       icon: '/pwa-192x192.svg',
-      badge: '/pwa-192x192.svg'
+      badge: '/pwa-192x192.svg',
+      requireInteraction: type === 'ride', // Keep ride notifications visible until clicked
+      silent: false, // Ensure sound is not silenced by system
+      tag: type === 'ride' ? 'new-ride' : `notification-${Date.now()}`, // Group ride notifications
     });
   }
 };
