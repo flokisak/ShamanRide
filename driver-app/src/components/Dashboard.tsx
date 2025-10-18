@@ -34,7 +34,7 @@ const Dashboard: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [selectedRecipient, setSelectedRecipient] = useState<string>('dispatcher');
   const [newMessage, setNewMessage] = useState<string>('');
-  const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
+  const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy' | 'waze'>('google');
   const [showManualRideModal, setShowManualRideModal] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
@@ -893,7 +893,7 @@ const Dashboard: React.FC = () => {
        }
      };
 
-  const navigateToDestination = async (ride?: RideLog, navApp?: 'google' | 'mapy') => {
+  const navigateToDestination = async (ride?: RideLog, navApp?: 'google' | 'mapy' | 'waze') => {
     const targetRide = ride || currentRide;
     if (targetRide) {
       // Use provided navApp or fall back to preferred navigation app
@@ -904,7 +904,19 @@ const Dashboard: React.FC = () => {
         // Geocode all stops
         const stopsCoords = await Promise.all(targetRide.stops.map(stop => geocodeAddress(stop, 'cs')));
 
-        if (appToUse === 'mapy') {
+        if (appToUse === 'waze') {
+          // For Waze, use destination with origin and waypoints
+          const formatCoord = (coord: { lat: number; lon: number }) => `${coord.lat},${coord.lon}`;
+          const origin = stopsCoords[0];
+          const destination = stopsCoords[stopsCoords.length - 1];
+          const waypoints = stopsCoords.slice(1, -1);
+
+          let wazeUrl = `https://waze.com/ul?ll=${formatCoord(destination)}&from=${formatCoord(origin)}&navigate=yes`;
+          if (waypoints.length > 0) {
+            wazeUrl += `&via=${waypoints.map(formatCoord).join('|')}`;
+          }
+          url = wazeUrl;
+        } else if (appToUse === 'mapy') {
           // For Mapy.cz, use the destination with waypoints (pickup as first waypoint)
           const destination = stopsCoords[stopsCoords.length - 1];
           const waypoints = stopsCoords.slice(0, -1); // All stops except destination
@@ -931,7 +943,10 @@ const Dashboard: React.FC = () => {
       } catch (error) {
         console.error('Error generating navigation URL:', error);
         // Fallback to simple destination navigation
-        if (appToUse === 'mapy') {
+        if (appToUse === 'waze') {
+          const destination = targetRide.stops[targetRide.stops.length - 1];
+          url = `https://waze.com/ul?q=${encodeURIComponent(destination)}&navigate=yes`;
+        } else if (appToUse === 'mapy') {
           const destination = targetRide.stops[targetRide.stops.length - 1];
           url = `https://mapy.cz/zakladni?q=${encodeURIComponent(destination)}`;
         } else {
@@ -1259,7 +1274,7 @@ const Dashboard: React.FC = () => {
                        {t('dashboard.completeRide')}
                      </button>
                       <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                        🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
+                        🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
                       </button>
                    </div>
                  )}
@@ -1579,28 +1594,38 @@ const Dashboard: React.FC = () => {
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Preferovaná navigační aplikace
               </label>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPreferredNavApp('google')}
-                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
-                    preferredNavApp === 'google'
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : 'bg-slate-700 hover:bg-slate-600'
-                  }`}
-                >
-                  Google Maps
-                </button>
-                <button
-                  onClick={() => setPreferredNavApp('mapy')}
-                  className={`flex-1 py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
-                    preferredNavApp === 'mapy'
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-slate-700 hover:bg-slate-600'
-                  }`}
-                >
-                  Mapy.cz
-                </button>
-              </div>
+               <div className="grid grid-cols-3 gap-2">
+                 <button
+                   onClick={() => setPreferredNavApp('google')}
+                   className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                     preferredNavApp === 'google'
+                       ? 'bg-blue-600 hover:bg-blue-700'
+                       : 'bg-slate-700 hover:bg-slate-600'
+                   }`}
+                 >
+                   Google Maps
+                 </button>
+                 <button
+                   onClick={() => setPreferredNavApp('mapy')}
+                   className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                     preferredNavApp === 'mapy'
+                       ? 'bg-green-600 hover:bg-green-700'
+                       : 'bg-slate-700 hover:bg-slate-600'
+                   }`}
+                 >
+                   Mapy.cz
+                 </button>
+                 <button
+                   onClick={() => setPreferredNavApp('waze')}
+                   className={`py-2 px-3 rounded-lg btn-modern text-white font-medium text-sm ${
+                     preferredNavApp === 'waze'
+                       ? 'bg-purple-600 hover:bg-purple-700'
+                       : 'bg-slate-700 hover:bg-slate-600'
+                   }`}
+                 >
+                   Waze
+                 </button>
+               </div>
             </div>
           </div>
         </div>

@@ -9,8 +9,8 @@ interface ManualRideModalProps {
     vehicleNumber: number;
     licensePlate: string;
     onRideAdded: (ride?: RideLog) => void;
-    onNavigateToDestination?: (stops: string[], navApp?: 'google' | 'mapy') => void;
-    preferredNavApp?: 'google' | 'mapy';
+    onNavigateToDestination?: (stops: string[], navApp?: 'google' | 'mapy' | 'waze') => void;
+    preferredNavApp?: 'google' | 'mapy' | 'waze';
 }
 
 type ModalState = 'form' | 'loading' | 'success' | 'error';
@@ -228,7 +228,7 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                                          onClick={() => onNavigateToDestination(stops, preferredNavApp)}
                                          className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium text-sm"
                                      >
-                                         🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
+                                          🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
                                      </button>
                                  </div>
                              )}
