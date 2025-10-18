@@ -4,6 +4,7 @@ import { supabaseService } from '../supabaseClient';
 import { SUPABASE_ENABLED as SUPABASE_ENABLED_SERVICES } from '../supabaseClient';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
+import { useAuth } from '../AuthContext';
 import { notifyUser, initializeNotifications, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
@@ -12,6 +13,7 @@ import io from 'socket.io-client';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const watchIdRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [driverStatus, setDriverStatus] = useState('offline');
@@ -28,8 +30,154 @@ const Dashboard: React.FC = () => {
   const [useCustomShift, setUseCustomShift] = useState<boolean>(false);
   const [socket, setSocket] = useState<any>(null);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [vehicleNumber, setVehicleNumber] = useState<number | null>(null);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [selectedRecipient, setSelectedRecipient] = useState<string>('general');
+  const [newMessage, setNewMessage] = useState<string>('');
+  const [preferredNavApp, setPreferredNavApp] = useState<'google' | 'mapy'>('google');
+  const [showManualRideModal, setShowManualRideModal] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
+  const [showRideHistory, setShowRideHistory] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'2days' | 'week' | 'month' | 'all'>('all');
+  const [licensePlate, setLicensePlate] = useState<string>('');
+  const [otherDrivers, setOtherDrivers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
+  const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
+  const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Calculate shift cash from completed rides within shift time range
+  // Load ride data for the current vehicle
+  const loadRideData = useCallback(async (vehicleId: number) => {
+    try {
+      console.log('Loading ride data for vehicle:', vehicleId);
+      const [currentRides, pendingRidesData, rideHistoryData] = await Promise.all([
+        supabaseService.getRideLogsByVehicle(vehicleId, 'in_progress', 1),
+        supabaseService.getRideLogsByVehicle(vehicleId, 'pending', 10),
+        supabaseService.getRideLogsByVehicle(vehicleId, undefined, 100)
+      ]);
+
+      setCurrentRide(currentRides[0] || null);
+      setPendingRides(pendingRidesData);
+      setRideHistory(rideHistoryData);
+
+      // Update driver status based on current ride
+      if (currentRides[0]) {
+        setDriverStatus('on_ride');
+      } else if (driverStatus === 'on_ride') {
+        setDriverStatus('available');
+      }
+
+      console.log('Ride data loaded successfully');
+    } catch (error) {
+      console.error('Error loading ride data:', error);
+    }
+  }, [driverStatus]);
+
+  // Refresh vehicle data
+  const refreshVehicleData = useCallback(async () => {
+    if (!vehicleNumber) return;
+
+    try {
+      console.log('Refreshing vehicle data for vehicle:', vehicleNumber);
+      await loadRideData(vehicleNumber);
+
+      // Also refresh vehicle info
+      const vehicles = await supabaseService.getVehicles();
+      const vehicle = vehicles.find(v => v.id === vehicleNumber);
+      if (vehicle) {
+        setLicensePlate(vehicle.licensePlate || '');
+      }
+    } catch (error) {
+      console.error('Error refreshing vehicle data:', error);
+    }
+  }, [vehicleNumber, loadRideData]);
+
+  // Initialize vehicle number when user changes
+  useEffect(() => {
+    const initializeVehicle = async () => {
+      if (!user) {
+        setVehicleNumber(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+        const vehicles = await supabaseService.getVehicles();
+        const driverVehicle = vehicles.find(v => v.driverId === user.id);
+
+        if (driverVehicle) {
+          setVehicleNumber(driverVehicle.id);
+          setLicensePlate(driverVehicle.licensePlate || '');
+          console.log('Initialized vehicle number:', driverVehicle.id);
+        } else {
+          console.warn('No vehicle found for driver:', user.id);
+          setVehicleNumber(null);
+          setError('No vehicle assigned to this driver account');
+        }
+      } catch (error) {
+        console.error('Error initializing vehicle:', error);
+        setError('Failed to load vehicle data');
+        setVehicleNumber(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeVehicle();
+  }, [user]);
+
+  // Load other drivers for chat functionality
+  useEffect(() => {
+    const loadOtherDrivers = async () => {
+      try {
+        const vehicles = await supabaseService.getVehicles();
+        const drivers = vehicles
+          .filter(v => v.id !== vehicleNumber && v.driverId)
+          .map(v => ({ id: v.id, name: v.name || `Vehicle ${v.id}` }));
+        setOtherDrivers(drivers);
+      } catch (error) {
+        console.error('Error loading other drivers:', error);
+      }
+    };
+
+    if (vehicleNumber) {
+      loadOtherDrivers();
+    }
+  }, [vehicleNumber]);
+
+  // Initialize notifications
+  useEffect(() => {
+    const init = async () => {
+      if (user?.id) {
+        const permission = await initializeNotifications(user.id);
+        setNotificationPermission(permission ? 'granted' : 'denied');
+      }
+    };
+    init();
+  }, [user?.id]);
+
+  // Monitor online status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+    // Calculate shift cash from completed rides within shift time range
   const calculateShiftCash = (rides: RideLog[], shiftStart?: number, shiftEnd?: number) => {
     if (useCustomShift && customShiftStart && customShiftEnd && customShiftDate) {
       // Use custom shift times for selected date
@@ -106,7 +254,7 @@ const Dashboard: React.FC = () => {
 
     // Socket.io connection for real-time messaging and ride updates
    useEffect(() => {
-     if (!userId || !vehicleNumber) return;
+      if (!user?.id || !vehicleNumber) return;
 
      const getToken = async () => {
        const { data: { session } } = await supabase.auth.getSession();
@@ -232,7 +380,7 @@ const Dashboard: React.FC = () => {
          socket.disconnect();
        }
      };
-    }, [userId, vehicleNumber]);
+    }, [user?.id, vehicleNumber]);
 
     // Mark messages as read when they are viewed
     useEffect(() => {
@@ -1494,7 +1642,7 @@ const Dashboard: React.FC = () => {
                 </span>
                 <button
                   onClick={async () => {
-                    const granted = await initializeNotifications(userId || undefined);
+                    const granted = await initializeNotifications(user?.id || undefined);
                     setNotificationPermission(Notification.permission as NotificationPermission);
                   }}
                   className="text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-white"
