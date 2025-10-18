@@ -1073,7 +1073,7 @@ const Dashboard: React.FC = () => {
 
           // Save sent message locally for immediate UI update
           const localMessageData = {
-            id: `temp-${Date.now()}`,
+            id: crypto.randomUUID(),
             sender_id: `driver_${vehicleNumber}`,
             receiver_id: receiverId,
             message: newMessage.trim(),
@@ -1359,23 +1359,24 @@ const Dashboard: React.FC = () => {
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
           <h2 className="text-lg font-semibold mb-3 text-white">{t('dashboard.messages')}</h2>
           <div className="h-40 overflow-y-auto mb-3 bg-slate-800/50 rounded-lg p-2">
-             {messages.length > 0 ? (
-               messages
-                 .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                 .map((msg, idx) => {
-                   const isNewestMessage = idx === 0; // First message is the newest
-                   return (
-                     <div
-                       key={msg.id || idx}
-                        className={`text-sm text-slate-300 mb-2 p-2 rounded relative ${
-                          isNewestMessage
-                            ? 'ring-2 ring-blue-400 ring-opacity-60 shadow-lg shadow-blue-400/20 animate-pulse'
-                            : 'bg-slate-800/30'
-                        }`}
-                     >
-                       {isNewestMessage && (
-                         <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>
-                       )}
+              {messages.length > 0 ? (
+                messages
+                  .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+                  .map((msg, idx) => {
+                    const isNewestMessage = idx === 0; // First message is the newest
+                    const shouldFlash = isNewestMessage && !msg.read; // Only flash if newest AND unread
+                    return (
+                      <div
+                        key={msg.id || idx}
+                         className={`text-sm text-slate-300 mb-2 p-2 rounded relative ${
+                           shouldFlash
+                             ? 'ring-2 ring-blue-400 ring-opacity-60 shadow-lg shadow-blue-400/20 animate-pulse'
+                             : 'bg-slate-800/30'
+                         }`}
+                      >
+                        {shouldFlash && (
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>
+                        )}
                        <div className="flex justify-between items-start mb-1">
                          <div className="flex items-center gap-2">
                            <strong className={`text-xs ${isNewestMessage ? 'text-blue-300' : 'text-primary'}`}>

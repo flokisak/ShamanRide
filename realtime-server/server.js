@@ -129,7 +129,7 @@ io.on('connection', (socket) => {
 
       // Create message object with encrypted content
       const messageData = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         sender_id: senderId,
         receiver_id: receiverId || room,
         message: encryptedMessage, // Store encrypted message

@@ -114,14 +114,18 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
          // Save to Supabase for persistence
          if (SUPABASE_ENABLED) {
-           supabase.from('driver_messages').insert(messageData).then(({ error }) => {
+           console.log('Saving received message to Supabase:', messageData);
+           supabase.from('driver_messages').insert(messageData).then(({ data, error }) => {
              if (error) {
-               console.warn('Failed to save message to Supabase:', error);
+               console.error('Failed to save received message to Supabase:', error, 'Message data:', messageData);
                // Fallback to localStorage
                addDriverMessage(messageData);
+             } else {
+               console.log('Successfully saved received message to Supabase:', data);
              }
            });
          } else {
+           console.log('Supabase disabled, saving received message to localStorage');
            // Save to localStorage
            addDriverMessage(messageData);
          }
@@ -375,10 +379,36 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
     console.log(`Loaded ${filteredMessages.length} messages from allMessages for ${selectedVehicleId}`);
     setMessages(filteredMessages);
 
-    // Also load from Supabase/localStorage as backup and to ensure we have all historical messages
+        // Also load from Supabase/localStorage as backup and to ensure we have all historical messages
     const loadFromStorage = async () => {
       try {
         if (SUPABASE_ENABLED) {
+          console.log('Loading messages from Supabase for:', selectedVehicleId);
+
+          // First, let's check if we can access the table at all
+          const { data: testData, error: testError } = await supabase
+            .from('driver_messages')
+            .select('*', { count: 'exact', head: true });
+
+          if (testError) {
+            console.error('Cannot access driver_messages table:', testError);
+          } else {
+            console.log('driver_messages table is accessible, total records:', testData);
+          }
+
+          // Also try to get all messages to see what's in the table
+          const { data: allData, error: allError } = await supabase
+            .from('driver_messages')
+            .select('*')
+            .order('timestamp', { ascending: false })
+            .limit(10);
+
+          if (allError) {
+            console.error('Cannot query driver_messages table:', allError);
+          } else {
+            console.log('Recent messages in driver_messages table:', allData);
+          }
+
           let query;
 
           if (selectedVehicleId === 'general') {
@@ -400,7 +430,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           const { data, error } = await query;
 
           if (error) {
-            console.warn('Could not load messages from Supabase:', error);
+            console.error('Could not load messages from Supabase:', error);
             // Fallback to localStorage
             const localMessages = getDriverMessages();
             let localFilteredMessages;
@@ -427,6 +457,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
             return;
           }
 
+          console.log(`Loaded ${data?.length || 0} messages from Supabase for ${selectedVehicleId}:`, data);
           if (data && data.length > 0) {
             // Merge with existing messages to avoid duplicates
             const mergedMessages = [...filteredMessages];
@@ -438,8 +469,12 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
 
             console.log(`Merged ${mergedMessages.length} messages (including ${data.length} from Supabase) for ${selectedVehicleId}`);
             setMessages(mergedMessages);
+          } else {
+            console.log('No messages found in Supabase, using only real-time messages');
+            setMessages(filteredMessages);
           }
         } else {
+          console.log('Supabase disabled, loading from localStorage');
           // Load from localStorage
           const localMessages = getDriverMessages();
           let localFilteredMessages;
@@ -465,7 +500,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
           setMessages(mergedMessages);
         }
       } catch (err) {
-        console.warn('Error loading messages for:', selectedVehicleId, err);
+        console.error('Error loading messages for:', selectedVehicleId, err);
       }
     };
 
@@ -512,26 +547,31 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
       // Send via socket
       socket.emit('message', messageData);
 
-       // Create local message object for immediate UI update
-       const localMessageData = {
-         id: `temp-${Date.now()}`,
-         sender_id: 'dispatcher',
-         receiver_id: selectedVehicleId === 'general' ? 'general' : `driver_${selectedVehicleId}`,
-         message: newMessage.trim(),
-         timestamp: new Date().toISOString(),
-         read: true
-       };
+        // Create local message object for immediate UI update
+        const localMessageData = {
+          id: crypto.randomUUID(),
+          sender_id: 'dispatcher',
+          receiver_id: selectedVehicleId === 'general' ? 'general' : `driver_${selectedVehicleId}`,
+          message: newMessage.trim(),
+          timestamp: new Date().toISOString(),
+          read: true,
+          encrypted: false // Local messages are not encrypted
+        };
 
        // Save to Supabase for persistence
        if (SUPABASE_ENABLED) {
-         supabase.from('driver_messages').insert(localMessageData).then(({ error }) => {
+         console.log('Saving sent message to Supabase:', localMessageData);
+         supabase.from('driver_messages').insert(localMessageData).then(({ data, error }) => {
            if (error) {
-             console.warn('Failed to save sent message to Supabase:', error);
+             console.error('Failed to save sent message to Supabase:', error, 'Message data:', localMessageData);
              // Fallback to localStorage
              addDriverMessage(localMessageData);
+           } else {
+             console.log('Successfully saved sent message to Supabase:', data);
            }
          });
        } else {
+         console.log('Supabase disabled, saving sent message to localStorage');
          // Save to localStorage
          addDriverMessage(localMessageData);
        }
@@ -782,6 +822,7 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                           .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
                           .map((msg, index) => {
                             const isNewestMessage = index === 0; // First message is the newest
+                            const shouldFlash = isNewestMessage && !msg.read; // Only flash if newest AND unread
                             return (
                               <div
                                 key={msg.id}
@@ -793,12 +834,12 @@ export const DriverChat: React.FC<DriverChatProps> = ({ vehicles, onNewMessage }
                                       ? 'bg-primary text-slate-900'
                                       : 'bg-slate-700 text-white'
                                   } ${
-                                    isNewestMessage
+                                    shouldFlash
                                       ? 'ring-2 ring-blue-400 ring-opacity-60 shadow-lg shadow-blue-400/20 animate-pulse'
                                       : ''
                                   }`}
                                 >
-                                  {isNewestMessage && (
+                                  {shouldFlash && (
                                     <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-400 rounded-full animate-ping"></div>
                                   )}
                                   <div className="text-xs opacity-75 mb-1">

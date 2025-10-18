@@ -273,7 +273,7 @@ const Chat = ({ currentUser, shiftId, chatType, targetId }) => {
 
     // Optimistically add message to UI (show decrypted version)
     const optimisticMessage = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       sender_id: messageData.senderId,
       receiver_id: messageData.receiverId,
       message: decryptMessage(encryptedMessage, encryptionKey), // Show decrypted message in UI
