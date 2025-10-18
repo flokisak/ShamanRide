@@ -9,6 +9,7 @@ import { notifyUser, initializeNotifications, requestNotificationPermission, req
 import { queueLocationData, queueMessage, queueRideUpdate, requestBackgroundSync, initializeBackgroundSync, backgroundSyncManager } from '../utils/backgroundSync';
 import { ManualRideModal } from './ManualRideModal';
 import { RideCompletionModal } from './RideCompletionModal';
+import { ShiftModal } from './ShiftModal';
 
 import io from 'socket.io-client';
 
@@ -41,11 +42,16 @@ const Dashboard: React.FC = () => {
     const saved = localStorage.getItem('preferredNavApp');
     return (saved === 'google' || saved === 'mapy' || saved === 'waze') ? saved : 'google';
   });
-  const [showManualRideModal, setShowManualRideModal] = useState(false);
-  const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
-  const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
-  const [showRideHistory, setShowRideHistory] = useState(false);
+   const [showManualRideModal, setShowManualRideModal] = useState(false);
+   const [showCompletionModal, setShowCompletionModal] = useState(false);
+   const [rideToComplete, setRideToComplete] = useState<RideLog | null>(null);
+   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
+   const [showRideHistory, setShowRideHistory] = useState(false);
+   const [showShiftModal, setShowShiftModal] = useState(false);
+   const [shiftStartOdo, setShiftStartOdo] = useState<number | null>(null);
+   const [shiftEndOdo, setShiftEndOdo] = useState<number | null>(null);
+   const [shiftStartTimestamp, setShiftStartTimestamp] = useState<number | null>(null);
+   const [shiftEndTimestamp, setShiftEndTimestamp] = useState<number | null>(null);
   const [historyFilter, setHistoryFilter] = useState<'2days' | 'week' | 'month' | 'all'>('all');
   const [licensePlate, setLicensePlate] = useState<string>('');
   const [otherDrivers, setOtherDrivers] = useState<any[]>([]);
@@ -273,6 +279,38 @@ const Dashboard: React.FC = () => {
     };
     init();
   }, [user?.id]);
+
+  // Load shift data from localStorage
+  useEffect(() => {
+    const savedShiftStartTime = localStorage.getItem('shiftStartTime');
+    const savedShiftStartOdo = localStorage.getItem('shiftStartOdo');
+    const savedShiftEndTime = localStorage.getItem('shiftEndTime');
+    const savedShiftEndOdo = localStorage.getItem('shiftEndOdo');
+
+    if (savedShiftStartTime) {
+      setShiftStartTimestamp(parseInt(savedShiftStartTime));
+    }
+    if (savedShiftStartOdo) {
+      setShiftStartOdo(parseFloat(savedShiftStartOdo));
+    }
+    if (savedShiftEndTime) {
+      setShiftEndTimestamp(parseInt(savedShiftEndTime));
+    }
+    if (savedShiftEndOdo) {
+      setShiftEndOdo(parseFloat(savedShiftEndOdo));
+    }
+  }, []);
+
+  // State for shift revenue (loaded from localStorage)
+  const [shiftRevenue, setShiftRevenue] = useState<number>(0);
+
+  // Load shift revenue from localStorage
+  useEffect(() => {
+    const savedShiftRevenue = localStorage.getItem('shiftRevenue');
+    if (savedShiftRevenue) {
+      setShiftRevenue(parseFloat(savedShiftRevenue));
+    }
+  }, []);
 
   // Monitor online status
   useEffect(() => {
@@ -1426,12 +1464,94 @@ const Dashboard: React.FC = () => {
        console.error('Error handling next ride after completion:', error);
      }
 
-     // Small delay to ensure database operations complete, then refresh
-     setTimeout(async () => {
-       console.log('Calling refreshVehicleData after ride completion');
-       await refreshVehicleData();
-     }, 1000);
-   };
+      // Small delay to ensure database operations complete, then refresh
+      setTimeout(async () => {
+        console.log('Calling refreshVehicleData after ride completion');
+        await refreshVehicleData();
+      }, 1000);
+    };
+
+    // Shift management functions
+    const handleStartShift = async (startOdo: number) => {
+      const now = Date.now();
+      setShiftStartTimestamp(now);
+      setShiftStartOdo(startOdo);
+      setShiftEndTimestamp(null);
+      setShiftEndOdo(null);
+
+      // Save to localStorage for persistence
+      localStorage.setItem('shiftStartTime', now.toString());
+      localStorage.setItem('shiftStartOdo', startOdo.toString());
+
+      // Update vehicle status to available when starting shift
+      await updateVehicleStatus('available');
+
+      console.log('Shift started at:', new Date(now).toLocaleString(), 'Odo:', startOdo);
+    };
+
+    const handleEndShift = async (endOdo: number) => {
+      if (!vehicleNumber) return;
+
+      const now = Date.now();
+      const shiftRevenue = calculateCurrentShiftRevenue();
+      const shiftDistance = endOdo - (shiftStartOdo || 0);
+
+      setShiftEndTimestamp(now);
+      setShiftEndOdo(endOdo);
+      setShiftRevenue(shiftRevenue);
+
+      // Save to localStorage for persistence
+      localStorage.setItem('shiftEndTime', now.toString());
+      localStorage.setItem('shiftEndOdo', endOdo.toString());
+      localStorage.setItem('shiftRevenue', shiftRevenue.toString());
+      localStorage.setItem('shiftDistance', shiftDistance.toString());
+
+      try {
+        // Update vehicle mileage in database
+        const vehicles = await supabaseService.getVehicles();
+        const updatedVehicles = vehicles.map(v =>
+          v.id === vehicleNumber ? { ...v, mileage: endOdo } : v
+        );
+        await supabaseService.updateVehicles(updatedVehicles);
+
+        console.log('Vehicle mileage updated to:', endOdo, 'km');
+      } catch (error) {
+        console.error('Failed to update vehicle mileage:', error);
+        // Continue with shift end even if mileage update fails
+      }
+
+      // Update vehicle status to offline when ending shift
+      await updateVehicleStatus('offline');
+
+      // Show shift summary
+      const shiftDuration = Math.round((now - (shiftStartTimestamp || 0)) / (1000 * 60)); // minutes
+      alert(`Směna ukončena!\n\nTržba: ${shiftRevenue} Kč\nUjetá vzdálenost: ${shiftDistance.toFixed(1)} km\nDélka směny: ${Math.floor(shiftDuration / 60)}h ${shiftDuration % 60}min`);
+
+      console.log('Shift ended at:', new Date(now).toLocaleString(), 'Odo:', endOdo);
+      console.log('Total shift distance:', shiftDistance, 'km');
+      console.log('Total shift revenue:', shiftRevenue, 'Kč');
+    };
+
+    const isShiftActive = shiftStartTimestamp !== null && shiftEndTimestamp === null;
+
+    // Calculate revenue for the current active shift
+    const calculateCurrentShiftRevenue = useCallback(() => {
+      if (!isShiftActive || !shiftStartTimestamp || !rideHistory.length) {
+        return 0;
+      }
+
+      return rideHistory.filter(ride => {
+        // Only count completed rides
+        if (ride.status !== RideStatus.Completed) return false;
+
+        const rideTime = new Date(ride.timestamp).getTime();
+
+        // Check if ride was completed during the current active shift
+        return rideTime >= shiftStartTimestamp;
+      }).reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
+    }, [isShiftActive, shiftStartTimestamp, rideHistory]);
+
+    const currentShiftRevenue = calculateCurrentShiftRevenue();
 
 
 
@@ -1500,18 +1620,49 @@ const Dashboard: React.FC = () => {
            )}
          </div>
 
-         {/* Manual Ride Button */}
-         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-           <button
-             onClick={() => setShowManualRideModal(true)}
-             className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg"
-           >
-             ➕ Přidat přímou jízdu
-           </button>
-           <p className="text-xs text-slate-400 mt-2 text-center">
-             Pro zákazníky, kteří přijdou přímo k vozidlu
-           </p>
-         </div>
+          {/* Manual Ride Button */}
+          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+            <button
+              onClick={() => setShowManualRideModal(true)}
+              className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg"
+            >
+              ➕ Přidat přímou jízdu
+            </button>
+            <p className="text-xs text-slate-400 mt-2 text-center">
+              Pro zákazníky, kteří přijdou přímo k vozidlu
+            </p>
+          </div>
+
+          {/* Shift Management Button */}
+          <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+            <button
+              onClick={() => setShowShiftModal(true)}
+              className={`w-full py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg ${
+                isShiftActive
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
+            >
+              {isShiftActive ? '🏁 Ukončit směnu' : '🚗 Začít směnu'}
+            </button>
+            <div className="text-xs text-slate-400 mt-2 text-center space-y-1">
+              {isShiftActive ? (
+                <>
+                  <p>Směna začala: {shiftStartTimestamp ? new Date(shiftStartTimestamp).toLocaleTimeString('cs-CZ') : ''}</p>
+                  <p>Počáteční stav: {shiftStartOdo} km</p>
+                  <p>Aktuální tržba: {currentShiftRevenue} Kč</p>
+                </>
+              ) : shiftEndTimestamp ? (
+                <>
+                  <p>Poslední směna: {new Date(shiftEndTimestamp).toLocaleDateString('cs-CZ')}</p>
+                  <p>Ujetá vzdálenost: {shiftEndOdo && shiftStartOdo ? (shiftEndOdo - shiftStartOdo).toFixed(1) : 0} km</p>
+                  <p>Tržba: {shiftRevenue} Kč</p>
+                </>
+              ) : (
+                <p>Zaznamenejte stav tachometru při začátku a konci směny</p>
+              )}
+            </div>
+          </div>
 
         {/* New Rides */}
         {pendingRides.length > 0 && (
@@ -1703,25 +1854,39 @@ const Dashboard: React.FC = () => {
           <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
                <div className="flex justify-between items-center mb-3">
                  <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
-                 <div className="flex items-center space-x-2">
-                 <div className="text-sm text-slate-300">
-                   <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
-                     {useCustomShift && customShiftStart && customShiftEnd && customShiftDate ? (
-                       <div className="text-xs text-slate-400 mt-1">
-                         {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
-                         <div className="text-xs text-slate-500">
-                           (včetně přes půlnoc)
-                         </div>
-                       </div>
-                     ) : shiftStartTime ? (
-                       <div className="text-xs text-slate-400 mt-1">
-                         Od: {new Date(shiftStartTime).toLocaleTimeString('cs-CZ', {
-                           hour: '2-digit',
-                           minute: '2-digit'
-                         })}
-                       </div>
-                     ) : null}
-                   </div>
+                <div className="flex items-center space-x-2">
+                  <div className="text-sm text-slate-300">
+                    {isShiftActive ? (
+                      <>
+                        <span className="font-medium">Tržba aktuální směny:</span> {currentShiftRevenue} Kč
+                        <div className="text-xs text-slate-400 mt-1">
+                          Od: {new Date(shiftStartTimestamp!).toLocaleTimeString('cs-CZ', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
+                        {useCustomShift && customShiftStart && customShiftEnd && customShiftDate ? (
+                          <div className="text-xs text-slate-400 mt-1">
+                            {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
+                            <div className="text-xs text-slate-500">
+                              (včetně přes půlnoc)
+                            </div>
+                          </div>
+                        ) : shiftStartTime ? (
+                          <div className="text-xs text-slate-400 mt-1">
+                            Od: {new Date(shiftStartTime).toLocaleTimeString('cs-CZ', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                    </div>
                    <button
                      onClick={() => setShowRideHistory(false)}
                      className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
@@ -1813,16 +1978,30 @@ const Dashboard: React.FC = () => {
            <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
              <div className="flex justify-between items-center">
                <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
-               <div className="flex items-center space-x-2">
-                 <div className="text-sm text-slate-300">
-                   <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
-                   {useCustomShift && customShiftStart && customShiftEnd && customShiftDate && (
-                     <div className="text-xs text-slate-400">
-                       {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
-                       <span className="text-xs text-slate-500 ml-1">(přes půlnoc)</span>
-                     </div>
-                   )}
-                 </div>
+                  <div className="flex items-center space-x-2">
+                  <div className="text-sm text-slate-300">
+                    {isShiftActive ? (
+                      <>
+                        <span className="font-medium">Tržba aktuální směny:</span> {currentShiftRevenue} Kč
+                        <div className="text-xs text-slate-400">
+                          Od: {new Date(shiftStartTimestamp!).toLocaleTimeString('cs-CZ', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
+                        {useCustomShift && customShiftStart && customShiftEnd && customShiftDate && (
+                          <div className="text-xs text-slate-400">
+                            {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
+                            <span className="text-xs text-slate-500 ml-1">(přes půlnoc)</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
                  <button
                    onClick={() => setShowRideHistory(true)}
                    className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
@@ -1838,34 +2017,45 @@ const Dashboard: React.FC = () => {
            </div>
          )}
 
-         {/* Cancel Ride Confirmation Modal */}
-         {showCancelConfirmation && (
-           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-             <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 max-w-sm mx-4">
-               <h3 className="text-lg font-semibold text-white mb-4">Potvrdit zrušení jízdy</h3>
-               <p className="text-slate-300 mb-6">
-                 Opravdu chcete zrušit tuto jízdu? Tato akce je nevratná.
-               </p>
-               <div className="flex space-x-3">
-                 <button
-                   onClick={() => setShowCancelConfirmation(false)}
-                   className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
-                 >
-                   Zrušit
-                 </button>
-                 <button
-                   onClick={async () => {
-                     setShowCancelConfirmation(false);
-                     await cancelRide();
-                   }}
-                   className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium transition-colors"
-                 >
-                   Potvrdit zrušení
-                 </button>
-               </div>
-             </div>
-           </div>
-         )}
+          {/* Cancel Ride Confirmation Modal */}
+          {showCancelConfirmation && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 max-w-sm mx-4">
+                <h3 className="text-lg font-semibold text-white mb-4">Potvrdit zrušení jízdy</h3>
+                <p className="text-slate-300 mb-6">
+                  Opravdu chcete zrušit tuto jízdu? Tato akce je nevratná.
+                </p>
+                <div className="flex space-x-3">
+                  <button
+                    onClick={() => setShowCancelConfirmation(false)}
+                    className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white font-medium transition-colors"
+                  >
+                    Zrušit
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setShowCancelConfirmation(false);
+                      await cancelRide();
+                    }}
+                    className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium transition-colors"
+                  >
+                    Potvrdit zrušení
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Shift Modal */}
+          <ShiftModal
+            isOpen={showShiftModal}
+            onClose={() => setShowShiftModal(false)}
+            onStartShift={handleStartShift}
+            onEndShift={handleEndShift}
+            isShiftActive={isShiftActive}
+            currentOdo={shiftStartOdo}
+            vehicleMileage={vehicles.find(v => v.id === vehicleNumber)?.mileage}
+          />
 
         {/* Shift Time Settings */}
         <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">

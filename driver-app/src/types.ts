@@ -317,3 +317,18 @@ export interface DriverStats {
   manual_entries_points: number;
   updated_at: string;
 }
+
+// Shift management types
+export interface ShiftData {
+  id: string;
+  driver_id: number;
+  vehicle_id: number;
+  start_time: number;
+  end_time?: number;
+  start_odometer: number;
+  end_odometer?: number;
+  total_distance?: number;
+  total_earnings?: number;
+  created_at: string;
+  updated_at: string;
+}
