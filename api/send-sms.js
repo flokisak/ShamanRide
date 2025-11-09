@@ -20,63 +20,49 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Use HTTP API for Vercel deployment
-    const smsServer = process.env.SMS_SERVER;
-    const smsUsername = process.env.SMS_USERNAME;
-    const smsPassword = process.env.SMS_PASSWORD;
+    const config = {
+      server: process.env.SMS_SERVER,
+      username: process.env.SMS_USERNAME,
+      password: process.env.SMS_PASSWORD,
+      deviceId: process.env.DEVICE_ID,
+    };
 
-    if (!smsServer || !smsUsername || !smsPassword) {
-      return res.status(500).json({
-        success: false,
-        error: 'SMS configuration missing. Please set SMS_SERVER, SMS_USERNAME, and SMS_PASSWORD environment variables.'
-      });
+    console.log('SMS config:', config);
+
+    if (!config.server || !config.username || !config.password) {
+      return res.status(500).json({ success: false, error: 'SMS gate not configured' });
     }
 
-    // Send SMS via HTTP API
-    const results = [];
-    for (const phone of recipients) {
-      try {
-        // Normalize phone to E.164 format, assuming Czech Republic +420
-        const normalizedPhone = phone.startsWith('+') ? phone : `+420${phone.replace(/\s/g, '')}`;
+    const url = `https://${config.server}/3rdparty/v1/messages`;
+    console.log('Sending SMS to:', url, { recipients, message });
 
-        // This is a generic HTTP API call - adjust based on your SMS provider
-        const smsResponse = await fetch(smsServer, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Basic ${Buffer.from(`${smsUsername}:${smsPassword}`).toString('base64')}`
-          },
-          body: JSON.stringify({
-            to: normalizedPhone,
-            message: message
-          })
-        });
-
-        if (!smsResponse.ok) {
-          const errorText = await smsResponse.text();
-          results.push({ phone: normalizedPhone, success: false, error: `HTTP ${smsResponse.status}: ${errorText}` });
-        } else {
-          const responseData = await smsResponse.json().catch(() => ({}));
-          results.push({ phone: normalizedPhone, success: true, data: responseData });
-        }
-      } catch (phoneErr) {
-        results.push({ phone, success: false, error: phoneErr.message });
+    const body = {
+      phoneNumbers: recipients.map(phone => phone.startsWith('+') ? phone : `+420${phone.replace(/\s/g, '')}`),
+      textMessage: {
+        text: message
       }
+    };
+
+    if (config.deviceId) {
+      body.deviceId = config.deviceId;
     }
 
-    // Check if all SMS were sent successfully
-    const allSuccessful = results.every(r => r.success);
-    if (allSuccessful) {
-      res.json({ success: true, data: results });
-    } else {
-      res.status(500).json({
-        success: false,
-        error: 'Some SMS failed to send',
-        details: results
-      });
-    }
+    const auth = Buffer.from(`${config.username}:${config.password}`).toString('base64');
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${auth}`
+      },
+      body: JSON.stringify(body),
+    });
+
+    const result = await response.text();
+    console.log('SMS response:', response.status, result);
+
+    res.json({ success: response.ok, data: result });
   } catch (error) {
-    console.error('SMS sending error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    console.error('SMS error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 }
