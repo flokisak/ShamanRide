@@ -409,7 +409,7 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
   }
 
   return (
-    <div className="p-3 rounded-lg shadow-2xl flex flex-col h-full bg-slate-800">
+    <div className={`p-3 rounded-lg shadow-2xl flex flex-col bg-slate-800 ${isMobile ? 'h-[85vh]' : 'h-full'}`}>
        <div className="flex-shrink-0 mb-4">
          <div className="flex items-center justify-between">
            <h3 className="text-sm font-semibold text-white flex items-center">
