@@ -2,7 +2,7 @@
     Uses local SMS gateway server with smsgate when available.
     Falls back to a no-op that resolves when not configured.
  */
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '';
 
 export function isSmsGateConfigured(): boolean {
   // Assume backend is running on localhost:3001

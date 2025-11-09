@@ -3,9 +3,11 @@ import type { RideRequest, RideLog, AssignmentResultData, Person } from '../type
 import { useTranslation } from '../contexts/LanguageContext';
 import { PlusIcon, TrashIcon } from './icons';
 import { AutocompleteInputField } from './AutocompleteInputField';
+import { POISearchModal } from './POISearchModal';
 import { smsService, type SmsMessageRecord } from '../services/smsService';
 import { sendSms } from '../services/messagingService';
 import { generateCustomerSms } from '../services/dispatchService';
+import { POIResult } from '../services/poiService';
 
 const InputField: React.FC<{ label: string, id: string, value: string | number, onChange: (e: React.ChangeEvent<HTMLInputElement>) => void, type?: string, error?: string }> = ({label, id, value, onChange, type='text', error}) => (
   <div>
@@ -38,6 +40,8 @@ interface DispatchFormProps {
 export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, onSchedule, isLoading, rideHistory, cooldownTime, onRoutePreview, assignmentResult, people, customerSms }) => {
   const { t } = useTranslation();
   const [stops, setStops] = useState<string[]>(['Náměstí, Mikulov', 'Dukelské náměstí, Hustopeče']);
+  // parallel array to keep selected placeIds for each stop (keeps UI address clean)
+  const [stopPlaceIds, setStopPlaceIds] = useState<string[]>(() => ['Náměstí, Mikulov', 'Dukelské náměstí, Hustopeče'].map(() => ''));
   const [customerName, setCustomerName] = useState('Jan Novák');
   const [customerPhone, setCustomerPhone] = useState('777 123 456');
   const [passengers, setPassengers] = useState(1);
@@ -49,18 +53,40 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
   const [showChat, setShowChat] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof RideRequest | 'stops', string>>>({});
   const [optimizeStops, setOptimizeStops] = useState(true);
+  const [showPOIModal, setShowPOIModal] = useState(false);
+  const [selectedStopIndex, setSelectedStopIndex] = useState<number | null>(null);
 
   const uniqueCustomerNames = useMemo(() => {
       const names = new Set<string>(rideHistory.map(log => log.customerName).filter(Boolean));
       return Array.from(names);
   }, [rideHistory]);
   
+   // compute combined stops (address|placeId) for geocoding/preview while keeping UI clean
+   const combinedStops = stops.map((s, i) => stopPlaceIds[i] ? `${s}|${stopPlaceIds[i]}` : s);
+
+   // Debounced route preview - only trigger when user stops typing for 2 seconds
+   // and only if we have at least 2 valid stops
    useEffect(() => {
+     // Only trigger route preview if we have at least 2 stops and they're not empty
+     const hasValidStops = combinedStops.length >= 2 && combinedStops.every(stop => stop.trim().length > 0);
+
+     if (!hasValidStops) {
+       onRoutePreview([]);
+       return;
+     }
+
      const handler = setTimeout(() => {
-         onRoutePreview(stops);
-     }, 800);
+       // Double-check stops are still valid before triggering
+       const currentCombinedStops = stops.map((s, i) => stopPlaceIds[i] ? `${s}|${stopPlaceIds[i]}` : s);
+       const stillValid = currentCombinedStops.length >= 2 && currentCombinedStops.every(stop => stop.trim().length > 0);
+
+       if (stillValid) {
+         onRoutePreview(currentCombinedStops);
+       }
+     }, 2000); // Increased to 2 seconds to reduce API calls
+
      return () => clearTimeout(handler);
-   }, [stops, onRoutePreview]);
+   }, [combinedStops, onRoutePreview, stops, stopPlaceIds]);
 
     useEffect(() => {
       const loadChatRecords = async () => {
@@ -94,15 +120,23 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
     const newStops = [...stops];
     newStops[index] = value;
     setStops(newStops);
+    // Clear any previously selected placeId for this index when user types manually
+    setStopPlaceIds(prev => {
+      const p = [...prev];
+      p[index] = '';
+      return p;
+    });
   };
   
   const addStop = () => {
     setStops([...stops, '']);
+    setStopPlaceIds(prev => [...prev, '']);
   };
   
   const removeStop = (index: number) => {
     if (stops.length > 2) {
       setStops(stops.filter((_, i) => i !== index));
+      setStopPlaceIds(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -164,6 +198,23 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
     }
   };
 
+  const handlePOISearch = (stopIndex: number) => {
+    setSelectedStopIndex(stopIndex);
+    setShowPOIModal(true);
+  };
+
+  const handlePOISelect = (poi: POIResult) => {
+    if (selectedStopIndex !== null) {
+      // Keep visible address clean, store placeId separately
+      handleStopChange(selectedStopIndex, poi.name);
+      setStopPlaceIds(prev => {
+        const p = [...prev];
+        p[selectedStopIndex] = poi.placeId || '';
+        return p;
+      });
+    }
+  };
+
 
   const validateForm = (): boolean => {
       const newErrors: Partial<Record<keyof RideRequest | 'stops', string>> = {};
@@ -182,21 +233,21 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
    const handleSubmit = (e: React.FormEvent) => {
      e.preventDefault();
      if (validateForm()) {
-         const rideRequest: RideRequest = {
-           stops,
-           customerName,
-           customerPhone,
-           passengers,
-           pickupTime,
-           notes,
-         };
-         if (isScheduled) {
-             onSchedule(rideRequest);
-         } else {
-             onSubmit(rideRequest, stops.length > 2 && optimizeStops);
-         }
-         // Clear SMS message after successful submission
-         setSmsMessage('');
+        const rideRequest: RideRequest = {
+          stops: combinedStops,
+          customerName,
+          customerPhone,
+          passengers,
+          pickupTime,
+          notes,
+        };
+        if (isScheduled) {
+            onSchedule(rideRequest);
+        } else {
+            onSubmit(rideRequest, combinedStops.length > 2 && optimizeStops);
+        }
+        // Clear SMS message after successful submission
+        setSmsMessage('');
      }
    };
   
@@ -215,14 +266,27 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
                 {stops.map((stop, index) => (
                   <div key={index} className="flex items-center space-x-2">
                     <span className="text-gray-400 font-mono text-sm w-5 text-center">{index + 1}.</span>
-                    <AutocompleteInputField 
-                      id={`stop-${index}`}
-                      value={stop}
-                      onChange={(val) => handleStopChange(index, val)}
-                      suggestionMode="remote"
-                      placeholder={index === 0 ? t('dispatch.stops.startPlaceholder') : t('dispatch.stops.destinationPlaceholder')}
-                      isFirst={index === 0}
-                    />
+                    <div className="flex-1">
+                      <AutocompleteInputField
+                        id={`stop-${index}`}
+                        value={stop}
+                        onChange={(val) => handleStopChange(index, val)}
+                        onSelectPlaceId={(pid) => setStopPlaceIds(prev => { const p=[...prev]; p[index]=pid||''; return p; })}
+                        suggestionMode="remote"
+                        placeholder={index === 0 ? t('dispatch.stops.startPlaceholder') : t('dispatch.stops.destinationPlaceholder')}
+                        isFirst={index === 0}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handlePOISearch(index)}
+                      className="p-2 text-cyan-400 hover:text-cyan-300 hover:bg-slate-700 rounded-full transition-colors"
+                      title="Vyhledat místo zájmu"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    </button>
                     {stops.length > 2 && <button type="button" onClick={() => removeStop(index)} className="p-1 text-red-500 hover:text-red-400 rounded-full"><TrashIcon size={18}/></button>}
                   </div>
                 ))}
@@ -348,6 +412,18 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
                 : t('dispatch.findVehicle')}
         </button>
         </form>
+
+        {/* POI Search Modal */}
+        <POISearchModal
+          isOpen={showPOIModal}
+          onClose={() => {
+            setShowPOIModal(false);
+            setSelectedStopIndex(null);
+          }}
+          onSelectPOI={handlePOISelect}
+          userLocation={undefined} // TODO: Add user location if available
+          searchRadius={10000}
+        />
     </div>
   );
 };

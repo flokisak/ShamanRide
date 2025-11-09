@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { useAuth } from '../AuthContext';
 import { useTranslation } from '../contexts/LanguageContext';
 
 const Login: React.FC = () => {
   const { t } = useTranslation();
+  const { signIn, signUp } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -16,42 +17,30 @@ const Login: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    if (isRegister) {
-      if (password !== confirmPassword) {
-        setError(t('login.passwordMismatch'));
-        setLoading(false);
-        return;
-      }
-      if (password.length < 6) {
-        setError(t('login.passwordTooShort'));
-        setLoading(false);
-        return;
-      }
-      try {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (error) throw error;
+    try {
+      if (isRegister) {
+        if (password !== confirmPassword) {
+          setError(t('login.passwordMismatch'));
+          setLoading(false);
+          return;
+        }
+        if (password.length < 6) {
+          setError(t('login.passwordTooShort'));
+          setLoading(false);
+          return;
+        }
+        await signUp(email, password);
         alert(t('login.registrationSuccess'));
         setIsRegister(false);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      } else {
+        await signIn(email, password);
+        console.log('Login successful');
       }
-    } else {
-      try {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+    } catch (err: any) {
+      console.error('Auth failed:', err);
+      setError(err.message || 'Authentication failed');
+    } finally {
+      setLoading(false);
     }
   };
 

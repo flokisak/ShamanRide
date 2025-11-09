@@ -1,43 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from './supabaseClient';
-import { AuthContext } from './AuthContext';
+import React, { useEffect } from 'react';
+import { startAuthKeepAlive } from './supabaseClient';
+import { AuthProvider, useAuth } from './AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
+import { initializeBackgroundSync } from './utils/backgroundSync';
 
-function App() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+function AppContent() {
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    // Get initial session with timeout
-    const getSessionWithTimeout = async () => {
-      try {
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Auth session loading timed out')), 10000)
-        );
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
-        setUser(session?.user ?? null);
-      } catch (error) {
-        console.error('Auth session error:', error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Initialize background sync
+    initializeBackgroundSync();
 
-    getSessionWithTimeout();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    // Start auth keep-alive to proactively refresh tokens and avoid
+    // short-lived session expiries when the app is idle. This helps keep
+    // drivers logged in for longer periods (refresh runs every 5 minutes).
+    try {
+      startAuthKeepAlive(5 * 60 * 1000);
+    } catch (err) {
+      console.warn('Failed to start auth keep-alive from App:', err);
+    }
   }, []);
 
   if (loading) {
@@ -45,12 +28,18 @@ function App() {
   }
 
   return (
+    <div className="min-h-screen bg-slate-900 text-white">
+      {user ? <Dashboard /> : <Login />}
+    </div>
+  );
+}
+
+function App() {
+  return (
     <LanguageProvider>
-      <AuthContext.Provider value={{ user, signOut: () => supabase.auth.signOut() }}>
-        <div className="min-h-screen bg-slate-900 text-white">
-          {user ? <Dashboard /> : <Login />}
-        </div>
-      </AuthContext.Provider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
     </LanguageProvider>
   );
 }

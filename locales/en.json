@@ -1,6 +1,7 @@
 {
   "general": {
     "add": "Add",
+    "editRide": "Edit Ride",
     "save": "Save",
     "saveChanges": "Save Changes",
     "cancel": "Cancel",
@@ -235,16 +236,23 @@
       "editRideFor": "Edit ride for customer {customerName}",
       "deleteRideFor": "Delete ride for customer {customerName}"
     },
-    "edit": {
-      "title": "Edit Ride Log",
-      "assignmentTitle": "Assignment",
-      "assignmentHelp": "Select a vehicle to assign. The driver will be auto-filled but can be changed.",
-       "availableVehicles": "Available Vehicles",
-       "selectDriver": "Select driver",
-       "estimates": "Estimates",
-       "estimatedPrice": "Estimated Price",
-       "estimatedDuration": "Estimated Duration"
-    }
+     "edit": {
+       "title": "Edit Ride Log",
+       "assignmentTitle": "Assignment",
+       "assignmentHelp": "Select a vehicle to assign. The driver will be auto-filled but can be changed.",
+        "availableVehicles": "Available Vehicles",
+        "selectDriver": "Select driver",
+        "estimates": "Estimates",
+        "estimatedPrice": "Estimated Price",
+        "estimatedDuration": "Estimated Duration",
+        "paymentMethod": "Payment Method",
+        "selectPaymentMethod": "Select payment method",
+        "rideType": "Ride Type",
+        "purpose": "Purpose",
+        "businessPurpose": "Business Purpose",
+        "startMileage": "Start Mileage",
+        "endMileage": "End Mileage"
+     }
     ,
     "smsPreview": {
       "title": "SMS Preview",
@@ -458,9 +466,17 @@
      "MANAGEMENT": "Management",
      "DISPATCHER": "Dispatcher"
    },
-   "personRolePlural": {
-     "DRIVER": "Drivers",
-     "MANAGEMENT": "Management",
-     "DISPATCHER": "Dispatchers"
-   }
+    "personRolePlural": {
+      "DRIVER": "Drivers",
+      "MANAGEMENT": "Management",
+      "DISPATCHER": "Dispatchers"
+    },
+    "paymentMethod": {
+      "cash": "Cash",
+      "card": "Card"
+    },
+    "rideType": {
+      "PRIVATE": "Private",
+      "BUSINESS": "Business"
+    }
 }

@@ -7,6 +7,8 @@ import { findBestVehicle, generateSms, generateCustomerSms, generateNavigationUr
 import { SUPABASE_ENABLED, supabase, supabaseService } from './services/supabaseClient';
 import type { SmsMessageRecord } from './services/smsService';
 import { sendSms, isSmsGateConfigured } from './services/messagingService';
+import { initializeNotifications, notifyUser } from './services/notifications';
+import io from 'socket.io-client';
 
 import { LoadingSpinner } from './components/LoadingSpinner';
 
@@ -25,7 +27,8 @@ import { TariffSettingsModal } from './components/TariffSettingsModal';
 import { AnalyticsModal } from './components/AnalyticsModal';
 import { SmsPreviewModal } from './components/SmsPreviewModal';
 import SmsGate from './components/SmsGate';
-import { DriverChat } from './components/DriverChat';
+import SocketRides from './components/SocketRides';
+import { StreamChatComponent } from './components/StreamChatComponent';
 import { useTranslation } from './contexts/LanguageContext';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -35,6 +38,13 @@ import { Leaderboard } from './components/Leaderboard';
 import { DailyStats } from './components/DailyStats';
 import { GamificationModal } from './components/GamificationModal';
 import { GamificationService } from './services/gamificationService';
+
+// Extend window interface for socket storage
+declare global {
+  interface Window {
+    dispatcherSocket: any;
+  }
+}
 
 
 // Initial data for people
@@ -62,13 +72,13 @@ type SortKey = 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'd
 type SortDirection = 'asc' | 'desc';
 
 const DEFAULT_LAYOUT: LayoutConfig = [
-  // Row 1: dispatch (left), map (top right), driverChat (bottom right)
-  { id: 'dispatch', colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 2 },
-  { id: 'map', colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1 },
-  { id: 'driverChat', colStart: 2, colSpan: 1, rowStart: 2, rowSpan: 1 },
+  // Row 1: dispatch, driverChat, map (3 columns)
+  { id: 'dispatch', colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 1 },
+  { id: 'driverChat', colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1 },
+  { id: 'map', colStart: 3, colSpan: 1, rowStart: 1, rowSpan: 1 },
   // Row 2: rideLog (left 2/3), vehicles (right 1/3)
-  { id: 'rideLog', colStart: 1, colSpan: 2, rowStart: 3, rowSpan: 1 },
-  { id: 'vehicles', colStart: 3, colSpan: 1, rowStart: 3, rowSpan: 1 },
+  { id: 'rideLog', colStart: 1, colSpan: 2, rowStart: 2, rowSpan: 1 },
+  { id: 'vehicles', colStart: 3, colSpan: 1, rowStart: 2, rowSpan: 1 },
 ];
 
 const DEFAULT_WIDGET_VISIBILITY: Record<WidgetId, boolean> = {
@@ -80,6 +90,7 @@ const DEFAULT_WIDGET_VISIBILITY: Record<WidgetId, boolean> = {
     smsGate: true,
     dailyStats: true,
     driverChat: true,
+    socketRides: true,
 };
 
 export const DEFAULT_TARIFF: Tariff = {
@@ -186,124 +197,7 @@ const AppContent: React.FC = () => {
     return () => clearInterval(interval);
   }, [reloadSmsMessages]);
 
-  // Subscribe to real-time ride updates from drivers with improved error handling
-     useEffect(() => {
-       if (!SUPABASE_ENABLED) return;
 
-       console.log('Setting up dispatcher ride updates subscription');
-        const rideChannel = supabase
-          .channel('dispatcher_ride_updates')
-          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ride_logs' }, (payload) => {
-            console.log('New ride inserted:', payload);
-            const newRide = payload.new;
-            const statusLower = newRide.status.toLowerCase();
-
-            // Map from DB format to app format
-            const mappedRide = {
-              id: newRide.id,
-              timestamp: newRide.timestamp,
-              vehicleName: newRide.vehicle_name ?? null,
-              vehicleLicensePlate: newRide.vehicle_license_plate ?? null,
-              driverName: newRide.driver_name ?? null,
-              vehicleType: newRide.vehicle_type ?? null,
-              customerName: newRide.customer_name,
-              rideType: (newRide.ride_type ?? 'business').toUpperCase(),
-              customerPhone: newRide.customer_phone,
-              stops: newRide.stops,
-              passengers: newRide.passengers,
-              pickupTime: newRide.pickup_time,
-               status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                       statusLower === 'completed' ? RideStatus.Completed :
-                       statusLower === 'cancelled' ? RideStatus.Cancelled :
-                       RideStatus.Pending,
-              vehicleId: newRide.vehicle_id ?? null,
-              notes: newRide.notes ?? null,
-              estimatedPrice: newRide.estimated_price ?? null,
-              estimatedPickupTimestamp: newRide.estimated_pickup_timestamp,
-              estimatedCompletionTimestamp: newRide.estimated_completion_timestamp,
-              fuelCost: newRide.fuel_cost ?? null,
-              distance: newRide.distance ?? null,
-              acceptedAt: newRide.accepted_at ?? null,
-              startedAt: newRide.started_at ?? null,
-              completedAt: newRide.completed_at ?? null,
-            };
-
-            // Add new ride to local ride log
-            setRideLog(prev => [mappedRide, ...prev]);
-          })
-          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ride_logs' }, (payload) => {
-            // Only process important status changes to reduce traffic, skip completed/cancelled rides
-            const oldStatus = payload.old?.status?.toLowerCase();
-            const newStatus = payload.new?.status?.toLowerCase();
-
-            // Skip updates for already completed or cancelled rides
-            if (oldStatus === 'completed' || oldStatus === 'cancelled' || newStatus === 'completed' || newStatus === 'cancelled') {
-              return;
-            }
-
-            // Only update for significant status changes
-            const importantStatuses = ['pending', 'accepted', 'in_progress'];
-            if (!importantStatuses.includes(newStatus) || oldStatus === newStatus) {
-              return; // Skip minor updates
-            }
-
-            console.log('Ride status updated:', { id: payload.new.id, oldStatus, newStatus });
-
-            const updatedRide = payload.new;
-            const statusLower = updatedRide.status.toLowerCase();
-
-            // Update local ride log
-            setRideLog(prev => prev.map(ride =>
-              ride.id === updatedRide.id
-                ? {
-                    ...ride,
-                    status: statusLower === 'in_progress' ? RideStatus.InProgress :
-                            statusLower === 'completed' ? RideStatus.Completed :
-                            statusLower === 'cancelled' ? RideStatus.Cancelled :
-                            statusLower === 'accepted' ? RideStatus.Accepted :
-                            statusLower === 'pending' ? RideStatus.Pending :
-                            ride.status,
-                    completedAt: updatedRide.completed_at || ride.completedAt,
-                    acceptedAt: updatedRide.accepted_at || ride.acceptedAt,
-                    startedAt: updatedRide.started_at || ride.startedAt
-                  }
-                : ride
-            ));
-
-            // Send status change message to driver if this is a status change
-            if (payload.old && payload.old.status !== payload.new.status && updatedRide.vehicle_id) {
-              const localRide = rideLog.find(r => r.id === updatedRide.id);
-              if (localRide) {
-                const oldStatusLower = payload.old.status.toLowerCase();
-                const oldStatusMapped = oldStatusLower === 'in_progress' ? RideStatus.InProgress :
-                                  oldStatusLower === 'completed' ? RideStatus.Completed :
-                                  oldStatusLower === 'cancelled' ? RideStatus.Cancelled :
-                                  oldStatusLower === 'accepted' ? RideStatus.Accepted :
-                                  RideStatus.Pending;
-                const newStatusMapped = statusLower === 'in_progress' ? RideStatus.InProgress :
-                                  statusLower === 'completed' ? RideStatus.Completed :
-                                  statusLower === 'cancelled' ? RideStatus.Cancelled :
-                                  statusLower === 'accepted' ? RideStatus.Accepted :
-                                  RideStatus.Pending;
-                const updatedRideForMessage = { ...localRide, status: newStatusMapped };
-                sendStatusChangeMessageToDriver(updatedRideForMessage, oldStatusMapped);
-              }
-            }
-          })
-          .subscribe((status) => {
-           console.log('Dispatcher ride updates channel status:', status);
-           if (status === 'SUBSCRIBED') {
-             console.log('Successfully subscribed to dispatcher ride updates');
-           } else if (status === 'CHANNEL_ERROR') {
-             console.error('Failed to subscribe to dispatcher ride updates, falling back to polling');
-           }
-         });
-
-   return () => {
-     console.log('Cleaning up dispatcher ride updates subscription');
-     supabase.removeChannel(rideChannel);
-   };
-     }, []); // Remove dependencies to prevent re-subscription on every state change
 
   // Layout and widget visibility remain local-only. Load persisted values but merge with defaults
   const [layout, setLayout] = useState<LayoutConfig>(() => {
@@ -344,6 +238,7 @@ const AppContent: React.FC = () => {
   
   const [routeToPreview, setRouteToPreview] = useState<string[] | null>(null);
   const [showCompletedRides, setShowCompletedRides] = useState(true); // Show completed rides by default for debugging
+  const [hasNewRides, setHasNewRides] = useState(false); // Track new rides from drivers
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('today');
   const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
@@ -356,9 +251,13 @@ const AppContent: React.FC = () => {
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
 
   // Gamification modal
-   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
+  const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
+  const [socketRidesExpanded, setSocketRidesExpanded] = useState(false);
+  const [rideHistoryExpanded, setRideHistoryExpanded] = useState(true);
 
-         // Apply modern Nord theme with rotating background
+
+
+          // Apply modern Nord theme with rotating background
          useEffect(() => {
            const nordBase = 'rgb(46, 52, 64)';
            const nordMid = 'rgb(59, 66, 82)';
@@ -391,9 +290,14 @@ const AppContent: React.FC = () => {
          }, []);
 
 
-  // Load initial data (Supabase when enabled, otherwise localStorage) and auto-update vehicle statuses
+  // Initialize notifications on app start
   useEffect(() => {
-    const loadData = async () => {
+    initializeNotifications();
+  }, []);
+
+  // Load initial data (Supabase when enabled, otherwise localStorage) and auto-update vehicle statuses
+   useEffect(() => {
+     const loadData = async () => {
       try {
         console.log('📥 Loading data via supabaseService (cloud or local fallback)');
         const results = await Promise.all([
@@ -469,8 +373,10 @@ const AppContent: React.FC = () => {
     loadData();
   }, []);
 
+
+
   // Load ride logs based on dateFilter
-  useEffect(() => {
+   useEffect(() => {
     const loadRideLogs = async () => {
       try {
         let options: { dateFrom?: string; dateTo?: string } | undefined;
@@ -536,99 +442,7 @@ const AppContent: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Real-time subscription for vehicle status changes (from driver app) with improved error handling
-   useEffect(() => {
-     if (!SUPABASE_ENABLED) return;
 
-     const vehicleChannel = supabase
-       .channel('vehicle_status_changes')
-       .on('postgres_changes', {
-         event: 'UPDATE',
-         schema: 'public',
-         table: 'vehicles'
-       }, (payload) => {
-         const updatedVehicle = payload.new;
-         console.log('Vehicle status changed:', updatedVehicle);
-
-         setVehicles(prevVehicles =>
-           prevVehicles.map(v =>
-             v.id === updatedVehicle.id
-               ? {
-                   ...v,
-                   status: updatedVehicle.status,
-                   location: updatedVehicle.location || v.location,
-                   updated_at: updatedVehicle.updated_at
-                 }
-               : v
-           )
-         );
-       })
-       .subscribe((status) => {
-         console.log('Vehicle status changes channel status:', status);
-         if (status === 'SUBSCRIBED') {
-           console.log('Successfully subscribed to vehicle status changes');
-         } else if (status === 'CHANNEL_ERROR') {
-           console.error('Failed to subscribe to vehicle status changes');
-         }
-       });
-
-     // Real-time subscription for location updates
-     const locationsChannel = supabase
-       .channel('locations_changes')
-       .on('postgres_changes', {
-         event: 'INSERT',
-         schema: 'public',
-         table: 'locations'
-       }, (payload) => {
-         const newLocation = payload.new;
-         setLocations(prev => ({
-           ...prev,
-           [newLocation.vehicle_id]: newLocation
-         }));
-       })
-       .on('postgres_changes', {
-         event: 'UPDATE',
-         schema: 'public',
-         table: 'locations'
-       }, (payload) => {
-         const updatedLocation = payload.new;
-         setLocations(prev => ({
-           ...prev,
-           [updatedLocation.vehicle_id]: updatedLocation
-         }));
-       })
-       .subscribe((status) => {
-         console.log('Locations changes channel status:', status);
-         if (status === 'SUBSCRIBED') {
-           console.log('Successfully subscribed to location updates');
-         } else if (status === 'CHANNEL_ERROR') {
-           console.error('Failed to subscribe to location updates');
-         }
-       });
-
-     // Periodic location refresh every minute
-     const locationRefreshInterval = setInterval(async () => {
-       try {
-         const loc = await supabaseService.getLocations().catch(() => []);
-         const latestLocs = (loc as any[]).reduce((acc, l) => {
-           const key = l.vehicle_id;
-           if (!acc[key] || new Date(l.timestamp) > new Date(acc[key].timestamp)) {
-             acc[key] = l;
-           }
-           return acc;
-         }, {} as Record<string, any>);
-         setLocations(latestLocs);
-       } catch (err) {
-         console.warn('Error refreshing locations:', err);
-       }
-     }, 60000); // Refresh every minute
-
-     return () => {
-       supabase.removeChannel(vehicleChannel);
-       supabase.removeChannel(locationsChannel);
-       clearInterval(locationRefreshInterval);
-     };
-   }, []);
 
       // --- Sync state changes to Supabase when enabled, otherwise keep localStorage ---
 
@@ -738,7 +552,7 @@ const AppContent: React.FC = () => {
 
         await Promise.all([
           supabaseService.updatePeople(people).catch(err => console.warn('Failed to sync people:', err)),
-          supabaseService.updateVehicles(vehicles, { excludeStatus: true }).catch(err => console.warn('Failed to sync vehicles (without status):', err)),
+           supabaseService.updateVehicles(vehicles, { excludeStatus: true, excludeMileage: true, excludeShiftTimes: true }).catch(err => console.warn('Failed to sync vehicles (without status, mileage, and shift times):', err)),
           supabaseService.updateRideLogs(rideLog).catch(err => console.warn('Failed to sync ride logs:', err)),
           supabaseService.updateNotifications(notifications).catch(err => console.warn('Failed to sync notifications:', err)),
           supabaseService.updateTariff(tariff).catch(err => console.warn('Failed to sync tariff:', err)),
@@ -821,7 +635,7 @@ const AppContent: React.FC = () => {
    }, [rideLog, notifications]);
 
   // --- Handlers ---
-  const handleScheduleRide = useCallback((rideRequest: RideRequest) => {
+  const handleScheduleRide = useCallback(async (rideRequest: RideRequest) => {
         const newLog: RideLog = {
           id: crypto.randomUUID(),
         timestamp: Date.now(),
@@ -843,8 +657,51 @@ const AppContent: React.FC = () => {
         estimatedCompletionTimestamp: undefined,
     };
 
-    setRideLog(prev => [newLog, ...prev]);
-    alert(t('notifications.rideScheduled'));
+    try {
+      // Prefer server-authoritative emit when dispatcher socket is connected
+      if ((window as any).dispatcherSocket) {
+        const rideData = {
+          id: newLog.id,
+          timestamp: newLog.timestamp,
+          vehicleName: newLog.vehicleName,
+          vehicleLicensePlate: newLog.vehicleLicensePlate,
+          driverName: newLog.driverName,
+          vehicleType: newLog.vehicleType,
+          customerName: newLog.customerName,
+          rideType: (newLog.rideType ?? 'business').toLowerCase(),
+          customerPhone: newLog.customerPhone,
+          stops: newLog.stops,
+          passengers: newLog.passengers,
+          pickupTime: newLog.pickupTime,
+          status: (newLog.status || '').toLowerCase(),
+          vehicleId: newLog.vehicleId,
+          notes: newLog.notes,
+          estimatedPrice: newLog.estimatedPrice,
+          estimatedPickupTimestamp: newLog.estimatedPickupTimestamp,
+          estimatedCompletionTimestamp: newLog.estimatedCompletionTimestamp,
+        };
+
+        (window as any).dispatcherSocket.emit('ride_update', { shiftId: 'dispatcher_shift', rideData });
+        console.log('➡️ Emitted ride_update via socket for scheduled ride:', newLog.id);
+        // Optimistically add to local state; server will reconcile when it persists
+        setRideLog(prev => [newLog, ...prev]);
+        alert(t('notifications.rideScheduled'));
+      } else {
+        // Fallback to central sync helper when socket not available
+        try {
+          await import('./services/syncService').then(m => m.persistRide(newLog));
+          console.log('Persisted scheduled ride via syncService fallback:', newLog.id);
+          setRideLog(prev => [newLog, ...prev]);
+          alert(t('notifications.rideScheduled'));
+        } catch (err) {
+          console.error('Failed to persist scheduled ride via syncService fallback:', err);
+          alert('Failed to save scheduled ride. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to save scheduled ride (socket or supabase):', error);
+      alert('Failed to save scheduled ride. Please try again.');
+    }
   }, [t]);
 
   const handleSubmitDispatch = useCallback(async (rideRequest: RideRequest, optimize: boolean) => {
@@ -893,22 +750,21 @@ const AppContent: React.FC = () => {
       const durationInMinutes = (rideDuration ? alternative.eta + rideDuration : alternative.eta + 30) + 5; // Add 5 min buffer
       const freeAt = Date.now() + durationInMinutes * 60 * 1000;
 
-      // Calculate total distance including from vehicle location to first stop
-      let totalDistance = 0;
+      // Calculate paid distance (only from first pickup to destination - customer is in car)
+      let paidDistance = 0;
       try {
-        const vehicleCoords = await geocodeAddress(chosenVehicle.location, language);
         const stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
-        if (stopCoords.length > 0) {
-          totalDistance += haversineDistance(vehicleCoords.lat, vehicleCoords.lon, stopCoords[0].lat, stopCoords[0].lon);
+        if (stopCoords.length > 1) {
+          // Only calculate distance from first pickup to destination (skip vehicle to pickup)
           for (let i = 1; i < stopCoords.length; i++) {
-            totalDistance += haversineDistance(stopCoords[i-1].lat, stopCoords[i-1].lon, stopCoords[i].lat, stopCoords[i].lon);
+            paidDistance += haversineDistance(stopCoords[i-1].lat, stopCoords[i-1].lon, stopCoords[i].lat, stopCoords[i].lon);
           }
         }
       } catch (err) {
-        console.error('Error calculating total distance:', err);
-        totalDistance = assignmentResult?.rideDistance || 0;
+        console.error('Error calculating paid distance:', err);
+        paidDistance = assignmentResult?.rideDistance || 0;
       }
-      const fuelCost = totalDistance ? calculateFuelCost(chosenVehicle, totalDistance) : undefined;
+      const fuelCost = paidDistance ? calculateFuelCost(chosenVehicle, paidDistance) : undefined;
 
          // Set up manual assignment details for SMS preview and final confirmation
          let navigationUrl = '';
@@ -926,7 +782,7 @@ const AppContent: React.FC = () => {
                   estimatedPrice: option.estimatedPrice,
                   navigationUrl: navigationUrl,
                   optimizedStops: optimizedStops,
-                  rideDistance: totalDistance,
+                  rideDistance: paidDistance,
                   eta: alternative.eta,
               });
            } catch (err: any) {
@@ -950,8 +806,8 @@ const AppContent: React.FC = () => {
        const destination = finalStops[finalStops.length - 1];
 
         // Use the distance that was calculated during assignment
-        const totalDistance = rideDistance || 0;
-        const fuelCost = totalDistance ? calculateFuelCost(vehicle, totalDistance) : undefined;
+        const paidDistance = rideDistance || 0;
+        const fuelCost = paidDistance ? calculateFuelCost(vehicle, paidDistance) : undefined;
 
        // Use the ETA that was calculated during assignment
        const totalBusyTime = eta + durationInMinutes + 5; // Add 5 min buffer
@@ -966,7 +822,23 @@ const AppContent: React.FC = () => {
       setVehicles(updatedVehicles);
 
       // Ensure vehicle update is saved to database immediately
-      supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
+      if ((window as any).dispatcherSocket) {
+        try {
+          // Emit a single vehicle status change for server to persist
+          (window as any).dispatcherSocket.emit('vehicle_status_changed', {
+            shiftId: 'dispatcher_shift',
+            vehicleId: vehicle.id,
+            status: VehicleStatus.Busy,
+            freeAt,
+          });
+          console.log('➡️ Emitted vehicle_status_changed via socket for vehicle', vehicle.id);
+        } catch (err) {
+          console.error('Socket emit failed, falling back to supabase updateVehicles', err);
+          supabaseService.updateVehicles(updatedVehicles).catch(err2 => console.error('Error saving vehicle update', err2));
+        }
+      } else {
+        supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
+      }
 
        const newLog: RideLog = {
            id: crypto.randomUUID(),
@@ -988,7 +860,7 @@ const AppContent: React.FC = () => {
            estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
            estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
           fuelCost: fuelCost,
-          distance: totalDistance,
+          distance: paidDistance,
        };
 
        console.log('🚗 Creating new ride for driver:', {
@@ -1004,6 +876,44 @@ const AppContent: React.FC = () => {
        setManualAssignmentDetails(null);
 
       // Automatically open SMS modal for the new ride
+      // Persist the created ride via socket (preferred) or Supabase fallback
+      try {
+        if ((window as any).dispatcherSocket) {
+          const rideData = {
+            id: newLog.id,
+            timestamp: newLog.timestamp,
+            vehicleName: newLog.vehicleName,
+            vehicleLicensePlate: newLog.vehicleLicensePlate,
+            driverName: newLog.driverName,
+            vehicleType: newLog.vehicleType,
+            customerName: newLog.customerName,
+            rideType: (newLog.rideType ?? 'business').toLowerCase(),
+            customerPhone: newLog.customerPhone,
+            stops: newLog.stops,
+            passengers: newLog.passengers,
+            pickupTime: newLog.pickupTime,
+            status: (newLog.status || '').toLowerCase(),
+            vehicleId: newLog.vehicleId,
+            notes: newLog.notes,
+            estimatedPrice: newLog.estimatedPrice,
+            estimatedPickupTimestamp: newLog.estimatedPickupTimestamp,
+            estimatedCompletionTimestamp: newLog.estimatedCompletionTimestamp,
+          };
+          (window as any).dispatcherSocket.emit('ride_update', { shiftId: 'dispatcher_shift', rideData });
+          console.log('➡️ Emitted ride_update via socket for manual assignment ride:', newLog.id);
+        } else {
+          try {
+            await import('./services/syncService').then(m => m.persistRide(newLog));
+            console.log('Persisted manual assignment ride via syncService fallback:', newLog.id);
+          } catch (err) {
+            console.error('Failed to persist manual assignment ride via syncService fallback:', err);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to persist manual assignment ride (socket or supabase):', err);
+      }
+
+      // Finally open SMS modal
       handleSendSms(newLog.id);
   };
 
@@ -1024,7 +934,8 @@ const AppContent: React.FC = () => {
   const handleUpdateVehicle = async (updatedVehicle: Vehicle) => {
     const updatedVehicles = vehicles.map(v => v.id === updatedVehicle.id ? updatedVehicle : v);
     try {
-      await supabaseService.updateVehicles(updatedVehicles);
+      const res = await import('./services/syncService').then(m => m.updateVehicles(updatedVehicles));
+      if (res && res.via === 'socket') console.log('updateVehicles emitted via socket');
       setVehicles(updatedVehicles);
     } catch (err) {
       console.error('Failed to save vehicle changes', err);
@@ -1043,12 +954,14 @@ const AppContent: React.FC = () => {
     );
     const updatedVehicles = vehicles.filter(v => v.id !== vehicleId);
     try {
-      await Promise.all([
-        supabaseService.deleteVehicle(vehicleId),
-        supabaseService.updateRideLogs(updatedRideLog),
-      ]);
+      // Prefer emitting deletion and ride-log update to server; fallback to supabase
+      const sync = await import('./services/syncService');
+      const delRes = await sync.deleteVehicle(vehicleId);
+      // Always update related ride logs via supabase fallback for now
+      await supabaseService.updateRideLogs(updatedRideLog).catch(err => console.error('Failed to update ride logs after vehicle delete', err));
       setRideLog(updatedRideLog);
       setVehicles(updatedVehicles);
+      if (delRes && delRes.via === 'socket') console.log('deleteVehicle emitted via socket');
     } catch (err) {
       console.error('Failed to delete vehicle', err);
       alert('Failed to delete vehicle. Please try again.');
@@ -1066,7 +979,8 @@ const AppContent: React.FC = () => {
     };
     const updatedVehicles = [...vehicles, newVehicle];
     try {
-      await supabaseService.updateVehicles(updatedVehicles);
+      const res = await import('./services/syncService').then(m => m.updateVehicles(updatedVehicles));
+      if (res && res.via === 'socket') console.log('updateVehicles emitted via socket');
       setVehicles(updatedVehicles);
     } catch (err) {
       console.error('Failed to add vehicle', err);
@@ -1083,7 +997,8 @@ const AppContent: React.FC = () => {
     };
     const updatedPeople = [...people, newPerson];
     try {
-      await supabaseService.updatePeople(updatedPeople);
+      const res = await import('./services/syncService').then(m => m.updatePeople(updatedPeople));
+      if (res && res.via === 'socket') console.log('updatePeople emitted via socket');
       setPeople(updatedPeople);
     } catch (err) {
       console.error('Failed to add person', err);
@@ -1094,7 +1009,8 @@ const AppContent: React.FC = () => {
   const handleUpdatePerson = async (updatedPerson: Person) => {
     const updatedPeople = people.map(p => p.id === updatedPerson.id ? updatedPerson : p);
     try {
-      await supabaseService.updatePeople(updatedPeople);
+      const res = await import('./services/syncService').then(m => m.updatePeople(updatedPeople));
+      if (res && res.via === 'socket') console.log('updatePeople emitted via socket');
       setPeople(updatedPeople);
     } catch (err) {
       console.error('Failed to update person', err);
@@ -1105,11 +1021,16 @@ const AppContent: React.FC = () => {
   const handleDeletePerson = async (personId: number) => {
     if (window.confirm(t('people.confirmDelete'))) {
       try {
-        await supabaseService.deletePerson(personId);
+        const sync = await import('./services/syncService');
+        await sync.deletePerson(personId).catch(err => console.error('syncService.deletePerson error', err));
         setPeople(prev => prev.filter(p => p.id !== personId));
         // Unassign this person from any vehicle they are driving
         const updatedVehicles = vehicles.map(v => v.driverId === personId ? { ...v, driverId: null } : v);
-        await supabaseService.updateVehicles(updatedVehicles);
+        await sync.updateVehicles(updatedVehicles).catch(err => {
+          console.error('syncService.updateVehicles error', err);
+          // fallback
+          return supabaseService.updateVehicles(updatedVehicles);
+        });
         setVehicles(updatedVehicles);
       } catch (err) {
         console.error('Failed to delete person', err);
@@ -1168,10 +1089,44 @@ const AppContent: React.FC = () => {
 
   const handleCreateRideLog = async (newLog: RideLog) => {
     try {
-      await supabaseService.addRideLog(newLog);
-      setRideLog(prev => [...prev, newLog]);
+      if ((window as any).dispatcherSocket) {
+        const rideData = {
+          id: newLog.id,
+          timestamp: newLog.timestamp,
+          vehicleName: newLog.vehicleName,
+          vehicleLicensePlate: newLog.vehicleLicensePlate,
+          driverName: newLog.driverName,
+          vehicleType: newLog.vehicleType,
+          customerName: newLog.customerName,
+          rideType: (newLog.rideType ?? 'business').toLowerCase(),
+          customerPhone: newLog.customerPhone,
+          stops: newLog.stops,
+          passengers: newLog.passengers,
+          pickupTime: newLog.pickupTime,
+          status: (newLog.status || '').toLowerCase(),
+          vehicleId: newLog.vehicleId,
+          notes: newLog.notes,
+          estimatedPrice: newLog.estimatedPrice,
+          estimatedPickupTimestamp: newLog.estimatedPickupTimestamp,
+          estimatedCompletionTimestamp: newLog.estimatedCompletionTimestamp,
+        };
+        (window as any).dispatcherSocket.emit('ride_update', { shiftId: 'dispatcher_shift', rideData });
+        console.log('➡️ Emitted ride_update via socket for created ride:', newLog.id);
+        setRideLog(prev => [...prev, newLog]);
+      } else {
+        // Fall back to syncService.persistRide when dispatcher socket is not available
+        try {
+          const mod = await import('./services/syncService');
+          await mod.persistRide(newLog);
+          setRideLog(prev => [...prev, newLog]);
+        } catch (err) {
+          console.warn('syncService.persistRide failed, falling back to supabaseService.addRideLog', err);
+          await supabaseService.addRideLog(newLog);
+          setRideLog(prev => [...prev, newLog]);
+        }
+      }
     } catch (err) {
-      console.error('Failed to save new ride log', err);
+      console.error('Failed to save new ride log (socket or supabase)', err);
       alert('Failed to save new ride. Please try again.');
       return;
     }
@@ -1179,37 +1134,97 @@ const AppContent: React.FC = () => {
     setIsRideBookOpen(true); // Re-open ride book after creating
   };
 
-  async function sendStatusChangeMessageToDriver(updatedLog: RideLog, oldStatus: RideStatus) {
+
+
+  const handleSendToDriver = async (rideId: string) => {
+    const rideToSend = rideLog.find(log => log.id === rideId);
+    if (!rideToSend) return;
+
+    // Only change status from SCHEDULED to PENDING if it's not already assigned
+    const shouldChangeStatus = rideToSend.status === RideStatus.Scheduled;
+    const updatedRide = shouldChangeStatus ? { ...rideToSend, status: RideStatus.Pending } : rideToSend;
+
     try {
-      if (!updatedLog.vehicleId) return;
-
-      let message = '';
-      if (updatedLog.status === RideStatus.Cancelled) {
-        message = `❌ Jízda zrušena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDůvod: Zrušeno dispečerem`;
-      } else if (updatedLog.status === RideStatus.Completed) {
-        message = `✅ Jízda dokončena\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nDěkujeme za dokončení jízdy!`;
-      } else if (updatedLog.status === RideStatus.Accepted && oldStatus === RideStatus.Pending) {
-        message = `📋 Jízda potvrzena dispečerem\n\nZákazník: ${updatedLog.customerName}\nTrasa: ${updatedLog.stops[0]} → ${updatedLog.stops[updatedLog.stops.length - 1]}\n\nPokračujte podle plánu.`;
-      }
-
-      if (message) {
-        const { error } = await supabase
-          .from('driver_messages')
-          .insert({
-            sender_id: 'dispatcher',
-            receiver_id: `driver_${updatedLog.vehicleId}`,
-            message: message,
-            read: false
-          });
-
-        if (error) {
-          console.error('Error sending status change message to driver:', error);
-        } else {
-          console.log('Status change message sent to driver');
+      if (shouldChangeStatus) {
+        try {
+          if ((window as any).dispatcherSocket) {
+            const rideData = {
+              id: updatedRide.id,
+              timestamp: updatedRide.timestamp,
+              vehicleName: updatedRide.vehicleName,
+              vehicleLicensePlate: updatedRide.vehicleLicensePlate,
+              driverName: updatedRide.driverName,
+              vehicleType: updatedRide.vehicleType,
+              customerName: updatedRide.customerName,
+              rideType: (updatedRide.rideType ?? 'business').toLowerCase(),
+              customerPhone: updatedRide.customerPhone,
+              stops: updatedRide.stops,
+              passengers: updatedRide.passengers,
+              pickupTime: updatedRide.pickupTime,
+              status: (updatedRide.status || '').toLowerCase(),
+              vehicleId: updatedRide.vehicleId,
+              notes: updatedRide.notes,
+              estimatedPrice: updatedRide.estimatedPrice,
+              estimatedPickupTimestamp: updatedRide.estimatedPickupTimestamp,
+              estimatedCompletionTimestamp: updatedRide.estimatedCompletionTimestamp,
+            };
+            (window as any).dispatcherSocket.emit('ride_update', { shiftId: 'dispatcher_shift', rideData });
+            console.log('➡️ Emitted ride_update via socket for status change:', updatedRide.id);
+          } else {
+            try {
+              await import('./services/syncService').then(m => m.persistRide(updatedRide));
+              console.log('Persisted updated ride via syncService fallback:', updatedRide.id);
+            } catch (err) {
+              console.error('Failed to persist updated ride via syncService fallback:', err);
+            }
+          }
+          setRideLog(prev => prev.map(log => log.id === rideId ? updatedRide : log));
+        } catch (err) {
+          console.error('Failed to persist status change (socket or supabase):', err);
         }
       }
-    } catch (error) {
-      console.error('Error in sendStatusChangeMessageToDriver:', error);
+
+      // Send notification to driver via socket
+      if (window.dispatcherSocket && updatedRide.vehicleId) {
+        const rideData = {
+          id: updatedRide.id,
+          timestamp: updatedRide.timestamp,
+          vehicleName: updatedRide.vehicleName,
+          vehicleLicensePlate: updatedRide.vehicleLicensePlate,
+          driverName: updatedRide.driverName,
+          vehicleType: updatedRide.vehicleType,
+          customerName: updatedRide.customerName,
+          rideType: updatedRide.rideType,
+          customerPhone: updatedRide.customerPhone,
+          stops: updatedRide.stops,
+          passengers: updatedRide.passengers,
+          pickupTime: updatedRide.pickupTime,
+          status: updatedRide.status.toLowerCase(),
+          vehicleId: updatedRide.vehicleId,
+          notes: updatedRide.notes,
+          estimatedPrice: updatedRide.estimatedPrice,
+          estimatedPickupTimestamp: updatedRide.estimatedPickupTimestamp,
+          estimatedCompletionTimestamp: updatedRide.estimatedCompletionTimestamp
+        };
+
+        window.dispatcherSocket.emit('ride_update', {
+          shiftId: `dispatcher_shift`,
+          rideData: rideData
+        });
+
+        console.log('Ride notification sent to driver via socket:', rideId);
+      }
+
+      // Ride notifications are now handled by Stream Chat
+
+      // Close the edit modal
+      setEditingRideLog(null);
+      setIsRideBookOpen(true);
+
+      console.log('Ride sent to driver:', rideId);
+    } catch (err) {
+      console.error('Failed to send ride to driver', err);
+      alert('Failed to send ride to driver. Please try again.');
     }
   };
 
@@ -1285,11 +1300,42 @@ const AppContent: React.FC = () => {
         return; // Wait for user confirmation
     }
 
-    // For all other updates, save first then apply
+    // For all other updates, prefer server-authoritative emit and then apply locally (optimistic)
     try {
-      await supabaseService.addRideLog(updatedLog);
+      if ((window as any).dispatcherSocket) {
+        const rideData = {
+          id: updatedLog.id,
+          timestamp: updatedLog.timestamp,
+          vehicleName: updatedLog.vehicleName,
+          vehicleLicensePlate: updatedLog.vehicleLicensePlate,
+          driverName: updatedLog.driverName,
+          vehicleType: updatedLog.vehicleType,
+          customerName: updatedLog.customerName,
+          rideType: (updatedLog.rideType ?? 'business').toLowerCase(),
+          customerPhone: updatedLog.customerPhone,
+          stops: updatedLog.stops,
+          passengers: updatedLog.passengers,
+          pickupTime: updatedLog.pickupTime,
+          status: (updatedLog.status || '').toLowerCase(),
+          vehicleId: updatedLog.vehicleId,
+          notes: updatedLog.notes,
+          estimatedPrice: updatedLog.estimatedPrice,
+          estimatedPickupTimestamp: updatedLog.estimatedPickupTimestamp,
+          estimatedCompletionTimestamp: updatedLog.estimatedCompletionTimestamp,
+        };
+        (window as any).dispatcherSocket.emit('ride_update', { shiftId: 'dispatcher_shift', rideData });
+        console.log('➡️ Emitted ride_update via socket for ride update:', updatedLog.id);
+      } else {
+        try {
+          const mod = await import('./services/syncService');
+          await mod.persistRide(updatedLog);
+        } catch (err) {
+          console.warn('syncService.persistRide failed, falling back to supabaseService.addRideLog', err);
+          await supabaseService.addRideLog(updatedLog);
+        }
+      }
     } catch (err) {
-      console.error('Failed to save ride log update', err);
+      console.error('Failed to save ride log update (socket or supabase)', err);
       alert('Failed to save ride status change. Please try again.');
       return;
     }
@@ -1297,8 +1343,7 @@ const AppContent: React.FC = () => {
     setRideLog(prev => prev.map(log => log.id === updatedLog.id ? updatedLog : log));
 
     if (originalLog && originalLog.status !== updatedLog.status && updatedLog.vehicleId) {
-        // Send notification message to driver about status change
-        sendStatusChangeMessageToDriver(updatedLog, originalLog.status);
+        // Status change notifications are now handled by Stream Chat
 
         if (updatedLog.status === RideStatus.Completed || updatedLog.status === RideStatus.Cancelled) {
             setVehicles(prev => prev.map(v => (v.id === updatedLog.vehicleId && v.status === VehicleStatus.Busy) ? { ...v, status: VehicleStatus.Available, freeAt: undefined } : v));
@@ -1366,6 +1411,15 @@ const AppContent: React.FC = () => {
       if (SUPABASE_ENABLED) {
         try {
           await supabaseService.deleteRideLog(logId);
+
+          // Emit ride deletion event via socket.io
+          if (window.dispatcherSocket) {
+            console.log('Emitting ride deletion event for:', logId);
+            window.dispatcherSocket.emit('ride_deleted', {
+              rideId: logId,
+              shiftId: 'dispatcher_shift'
+            });
+          }
         } catch (err) {
           console.error('Failed to delete ride log from supabase:', err);
         }
@@ -1377,7 +1431,7 @@ const AppContent: React.FC = () => {
     setSmsGateConfig(newConfig);
     localStorage.setItem('sms-gate-config', JSON.stringify(newConfig));
     try {
-      await fetch('http://localhost:3001/api/config', {
+      await fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newConfig),
@@ -1535,17 +1589,17 @@ const AppContent: React.FC = () => {
         new Date(log.timestamp).toLocaleString(language || 'cs-CZ'),
         log.vehicleName,
         log.vehicleLicensePlate,
-        log.vehicleType ? (log.vehicleType === 'Car' ? t('vehicleType.CAR') : log.vehicleType === 'Van' ? t('vehicleType.VAN') : log.vehicleType) : '',
+        log.vehicleType ? (log.vehicleType === VehicleType.Car ? t('vehicleType.CAR') : log.vehicleType === VehicleType.Van ? t('vehicleType.VAN') : log.vehicleType) : '',
         log.driverName,
         log.customerName,
         log.customerPhone,
         log.stops[0] || '', // Pickup
         log.stops.slice(1).join('; ') || '', // Destinations
         log.pickupTime,
-        log.status === 'Scheduled' ? t('rideStatus.SCHEDULED') :
-        log.status === 'InProgress' ? t('rideStatus.IN_PROGRESS') :
-        log.status === 'Completed' ? t('rideStatus.COMPLETED') :
-        log.status === 'Cancelled' ? t('rideStatus.CANCELLED') : log.status,
+        log.status === RideStatus.Scheduled ? t('rideStatus.SCHEDULED') :
+        log.status === RideStatus.InProgress ? t('rideStatus.IN_PROGRESS') :
+        log.status === RideStatus.Completed ? t('rideStatus.COMPLETED') :
+        log.status === RideStatus.Cancelled ? t('rideStatus.CANCELLED') : log.status,
         log.estimatedPrice ?? '',
         log.notes ?? ''
       ].map(escapeCsvCell));
@@ -1620,10 +1674,23 @@ const AppContent: React.FC = () => {
 
   const reloadRideLogs = useCallback(async () => {
     try {
+      console.log('🔄 Reloading ride logs...');
       const rl = await supabaseService.getRideLogs().catch(() => []);
+      console.log(`📊 Reloaded ${Array.isArray(rl) ? rl.length : 0} ride logs from Supabase`);
       setRideLog(Array.isArray(rl) ? rl : []);
     } catch (err) {
-      console.error('Error reloading ride logs:', err);
+      console.error('❌ Error reloading ride logs:', err);
+    }
+  }, []);
+
+  const reloadVehicles = useCallback(async () => {
+    try {
+      console.log('🔄 Reloading vehicles...');
+      const vh = await supabaseService.getVehicles().catch(() => []);
+      console.log(`🚗 Reloaded ${Array.isArray(vh) ? vh.length : 0} vehicles from Supabase`);
+      setVehicles(Array.isArray(vh) ? vh : []);
+    } catch (err) {
+      console.error('❌ Error reloading vehicles:', err);
     }
   }, []);
 
@@ -1819,11 +1886,150 @@ const AppContent: React.FC = () => {
     dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
     vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} locations={locations} />,
     map: <OpenStreetMap vehicles={vehicles} people={people} locations={locations} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
-      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onSort={handleSort} sortConfig={sortConfig} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} onResendRide={handleResendRide} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} />,
+      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onSendSms={handleSendSms} onResendRide={handleResendRide} onSendToDriver={handleSendToDriver} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} hasNewRides={hasNewRides} onMarkRidesViewed={() => setHasNewRides(false)} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-      driverChat: <DriverChat vehicles={vehicles} onNewMessage={handleDriverMessage} />,
+      driverChat: <StreamChatComponent vehicles={vehicles} people={people} onNewMessage={(vehicleId, message, options) => {
+        // Trigger browser notification for new messages (non-focus-stealing)
+        const vehicle = vehicles.find(v => v.id === vehicleId);
+        const vehicleName = vehicle ? vehicle.name : `Vozidlo ${vehicleId}`;
+        notifyUser('message', {
+          title: 'Nová zpráva od řidiče',
+          body: `${vehicleName}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`,
+          focusStealing: options?.focusStealing ?? false
+        });
+      }} />,
+        socketRides: <SocketRides
+          currentUser={user}
+          shiftId="dispatcher_shift"
+          isDispatcher={true}
+          onSocketReady={(socketInstance) => {
+            // Store socket instance for emitting events
+            window.dispatcherSocket = socketInstance;
+
+            // Listen for vehicle updates from other clients
+            socketInstance.on('vehicles_updated', (data) => {
+              console.log('Vehicles updated from socket:', data.vehicles);
+              if (data.vehicles && Array.isArray(data.vehicles)) {
+                setVehicles(prevVehicles => {
+                  const updatedVehicles = [...prevVehicles];
+                  data.vehicles.forEach(updatedVehicle => {
+                    const index = updatedVehicles.findIndex(v => v.id === updatedVehicle.id);
+                    if (index >= 0) {
+                      updatedVehicles[index] = { ...updatedVehicles[index], ...updatedVehicle };
+                    }
+                  });
+                  return updatedVehicles;
+                });
+              }
+            });
+          }}
+          onRideUpdate={(rideData) => {
+           // Handle ride updates from Socket.io
+           const mappedRide = {
+             id: rideData.id,
+             timestamp: rideData.timestamp,
+             vehicleName: rideData.vehicleName ?? null,
+             vehicleLicensePlate: rideData.vehicleLicensePlate ?? null,
+             driverName: rideData.driverName ?? null,
+             vehicleType: rideData.vehicleType ?? null,
+             customerName: rideData.customerName,
+             rideType: (rideData.rideType ?? 'business').toUpperCase(),
+             customerPhone: rideData.customerPhone,
+             stops: rideData.stops,
+             passengers: rideData.passengers,
+             pickupTime: rideData.pickupTime,
+             status: rideData.status?.toLowerCase() === 'in_progress' ? RideStatus.InProgress :
+                     rideData.status?.toLowerCase() === 'completed' ? RideStatus.Completed :
+                     rideData.status?.toLowerCase() === 'cancelled' ? RideStatus.Cancelled :
+                     rideData.status?.toLowerCase() === 'accepted' ? RideStatus.Accepted :
+                     RideStatus.Pending,
+             vehicleId: rideData.vehicleId ?? null,
+             notes: rideData.notes ?? null,
+             estimatedPrice: rideData.estimatedPrice ?? null,
+             estimatedPickupTimestamp: rideData.estimatedPickupTimestamp,
+             estimatedCompletionTimestamp: rideData.estimatedCompletionTimestamp,
+             fuelCost: rideData.fuelCost ?? null,
+             distance: rideData.distance ?? null,
+             payment: rideData.payment ?? null,
+             acceptedAt: rideData.acceptedAt ?? null,
+             startedAt: rideData.startedAt ?? null,
+             completedAt: rideData.completedAt ?? null,
+           };
+
+           // Check if this is a new ride (not already in our ride log)
+           const isNewRide = !rideLog.some(r => r.id === rideData.id);
+
+           setRideLog(prev => {
+             const existingIndex = prev.findIndex(r => r.id === rideData.id);
+             if (existingIndex >= 0) {
+               const updated = [...prev];
+               updated[existingIndex] = { ...updated[existingIndex], ...mappedRide };
+               return updated;
+             } else {
+               return [mappedRide, ...prev];
+             }
+           });
+
+            // Notify dispatcher of new ride from driver
+            if (isNewRide && rideData.status?.toLowerCase() === 'pending') {
+              setHasNewRides(true); // Mark that there are new rides
+              notifyUser('ride', {
+                title: 'Nová jízda od řidiče!',
+                body: `${rideData.customerName} - ${rideData.stops?.[0]} → ${rideData.stops?.[rideData.stops.length - 1]}`
+             });
+           }
+         }}
+        onStatusChange={(rideId, newStatus) => {
+          // Handle status changes from Socket.io
+          const statusLower = newStatus.toLowerCase();
+          setRideLog(prev => prev.map(ride =>
+            ride.id === rideId
+              ? {
+                  ...ride,
+                  status: statusLower === 'in_progress' ? RideStatus.InProgress :
+                          statusLower === 'completed' ? RideStatus.Completed :
+                          statusLower === 'cancelled' ? RideStatus.Cancelled :
+                          statusLower === 'accepted' ? RideStatus.Accepted :
+                          statusLower === 'pending' ? RideStatus.Pending :
+                          ride.status,
+                }
+              : ride
+          ));
+        }}
+        onRideCancel={(rideId) => {
+          // Handle ride cancellations from Socket.io
+          setRideLog(prev => prev.filter(ride => ride.id !== rideId));
+        }}
+        onVehicleStatusUpdate={(data) => {
+          // Handle vehicle status updates from Socket.io
+          console.log('Vehicle status update received:', data);
+          console.log('Current vehicles before update:', vehicles.map(v => ({ id: v.id, status: v.status })));
+
+          setVehicles(prev => {
+            const updated = prev.map(vehicle =>
+              vehicle.id === data.vehicleId
+                ? { ...vehicle, status: data.status }
+                : vehicle
+            );
+            console.log('Vehicles after update:', updated.map(v => ({ id: v.id, status: v.status })));
+            return updated;
+          });
+        }}
+        onPositionUpdate={(data) => {
+          // Handle real-time position updates from Socket.io
+          console.log('Position update received:', data);
+          setLocations(prev => ({
+            ...prev,
+            [data.vehicleId.toString()]: {
+              latitude: data.latitude,
+              longitude: data.longitude,
+              timestamp: data.timestamp
+            }
+          }));
+        }}
+      />,
   };
 
   const visibleLayout = layout.filter(item => widgetVisibility[item.id]);
@@ -2019,133 +2225,11 @@ const AppContent: React.FC = () => {
 
 
 
-              {/* Main Dashboard Grid */}
-              <div className="grid grid-cols-3 gap-6">
-                {(() => {
-                  const mapColStart = widgetVisibility.dispatch ? 2 : 1;
-                  const mapColSpan = widgetVisibility.dispatch ? 2 : 3;
-                  const smsColStart = widgetVisibility.dispatch ? 2 : 1;
-                  const smsColSpan = widgetVisibility.dispatch ? 2 : 3;
-                  const smsRowStart = widgetVisibility.map ? 2 : 1;
-                  const rideLogColSpan = widgetVisibility.vehicles ? 2 : 3;
-                  const vehiclesColStart = widgetVisibility.rideLog ? 3 : 1;
-                  const vehiclesColSpan = widgetVisibility.rideLog ? 1 : 3;
-
-                  return (
-                    <>
-                      {/* Dispatch Widget - Column 1, Rows 1-2 */}
-                      {widgetVisibility.dispatch && (
-                        <div className="col-start-1 row-start-1 row-span-2">
-                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
-                            <div className="p-4">
-                              {widgetMap.dispatch}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Map Widget - Dynamic columns, Row 1 */}
-                      {widgetVisibility.map && (
-                        <div className={`col-start-${mapColStart} row-start-1 col-span-${mapColSpan}`}>
-                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
-                             <div className="p-3 border-b border-slate-700">
-                               <h3 className="text-sm font-semibold text-white flex items-center">
-                                 <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
-                                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                                  </svg>
-                                 </div>
-                                 Mapa vozového parku
-                               </h3>
-                             </div>
-                             <div className="p-4">
-                               <div className="h-96">
-                                 {widgetMap.map}
-                               </div>
-                             </div>
-                           </div>
-                         </div>
-                      )}
-
-                       {/* Driver Chat - Dynamic columns and row */}
-                       {widgetVisibility.driverChat && (
-                         <div className={`col-start-${smsColStart} row-start-${smsRowStart} col-span-${smsColSpan}`}>
-                            <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
-                              <div className="p-4 h-full">
-                                {widgetMap.driverChat}
-                              </div>
-                            </div>
-                          </div>
-                       )}
-
-                      {/* Ride History - Dynamic columns, Row 3 */}
-                      {widgetVisibility.rideLog && (
-                        <div className={`col-start-1 row-start-3 col-span-${rideLogColSpan}`}>
-                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
-                             <div className="p-3 border-b border-slate-700">
-                                <div className="flex justify-between items-center">
-                                  <h3 className="text-sm font-semibold text-white flex items-center">
-                                    <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
-                                      <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                     </svg>
-                                    </div>
-                                    Historie jízd
-                                  </h3>
-                                    <div className="flex items-center space-x-2">
-                                      <button
-                                        onClick={reloadRideLogs}
-                                        className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                                        title="Reload ride history"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                        </svg>
-                                      </button>
-                                      <button
-                                        onClick={handleAddRideClick}
-                                        className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
-                                      >
-                                     <PlusIcon size={14} />
-                                     <span>Přidat jízdu</span>
-                                   </button>
-                                    </div>
-                               </div>
-                            </div>
-                            <div className="p-4">
-                              {widgetMap.rideLog}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Vehicles Status - Dynamic columns, Row 3 */}
-                      {widgetVisibility.vehicles && (
-                        <div className={`col-start-${vehiclesColStart} row-start-3 col-span-${vehiclesColSpan}`}>
-                           <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
-                             <div className="p-3 border-b border-slate-700">
-                               <h3 className="text-sm font-semibold text-white flex items-center">
-                                 <div className="w-6 h-6 bg-[#EBCB8B]/80 rounded-lg flex items-center justify-center mr-2">
-                                   <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                                  </svg>
-                                 </div>
-                                 Stav vozového parku
-                               </h3>
-                             </div>
-                             <div className="p-4">
-                               {widgetMap.vehicles}
-                             </div>
-                           </div>
-                         </div>
-                      )}
-                    </>
-                  );
-                })()}
-
-                {/* Dispatch Widget - Column 1, Rows 1-2 */}
+               {/* Main Dashboard Grid */}
+               <div className="grid grid-cols-3 gap-6">
+                 {/* Dispatch Widget - Column 1, Row 1 */}
                 {widgetVisibility.dispatch && (
-                  <div className="col-start-1 row-start-1 row-span-2">
+                  <div className="col-start-1 row-start-1">
                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
                       <div className="p-4">
                         {widgetMap.dispatch}
@@ -2154,11 +2238,11 @@ const AppContent: React.FC = () => {
                   </div>
                 )}
 
-                {/* Map Widget - Columns 2-3, Row 1 */}
+                {/* Map Widget - Column 3, Row 1 */}
                 {widgetVisibility.map && (
-                  <div className="col-start-2 row-start-1 col-span-2">
-                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
-                       <div className="p-3 border-b border-slate-700">
+                  <div className="col-start-3 row-start-1">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full flex flex-col">
+                       <div className="p-3 border-b border-slate-700 flex-shrink-0">
                          <h3 className="text-sm font-semibold text-white flex items-center">
                            <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2168,81 +2252,139 @@ const AppContent: React.FC = () => {
                            Mapa vozového parku
                          </h3>
                        </div>
-                       <div className="p-4">
-                         <div className="h-96">
-                           {widgetMap.map}
-                         </div>
+                       <div className="flex-1 min-h-0">
+                         {widgetMap.map}
                        </div>
                      </div>
                    </div>
                 )}
 
-                 {/* Driver Chat - Columns 2-3, Row 2 */}
-                 {widgetVisibility.driverChat && (
-                   <div className="col-start-2 row-start-2 col-span-2">
-                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-96">
-                        <div className="p-4 h-full">
-                         {widgetMap.driverChat}
-                       </div>
-                     </div>
-                   </div>
-                 )}
-
-                {/* Ride History - Column 1-2, Row 3 */}
-                {widgetVisibility.rideLog && (
-                  <div className="col-start-1 row-start-3 col-span-2">
-                  <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
-                    <div className="p-3 border-b border-slate-700">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-semibold text-white flex items-center">
-                          <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
-                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                           </svg>
-                         </div>
-                         Historie jízd
-                       </h3>
-                         <div className="flex items-center space-x-2">
-                           <button
-                             onClick={reloadRideLogs}
-                             className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
-                             title="Reload ride history"
-                           >
-                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                             </svg>
-                           </button>
-                           <button
-                             onClick={handleAddRideClick}
-                             className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
-                           >
-                          <PlusIcon size={14} />
-                          <span>Přidat jízdu</span>
-                        </button>
-                         </div>
-                     </div>
-                   </div>
-                   <div className="p-4">
-                        {widgetMap.rideLog}
+                  {/* Driver Chat - Column 2, Row 1 */}
+                  {widgetVisibility.driverChat && (
+                    <div className="col-start-2 row-start-1">
+                       <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
+                         <div className="p-4 h-full">
+                          {widgetMap.driverChat}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Vehicles Status - Column 3, Row 3 */}
-                {widgetVisibility.vehicles && (
-                  <div className="col-start-3 row-start-3">
-                  <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
-                    <div className="p-3 border-b border-slate-700">
-                      <h3 className="text-sm font-semibold text-white flex items-center">
-                        <div className="w-6 h-6 bg-[#EBCB8B]/80 rounded-lg flex items-center justify-center mr-2">
-                          <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                         </svg>
+                 {/* Ride History - Column 1-2, Row 2 */}
+                 {widgetVisibility.rideLog && (
+                   <div className="col-start-1 row-start-2 col-span-2">
+                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full flex flex-col">
+                       <div className="p-3 border-b border-slate-700 flex-shrink-0">
+                         <div className="flex justify-between items-center">
+                           <h3 className="text-sm font-semibold text-white flex items-center">
+                             <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
+                               <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                               </svg>
+                             </div>
+                             Historie jízd
+                           </h3>
+                           <div className="flex items-center space-x-2">
+                             <button
+                               onClick={reloadRideLogs}
+                               className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                               title="Reload ride history"
+                             >
+                               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                               </svg>
+                             </button>
+                             <button
+                               onClick={() => setRideHistoryExpanded(!rideHistoryExpanded)}
+                               className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                               title={rideHistoryExpanded ? "Collapse ride history" : "Expand ride history"}
+                             >
+                               <svg
+                                 className={`w-4 h-4 transition-transform ${rideHistoryExpanded ? 'rotate-180' : ''}`}
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke="currentColor"
+                               >
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                               </svg>
+                             </button>
+                             <button
+                               onClick={handleAddRideClick}
+                               className="flex items-center space-x-2 px-3 py-1 bg-[#A3BE8C] hover:bg-[#8FBCBB] text-slate-900 text-xs font-medium rounded-lg transition-colors"
+                             >
+                               <PlusIcon size={14} />
+                               <span>Přidat jízdu</span>
+                             </button>
+                           </div>
+                         </div>
                        </div>
-                       Stav vozového parku
-                     </h3>
+
+                       {rideHistoryExpanded && (
+                         <div className="flex-1 min-h-0 p-4">
+                           {widgetMap.rideLog}
+
+                           {/* Collapsible Socket Rides Section */}
+                           <div className="mt-4 border-t border-slate-700 pt-4">
+                             <button
+                               onClick={() => setSocketRidesExpanded(!socketRidesExpanded)}
+                               className="flex items-center justify-between w-full p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                             >
+                               <div className="flex items-center space-x-2">
+                                 <div className="w-4 h-4 bg-[#81A1C1]/80 rounded flex items-center justify-center">
+                                   <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                   </svg>
+                                 </div>
+                                 <span className="text-sm font-medium text-white">Real-time jízdy</span>
+                                 <span className="text-xs text-slate-400">({recentRideLog.length})</span>
+                               </div>
+                               <svg
+                                 className={`w-4 h-4 text-slate-400 transition-transform ${socketRidesExpanded ? 'rotate-180' : ''}`}
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke="currentColor"
+                               >
+                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                               </svg>
+                             </button>
+
+                             {socketRidesExpanded && widgetVisibility.socketRides && (
+                               <div className="mt-3">
+                                 {widgetMap.socketRides}
+                               </div>
+                             )}
+                           </div>
+                         </div>
+                       )}
+                     </div>
                    </div>
+                  )}
+
+                {/* Vehicles Status - Column 3, Row 2 */}
+                {widgetVisibility.vehicles && (
+                  <div className="col-start-3 row-start-2">
+                  <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden">
+                     <div className="p-3 border-b border-slate-700">
+                       <h3 className="text-sm font-semibold text-white flex items-center justify-between">
+                         <div className="flex items-center">
+                           <div className="w-6 h-6 bg-[#EBCB8B]/80 rounded-lg flex items-center justify-center mr-2">
+                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                           </div>
+                           Stav vozového parku
+                         </div>
+                         <button
+                           onClick={reloadVehicles}
+                           className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                           title="Reload vehicle status"
+                         >
+                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                           </svg>
+                         </button>
+                       </h3>
+                     </div>
                    <div className="p-4">
                         {widgetMap.vehicles}
                       </div>
@@ -2250,7 +2392,9 @@ const AppContent: React.FC = () => {
                   </div>
                 )}
 
-             </div>
+
+
+              </div>
           </div>
         </main>
       
@@ -2265,8 +2409,8 @@ const AppContent: React.FC = () => {
       {/* Modals */}
       {editingVehicle && (<EditVehicleModal vehicle={editingVehicle} people={people} onSave={handleUpdateVehicle} onClose={() => setEditingVehicle(null)} onDelete={handleDeleteVehicle}/>)}
       {isAddingVehicle && (<AddVehicleModal onSave={handleAddVehicle} onClose={() => setIsAddingVehicle(false)}/>)}
-      {editingRideLog && (<EditRideLogModal log={editingRideLog} vehicles={vehicles} people={people} onSave={handleUpdateRideLog} onSendSms={handleSendSms} onClose={() => { setEditingRideLog(null); setIsRideBookOpen(true); }}/>)}
-      {isCreatingRide && (<EditRideLogModal log={createDefaultRideLog()} vehicles={vehicles} people={people} onSave={handleCreateRideLog} onSendSms={handleSendSms} onClose={() => { setIsCreatingRide(false); setIsRideBookOpen(true); }}/>)}
+      {editingRideLog && (<EditRideLogModal log={editingRideLog} vehicles={vehicles} people={people} onSave={handleUpdateRideLog} onSendSms={handleSendSms} onSendToDriver={handleSendToDriver} onClose={() => { setEditingRideLog(null); setIsRideBookOpen(true); }}/>)}
+      {isCreatingRide && (<EditRideLogModal log={createDefaultRideLog()} vehicles={vehicles} people={people} onSave={handleCreateRideLog} onSendSms={handleSendSms} onSendToDriver={handleSendToDriver} onClose={() => { setIsCreatingRide(false); setIsRideBookOpen(true); }}/>)}
       {isRideBookOpen && (<RideBookModal rideLogs={rideLog} vehicles={vehicles} people={people} companyInfo={companyInfo} onEdit={(log) => { setEditingRideLog(log); setIsRideBookOpen(false); }} onDelete={handleDeleteRideLog} onAdd={() => { setIsCreatingRide(true); setIsRideBookOpen(false); }} onClose={() => setIsRideBookOpen(false)} />)}
       {manualAssignmentDetails && (<ManualAssignmentModal details={manualAssignmentDetails} people={people} onConfirm={handleManualAssignmentConfirm} onClose={() => setManualAssignmentDetails(null)} messagingApp={messagingApp} />)}
       {isPeopleModalOpen && (<ManagePeopleModal people={people} onAdd={handleAddPerson} onUpdate={handleUpdatePerson} onDelete={handleDeletePerson} onClose={() => setIsPeopleModalOpen(false)}/>)}

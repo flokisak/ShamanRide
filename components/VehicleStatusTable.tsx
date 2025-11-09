@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import type { Vehicle, Person, RideLog, Achievement } from '../types';
-import { VehicleStatus, VehicleType, RideStatus } from '../types';
+import { VehicleStatus, VehicleType, RideStatus, PersonRole } from '../types';
 import { CarIcon, EditIcon, WrenchIcon, AlertTriangleIcon, FuelIcon, TrophyIcon, StarIcon, DeerIcon } from './icons';
 import { Countdown } from './Countdown';
 import { useTranslation } from '../contexts/LanguageContext';
@@ -68,7 +68,7 @@ export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles
       const achievementsMap = new Map<number, Achievement[]>();
 
       for (const person of people) {
-        if (person.role === 'DRIVER') {
+        if (person.role === PersonRole.Driver) {
           try {
             const achievements = await supabaseService.getDriverAchievements(person.id);
             if (achievements && achievements.length > 0) {

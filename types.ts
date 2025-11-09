@@ -37,6 +37,11 @@ export enum NavigationApp {
   Waze = 'waze',
 }
 
+export enum PaymentMethod {
+  Cash = 'cash',
+  Card = 'card',
+}
+
 export enum FuelType {
   Diesel = 'DIESEL',
   Petrol = 'PETROL',
@@ -73,10 +78,15 @@ export interface Vehicle {
   vignetteExpiry?: string; // YYYY-MM-DD
   vehicleNotes?: string;
   fuelType?: FuelType;
-   fuelConsumption?: number; // L/100km
-   phone?: string; // Phone number for the vehicle's built-in phone
-   email?: string; // Driver's email for authentication
- }
+  fuelConsumption?: number; // L/100km
+     phone?: string; // Phone number for the vehicle's built-in phone
+     email?: string; // Driver's email for authentication
+  shiftStart?: string; // ISO timestamp when shift started
+  shiftEnd?: string; // ISO timestamp when shift ended
+  shiftStartOdo?: number; // Odometer reading when shift started
+  shiftEndOdo?: number; // Odometer reading when shift ended
+  lastLocationUpdate?: number; // Timestamp when location was last updated
+}
 
 export interface RideRequest {
   stops: string[]; // First stop is pickup, the rest are destinations
@@ -136,21 +146,24 @@ export interface RideLog {
   passengers: number;
   notes?: string;
   estimatedPrice?: number;
-  // Timestamps for tracking and notifications
-  estimatedPickupTimestamp?: number;
-  estimatedCompletionTimestamp?: number;
-  fuelCost?: number;
-  // Kniha jízd fields
-  rideType: RideType; // BUSINESS or PRIVATE
-  startMileage?: number; // Počáteční stav km
-  endMileage?: number; // Konečný stav km
-  distance?: number; // Ujetá vzdálenost v km
-  purpose?: string; // Účel jízdy (pro soukromé jízdy)
-  businessPurpose?: string; // Účel služební jízdy
+   // Timestamps for tracking and notifications
+   estimatedPickupTimestamp?: number;
+   estimatedCompletionTimestamp?: number;
+   acceptedAt?: number;
+   startedAt?: number;
+   fuelCost?: number;
+   // Kniha jízd fields
+   rideType: RideType; // BUSINESS or PRIVATE
+   startMileage?: number; // Počáteční stav km
+   endMileage?: number; // Konečný stav km
+   distance?: number; // Ujetá vzdálenost v km
+   purpose?: string; // Účel jízdy (pro soukromé jízdy)
+   businessPurpose?: string; // Účel služební jízdy
+   payment?: PaymentMethod; // Payment method
 }
 
 // Types for customizable layout
-export type WidgetId = 'dispatch' | 'vehicles' | 'rideLog' | 'map' | 'leaderboard' | 'smsGate' | 'dailyStats' | 'driverChat';
+export type WidgetId = 'dispatch' | 'vehicles' | 'rideLog' | 'map' | 'leaderboard' | 'smsGate' | 'dailyStats' | 'driverChat' | 'socketRides';
 
 export interface LayoutItem {
   id: WidgetId;
@@ -165,7 +178,7 @@ export type LayoutConfig = LayoutItem[];
 // Types for Notification System
 export interface Notification {
   id: string;
-  type: 'delay' | 'reminder' | 'customerOrder';
+  type: 'delay' | 'reminder' | 'customerOrder' | 'info';
   titleKey: string;
   messageKey: string;
   messageParams?: Record<string, string | number>;
@@ -251,7 +264,8 @@ export enum AchievementType {
   DEER_MASTER = 'DEER_MASTER',
   REVENUE_CHAMPION = 'REVENUE_CHAMPION',
   STREAK_MASTER = 'STREAK_MASTER',
-  NIGHT_OWL = 'NIGHT_OWL'
+  NIGHT_OWL = 'NIGHT_OWL',
+  FAST_ACCEPTANCE = 'FAST_ACCEPTANCE'
 }
 
 export enum ManualEntryType {
@@ -273,7 +287,9 @@ export interface DriverScore {
   customer_count_score: number;
   revenue_score: number;
   perfect_rides_score: number;
+  acceptance_time_score: number;
   deer_collision_score: number; // Easter egg
+  average_rating?: number; // Optional field for customer ratings
   rank: number;
   updated_at: string;
 }
@@ -315,5 +331,21 @@ export interface DriverStats {
   total_paid_km: number;
   total_empty_km: number;
   manual_entries_points: number;
+  average_rating?: number; // Optional field for customer ratings
+  updated_at: string;
+}
+
+// Shift management types
+export interface ShiftData {
+  id: string;
+  driver_id: number;
+  vehicle_id: number;
+  start_time: number;
+  end_time?: number;
+  start_odometer: number;
+  end_odometer?: number;
+  total_distance?: number;
+  total_earnings?: number;
+  created_at: string;
   updated_at: string;
 }

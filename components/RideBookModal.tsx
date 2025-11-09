@@ -72,6 +72,8 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
       'Telefon',
       'Trasa',
       'Typ jízdy',
+      'Cena',
+      'Způsob platby',
       'Počáteční km',
       'Konečný km',
       'Vzdálenost',
@@ -93,6 +95,8 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
         log.customerPhone,
         log.stops.join(' -> '),
         log.rideType ? t(`rideType.${log.rideType}`) : '-',
+        log.estimatedPrice || '-',
+        log.payment ? (log.payment === 'cash' ? 'Hotovost' : 'Karta') : '-',
         log.startMileage || '-',
         log.endMileage || '-',
         log.distance || '-',
@@ -156,6 +160,9 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
             <h2>Souhrn</h2>
             <p><strong>Celková vzdálenost služebních jízd:</strong> ${mileageSummary.totalBusinessDistance.toLocaleString()} km</p>
             <p><strong>Celková vzdálenost soukromých jízd:</strong> ${mileageSummary.totalPrivateDistance.toLocaleString()} km</p>
+            <p><strong>Celkové příjmy:</strong> ${mileageSummary.totalRevenue.toLocaleString()} Kč</p>
+            <p><strong>Příjmy z karet:</strong> ${mileageSummary.cardRevenue.toLocaleString()} Kč</p>
+            <p><strong>Příjmy z hotovosti:</strong> ${mileageSummary.cashRevenue.toLocaleString()} Kč</p>
             <p><strong>Celkové náklady na palivo:</strong> ${mileageSummary.totalFuelCost.toLocaleString()} Kč</p>
           </div>
 
@@ -169,6 +176,8 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
                 <th>Zákazník</th>
                 <th>Trasa</th>
                 <th>Typ jízdy</th>
+                <th>Cena</th>
+                <th>Platba</th>
                 <th>Počáteční km</th>
                 <th>Konečný km</th>
                 <th>Vzdálenost</th>
@@ -190,6 +199,8 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
                     <td>${log.customerName}</td>
                     <td>${log.stops.join(' -> ')}</td>
                     <td>${log.rideType ? t(`rideType.${log.rideType}`) : '-'}</td>
+                    <td>${log.estimatedPrice ? log.estimatedPrice + ' Kč' : '-'}</td>
+                    <td>${log.payment ? (log.payment === 'cash' ? 'Hotovost' : 'Karta') : '-'}</td>
                     <td>${log.startMileage || '-'}</td>
                     <td>${log.endMileage || '-'}</td>
                     <td>${log.distance || '-'}</td>
@@ -303,7 +314,7 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
         <div className="p-6">
           <div className="bg-slate-700 rounded-lg p-4 mb-4">
             <h3 className="text-lg font-semibold text-white mb-2">Souhrn</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm">
               <div>
                 <span className="text-gray-400">Služební jízdy:</span>
                 <span className="text-white ml-2">{mileageSummary.totalBusinessDistance.toLocaleString()} km</span>
@@ -311,6 +322,18 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
               <div>
                 <span className="text-gray-400">Soukromé jízdy:</span>
                 <span className="text-white ml-2">{mileageSummary.totalPrivateDistance.toLocaleString()} km</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Celkové příjmy:</span>
+                <span className="text-green-400 ml-2 font-medium">{mileageSummary.totalRevenue.toLocaleString()} Kč</span>
+              </div>
+              <div>
+                <span className="text-gray-400">💳 Karta:</span>
+                <span className="text-blue-400 ml-2 font-medium">{mileageSummary.cardRevenue.toLocaleString()} Kč</span>
+              </div>
+              <div>
+                <span className="text-gray-400">💵 Hotovost:</span>
+                <span className="text-green-300 ml-2 font-medium">{mileageSummary.cashRevenue.toLocaleString()} Kč</span>
               </div>
               <div>
                 <span className="text-gray-400">Náklady na palivo:</span>
@@ -329,6 +352,8 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Zákazník</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Trasa</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Typ</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Cena</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Platba</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Km</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Účel</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">Akce</th>
@@ -376,6 +401,22 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
                          }`}>
                           {log.rideType ? t(`rideType.${log.rideType}`) : '-'}
                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-green-400 font-medium">
+                        {log.estimatedPrice ? `${log.estimatedPrice} Kč` : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {log.payment ? (
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            log.payment === 'cash'
+                              ? 'bg-green-900/50 text-green-300 border border-green-700/50'
+                              : 'bg-blue-900/50 text-blue-300 border border-blue-700/50'
+                          }`}>
+                            {log.payment === 'cash' ? '💵 Hotovost' : '💳 Karta'}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-white">
                         {log.startMileage && log.endMileage ? (

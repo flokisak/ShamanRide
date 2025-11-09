@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { RideLog, Vehicle, Person } from '../types';
-import { RideStatus, VehicleStatus, PersonRole, RideType } from '../types';
+import { RideStatus, VehicleStatus, PersonRole, RideType, PaymentMethod } from '../types';
 import { CloseIcon, PlusIcon, TrashIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 import { geocodeAddress } from '../services/dispatchService';
@@ -13,9 +13,10 @@ interface EditRideLogModalProps {
   onSave: (log: RideLog) => void;
   onSendSms: (logId: string) => void;
   onClose: () => void;
+  onSendToDriver?: (logId: string) => void;
 }
 
-export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicles, people, onSave, onSendSms, onClose }) => {
+export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicles, people, onSave, onSendSms, onClose, onSendToDriver }) => {
   const { t } = useTranslation();
   const [formData, setFormData] = useState<RideLog>(log);
   const [estimatedPrice, setEstimatedPrice] = useState<number | null>(null);
@@ -244,12 +245,20 @@ export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicle
              <div className="border-t border-slate-700 pt-4">
                  <h3 className="text-md font-semibold text-gray-200 mb-2">{t('rideLog.title')}</h3>
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                     <div>
-                         <label htmlFor="rideType" className="block text-sm font-medium text-gray-300 mb-1">{t('rideLog.edit.rideType')}</label>
-                         <select id="rideType" name="rideType" value={formData.rideType} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
-                             {Object.values(RideType).map(type => (<option key={type} value={type}>{t(`rideType.${type}`)}</option>))}
-                         </select>
-                     </div>
+                      <div>
+                          <label htmlFor="rideType" className="block text-sm font-medium text-gray-300 mb-1">{t('rideLog.edit.rideType')}</label>
+                          <select id="rideType" name="rideType" value={formData.rideType} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                              {Object.values(RideType).map(type => (<option key={type} value={type}>{t(`rideType.${type}`)}</option>))}
+                          </select>
+                      </div>
+                      <div>
+                          <label htmlFor="payment" className="block text-sm font-medium text-gray-300 mb-1">{t('rideLog.edit.paymentMethod')}</label>
+                          <select id="payment" name="payment" value={formData.payment || ''} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500">
+                              <option value="">{t('rideLog.edit.selectPaymentMethod')}</option>
+                              <option value={PaymentMethod.Cash}>{t('paymentMethod.cash')}</option>
+                              <option value={PaymentMethod.Card}>{t('paymentMethod.card')}</option>
+                          </select>
+                      </div>
                      <div>
                          <label htmlFor="startMileage" className="block text-sm font-medium text-gray-300 mb-1">{t('rideLog.edit.startMileage')} (km)</label>
                          <input type="number" id="startMileage" name="startMileage" value={formData.startMileage || ''} onChange={handleChange} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"/>
@@ -284,14 +293,23 @@ export const EditRideLogModal: React.FC<EditRideLogModalProps> = ({ log, vehicle
               <textarea id="notes" name="notes" value={formData.notes || ''} onChange={handleChange} rows={3} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"/>
             </div>
           </div>
-          <div className="flex justify-end items-center p-6 bg-slate-900 border-t border-slate-700 rounded-b-lg space-x-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md bg-slate-600 text-gray-200 hover:bg-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-slate-800">
-              {t('general.cancel')}
-            </button>
-            <button type="submit" className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-slate-900 bg-cyan-400 hover:bg-cyan-500 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800">
-              {t('general.saveChanges')}
-            </button>
-          </div>
+            <div className="flex justify-end items-center p-6 bg-slate-900 border-t border-slate-700 rounded-b-lg space-x-3">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium rounded-md bg-slate-600 text-gray-200 hover:bg-slate-500 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-slate-800">
+                {t('general.cancel')}
+              </button>
+              {(formData.status === RideStatus.Scheduled || formData.status === RideStatus.Pending) && formData.vehicleId && onSendToDriver && (
+                <button
+                  type="button"
+                  onClick={() => onSendToDriver(formData.id)}
+                  className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-slate-800"
+                >
+                  📤 {formData.status === RideStatus.Scheduled ? 'Odeslat řidiči' : 'Znovu odeslat řidiči'}
+                </button>
+              )}
+              <button type="submit" className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-slate-900 bg-cyan-400 hover:bg-cyan-500 transition-colors focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-800">
+                {t('general.saveChanges')}
+              </button>
+            </div>
         </form>
       </div>
     </div>

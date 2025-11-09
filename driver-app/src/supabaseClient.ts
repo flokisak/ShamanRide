@@ -1,23 +1,203 @@
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_FUEL_PRICES } from './types';
+import { splitAddressAndPlaceId } from './utils/addressUtils';
 
 const isBrowser = typeof window !== 'undefined';
-const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
-const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.SUPABASE_ANON_KEY;
-const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.SUPABASE_SERVICE_KEY;
+// Use main app's environment variables for consistency
+const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.VITE_SUPABASE_SERVICE_KEY;
+
+console.log('Driver app environment variables:', {
+  supabaseUrl: supabaseUrl ? 'SET' : 'NOT SET',
+  supabaseAnonKey: supabaseAnonKey ? 'SET (length: ' + supabaseAnonKey.length + ')' : 'NOT SET',
+  supabaseServiceKey: supabaseServiceKey ? 'SET' : 'NOT SET'
+});
 
 export const SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
 
 let supabase: any = null;
 if (SUPABASE_ENABLED) {
-  // Use service key if available (for driver app), otherwise anon key
-  const key = supabaseServiceKey || supabaseAnonKey;
-  supabase = createClient(supabaseUrl, key);
+  // Create our own Supabase client for the driver app
+  // Use anon key for client-side authentication, rely on RLS policies
+  const key = supabaseAnonKey || supabaseServiceKey;
+  console.log('Creating Supabase client with key type:', supabaseServiceKey ? 'SERVICE' : 'ANON');
+  if (isBrowser) {
+    const GLOBAL_KEY = '__shamanride_supabase_client_driver__';
+    (window as any)[GLOBAL_KEY] = (window as any)[GLOBAL_KEY] || createClient(supabaseUrl, key, {
+      auth: {
+        storageKey: 'shamanride-driver-auth-token',
+        storage: window.localStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false
+      }
+    });
+    supabase = (window as any)[GLOBAL_KEY];
+    console.log('Using Supabase client for driver app with separate auth storage');
+  } else {
+    supabase = createClient(supabaseUrl, key);
+    console.log('Using Supabase key for driver app (server)');
+  }
 } else {
   console.warn('Supabase is not configured. Falling back to localStorage-based local mode.');
 }
 
 export { supabase };
+
+// Keep a cached access token on the window object so other modules (sockets)
+// can read it synchronously without calling getSession() repeatedly.
+if (typeof window !== 'undefined' && supabase && supabase.auth) {
+  try {
+    // Initialize cache from current session (non-blocking)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      (window as any).__shamanride_access_token = session?.access_token ?? null;
+    }).catch(() => {
+      (window as any).__shamanride_access_token = null;
+    });
+
+    // Update the cache on auth state changes
+    supabase.auth.onAuthStateChange((_event: string, session: any) => {
+      (window as any).__shamanride_access_token = session?.access_token ?? null;
+    });
+  } catch (err) {
+    // ignore
+  }
+}
+
+export function getCachedAccessToken() {
+  if (typeof window === 'undefined') return null;
+  return (window as any).__shamanride_access_token ?? null;
+}
+
+// Rate-limited, defensive refresh helper.
+// Avoids spamming Supabase /auth/token when multiple components attempt refreshes.
+export async function safeRefreshSession(opts?: { force?: boolean, minIntervalMs?: number }) {
+  if (!SUPABASE_ENABLED || !supabase || !supabase.auth) return null;
+
+  const minIntervalMs = opts?.minIntervalMs ?? 30 * 1000; // default 30s between refresh attempts
+  if (typeof window === 'undefined') return null;
+
+  (window as any).__shamanride_refresh_lock__ = (window as any).__shamanride_refresh_lock__ || { lastAttempt: 0, failures: 0 };
+  const lock = (window as any).__shamanride_refresh_lock__;
+  const now = Date.now();
+
+  if (!opts?.force && now - (lock.lastAttempt || 0) < minIntervalMs) {
+    // Too soon to attempt another refresh
+    return null;
+  }
+
+  lock.lastAttempt = now;
+
+  try {
+    // Use the Supabase client's refreshSession (it will read current session if not passed)
+    const res = await supabase.auth.refreshSession();
+    lock.failures = 0;
+
+    // Update cached token if present
+    try {
+      const newToken = res?.data?.session?.access_token ?? null;
+      (window as any).__shamanride_access_token = newToken;
+    } catch (e) {
+      // ignore
+    }
+
+    return res;
+  } catch (err) {
+    lock.failures = (lock.failures || 0) + 1;
+    // Exponential backoff applied by callers via minIntervalMs if needed
+    console.warn('safeRefreshSession: refresh failed', err);
+    return null;
+  }
+}
+
+// Synchronously return cached token or attempt a safe refresh if forceRefresh is true.
+export async function safeGetAccessToken({ forceRefresh = false } = {}) {
+  const cached = getCachedAccessToken();
+  if (cached && !forceRefresh) return cached;
+  // Try to refresh in a defensive way (respect caller's forceRefresh flag)
+  await safeRefreshSession({ force: forceRefresh });
+  return getCachedAccessToken();
+}
+
+// Auth keep-alive: periodically refresh the Supabase session to avoid
+// short-lived access token expiry (helps prevent unexpected auto-logout
+// when the browser is idle). Default interval is 2 minutes for more frequent refresh.
+let _authKeepAliveId: number | null = null;
+let _lastRefreshTime: number = 0;
+let _refreshAttempts: number = 0;
+const MAX_REFRESH_ATTEMPTS = 3;
+
+export function startAuthKeepAlive(intervalMs: number = 2 * 60 * 1000) {
+  if (!SUPABASE_ENABLED || typeof window === 'undefined') return;
+  try {
+    // Use a window-global guard so multiple bundles or hot-reloads don't start
+    // more than one keep-alive interval. Store state on
+    // window.__shamanride_auth_keep_alive__ = { id, lastRefreshTime, attempts }
+    const globalKey = '__shamanride_auth_keep_alive__';
+    const win: any = window as any;
+    if (!win[globalKey]) {
+      win[globalKey] = { id: null, lastRefreshTime: 0, attempts: 0 };
+    }
+    if (win[globalKey].id) return; // already started
+    console.log('Starting auth keep-alive (idempotent), interval ms:', intervalMs);
+    win[globalKey].id = window.setInterval(async () => {
+      try {
+        const now = Date.now();
+        // Skip if we refreshed recently (within last minute)
+        if (now - win[globalKey].lastRefreshTime < 60000) return;
+
+        // Only attempt a defensive refresh if we have a cached token
+        const cached = getCachedAccessToken();
+        if (!cached) {
+          console.log('Auth keep-alive: No cached token, skipping refresh');
+          return;
+        }
+
+        // Use the canonical safeRefreshSession helper which rate-limits/locks refreshes
+        const res = await safeRefreshSession({ minIntervalMs: 60 * 1000 });
+        if (res && res.data && res.data.session) {
+          console.log('Auth keep-alive: Session refreshed successfully');
+          win[globalKey].lastRefreshTime = now;
+          win[globalKey].attempts = 0; // Reset on success
+        } else {
+          console.warn('Auth keep-alive: refresh did not return a new session');
+          win[globalKey].attempts++;
+          if (win[globalKey].attempts >= MAX_REFRESH_ATTEMPTS) {
+            console.error('Auth keep-alive: Too many refresh failures, stopping keep-alive');
+            stopAuthKeepAlive();
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Auth keep-alive error:', err);
+        win[globalKey].attempts++;
+        if (win[globalKey].attempts >= MAX_REFRESH_ATTEMPTS) {
+          console.error('Auth keep-alive: Too many errors, stopping keep-alive');
+          stopAuthKeepAlive();
+        }
+      }
+    }, intervalMs) as unknown as number;
+  } catch (err) {
+    console.warn('Failed to start auth keep-alive:', err);
+  }
+}
+
+export function stopAuthKeepAlive() {
+  try {
+    const win: any = window as any;
+    const globalKey = '__shamanride_auth_keep_alive__';
+    if (win && win[globalKey] && win[globalKey].id) {
+      clearInterval(win[globalKey].id as number);
+      win[globalKey].id = null;
+      win[globalKey].lastRefreshTime = 0;
+      win[globalKey].attempts = 0;
+      console.log('Auth keep-alive stopped');
+    }
+  } catch (err) {
+    console.warn('Failed to stop auth keep-alive:', err);
+  }
+}
 
 // Minimal localStorage helpers for fallback mode
 const TABLE_PREFIX = 'rapid-dispatch-';
@@ -46,13 +226,18 @@ const writeSingle = (key: string, value: any) => {
 export const authService = SUPABASE_ENABLED
   ? {
       async signUp(email: string, password: string) {
+        console.log('Auth service signUp called with:', { email, supabaseUrl, keyLength: supabaseAnonKey?.length });
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         return data;
       },
       async signIn(email: string, password: string) {
+        console.log('Auth service signIn called with:', { email, supabaseUrl, keyLength: supabaseAnonKey?.length });
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          console.error('Supabase signIn error:', error);
+          throw error;
+        }
         return data;
       },
       async signOut() {
@@ -182,7 +367,7 @@ const supabaseService: any = SUPABASE_ENABLED ? {
   async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
     let query = supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleId);
     if (status) {
-      query = query.eq('status', status);
+      query = query.eq('status', status.toLowerCase());
     }
     query = query.order('timestamp', { ascending: false });
     if (limit) {
@@ -192,7 +377,8 @@ const supabaseService: any = SUPABASE_ENABLED ? {
     if (error) throw error;
     return (data || []).map((d: any) => this._fromDbRideLog(d));
   },
-   async addRideLog(rideLog: any) {
+
+  async addRideLog(rideLog: any) {
      const dbData = this._toDbRideLog(rideLog);
      console.log('addRideLog: sending to database:', dbData);
      if (SUPABASE_ENABLED) {
@@ -243,13 +429,82 @@ const supabaseService: any = SUPABASE_ENABLED ? {
         const { error } = await supabase.from('driver_messages').insert(message);
         if (error) throw error;
       },
-      async () => {},
+      async () => {
+        const existing = readTable('driver-messages');
+        existing.unshift(message);
+        writeTable('driver-messages', existing);
+      },
       'Supabase addDriverMessage'
     );
     // Always save to local
     const existing = readTable('driver-messages');
     existing.unshift(message);
     writeTable('driver-messages', existing);
+  },
+
+  // Gamification methods
+  async getDriverScore(driverId: number) {
+    return runWithFallback(
+      async () => {
+        const { data, error } = await supabase.from('driver_scores').select('*').eq('driver_id', driverId).single();
+        if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+        return data || null;
+      },
+      async () => {
+        const scores = readTable('driver-scores');
+        return scores.find((s: any) => s.driver_id === driverId) || null;
+      },
+      'Supabase getDriverScore'
+    );
+  },
+  async getDriverAchievements(driverId: number) {
+    return runWithFallback(
+      async () => {
+        const { data, error } = await supabase.from('achievements').select('*').eq('driver_id', driverId);
+        if (error) throw error;
+        return data || [];
+      },
+      async () => {
+        const achievements = readTable('achievements');
+        return achievements.filter((a: any) => a.driver_id === driverId);
+      },
+      'Supabase getDriverAchievements'
+    );
+  },
+  async getLeaderboard() {
+    return runWithFallback(
+      async () => {
+        const { data, error } = await supabase.from('driver_scores').select('*').order('total_score', { ascending: false });
+        if (error) throw error;
+        return (data || []).map((score: any, index: number) => ({ ...score, rank: index + 1 }));
+      },
+      async () => {
+        const scores = readTable('driver-scores');
+        return scores.sort((a: any, b: any) => b.total_score - a.total_score).map((score: any, index: number) => ({ ...score, rank: index + 1 }));
+      },
+      'Supabase getLeaderboard'
+    );
+  },
+  async getManualEntries(driverId?: number) {
+    return runWithFallback(
+      async () => {
+        let query = supabase.from('manual_entries').select('*').order('created_at', { ascending: false });
+        if (driverId) {
+          query = query.eq('driver_id', driverId);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+      },
+      async () => {
+        const entries = readTable('manual-entries');
+        if (driverId) {
+          return entries.filter((e: any) => e.driver_id === driverId);
+        }
+        return entries;
+      },
+      'Supabase getManualEntries'
+    );
   },
 
   // Mapping helpers
@@ -273,6 +528,10 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       fuel_consumption: v.fuelConsumption ?? null,
       phone: v.phone ?? null,
       email: v.email ?? null,
+      shift_start: v.shiftStart ?? null,
+      shift_end: v.shiftEnd ?? null,
+      shift_start_odo: v.shiftStartOdo ?? null,
+      shift_end_odo: v.shiftEndOdo ?? null,
     };
   },
   _fromDbVehicle(db: any) {
@@ -295,6 +554,10 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       fuelConsumption: db.fuel_consumption ?? null,
       phone: db.phone ?? null,
       email: db.email ?? null,
+      shiftStart: db.shift_start ?? null,
+      shiftEnd: db.shift_end ?? null,
+      shiftStartOdo: db.shift_start_odo ?? null,
+      shiftEndOdo: db.shift_end_odo ?? null,
     };
   },
 
@@ -320,6 +583,7 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
       fuel_cost: r.fuelCost ?? null,
       distance: r.distance ?? null,
+      payment: r.payment ?? null,
     };
 
     // Add timestamp fields if they exist
@@ -351,9 +615,9 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       estimatedCompletionTimestamp: db.estimated_completion_timestamp,
       fuelCost: db.fuel_cost ?? null,
       distance: db.distance ?? null,
-      acceptedAt: db.accepted_at ?? null,
-      startedAt: db.started_at ?? null,
-      completedAt: db.completed_at ?? null,
+      acceptedAt: db.accepted_at ? new Date(db.accepted_at).getTime() : null,
+      startedAt: db.started_at ? new Date(db.started_at).getTime() : null,
+      completedAt: db.completed_at ? new Date(db.completed_at).getTime() : null,
     };
   },
 } : {
@@ -374,7 +638,7 @@ const supabaseService: any = SUPABASE_ENABLED ? {
     const rides = readTable('ride-log').filter((r: any) => r.vehicleId === vehicleId);
     let filtered = rides;
     if (status) {
-      filtered = filtered.filter((r: any) => r.status === status);
+      filtered = filtered.filter((r: any) => r.status?.toLowerCase() === status.toLowerCase());
     }
     filtered.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     if (limit) {
@@ -408,9 +672,10 @@ const geocodeCache = new Map<string, { lat: number; lon: number }>();
 const SOUTH_MORAVIA_BOUNDS = { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax: 49.3 };
 
 // Geocoding functions
+
 const fetchPhotonCoords = async (addrToTry: string): Promise<{ lat: number; lon: number } | null> => {
-  const addr = addrToTry.split('|')[0];
-  const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(addr)}&limit=10&bbox=12.0,46.0,24.0,52.0`;
+  const { text: addr } = splitAddressAndPlaceId(addrToTry);
+  const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(addr)}&limit=10&bbox=12.0,48.5,18.9,51.1`;
   const response = await fetch(photonUrl);
   if (!response.ok) return null;
   const data = await response.json();
@@ -453,7 +718,7 @@ function isInCzechRepublic(lat: number, lon: number): boolean {
 const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number }> => {
   const tryGeocode = async (query: string): Promise<{ lat: number; lon: number } | null> => {
     const proxyUrl = 'https://corsproxy.io/?';
-    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10`;
+    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=CZ`;
 
     try {
       const response = await fetch(nominatimUrl);
@@ -581,7 +846,7 @@ async function geocodeAddress(address: string, language: string): Promise<{ lat:
     if (googleMapsApiKey) {
       console.log('Photon failed, trying Google Maps for address:', cleanAddress);
       const proxyUrl = 'https://corsproxy.io/?';
-      const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+      const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&components=country:CZ&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
 
       const response = await fetch(geocodingUrl);
       if (response.ok) {

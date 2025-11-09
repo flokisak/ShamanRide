@@ -36,6 +36,11 @@ export enum NavigationApp {
   Waze = 'waze',
 }
 
+export enum PaymentMethod {
+  Cash = 'cash',
+  Card = 'card',
+}
+
 export enum FuelType {
   Diesel = 'DIESEL',
   Petrol = 'PETROL',
@@ -74,6 +79,8 @@ export interface Vehicle {
   fuelType?: FuelType;
   fuelConsumption?: number; // L/100km
   phone?: string; // Phone number for the vehicle's built-in phone
+  shiftStart?: string; // ISO timestamp when shift started
+  shiftEnd?: string; // ISO timestamp when shift ended
 }
 
 export interface RideRequest {
@@ -134,17 +141,20 @@ export interface RideLog {
   passengers: number;
   notes?: string;
   estimatedPrice?: number;
-  // Timestamps for tracking and notifications
-  estimatedPickupTimestamp?: number;
-  estimatedCompletionTimestamp?: number;
-  fuelCost?: number;
+   // Timestamps for tracking and notifications
+   estimatedPickupTimestamp?: number;
+   estimatedCompletionTimestamp?: number;
+   acceptedAt?: number;
+   startedAt?: number;
+   fuelCost?: number;
   // Kniha jízd fields
   rideType: RideType; // BUSINESS or PRIVATE
   startMileage?: number; // Počáteční stav km
   endMileage?: number; // Konečný stav km
   distance?: number; // Ujetá vzdálenost v km
   purpose?: string; // Účel jízdy (pro soukromé jízdy)
-  businessPurpose?: string; // Účel služební jízdy
+   businessPurpose?: string; // Účel služební jízdy
+   payment?: PaymentMethod; // Payment method
 }
 
 // Types for customizable layout
@@ -313,5 +323,20 @@ export interface DriverStats {
   total_paid_km: number;
   total_empty_km: number;
   manual_entries_points: number;
+  updated_at: string;
+}
+
+// Shift management types
+export interface ShiftData {
+  id: string;
+  driver_id: number;
+  vehicle_id: number;
+  start_time: number;
+  end_time?: number;
+  start_odometer: number;
+  end_odometer?: number;
+  total_distance?: number;
+  total_earnings?: number;
+  created_at: string;
   updated_at: string;
 }

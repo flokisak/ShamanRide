@@ -1,10 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
-import { DEFAULT_FUEL_PRICES } from '../types';
+import { DEFAULT_FUEL_PRICES, RideStatus } from '../types';
+import dotenv from 'dotenv';
+import path from 'path';
 
+// Load environment variables in Node.js
 const isBrowser = typeof window !== 'undefined';
+if (!isBrowser) {
+  dotenv.config({ path: path.join(process.cwd(), '..', '.env') });
+}
 const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
 const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.SUPABASE_ANON_KEY;
 const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.SUPABASE_SERVICE_KEY;
+
+
 
 export const SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
 
@@ -12,12 +20,96 @@ let supabase: any = null;
 if (SUPABASE_ENABLED) {
   // Use service key if available (for driver app), otherwise anon key
   const key = supabaseServiceKey || supabaseAnonKey;
-  supabase = createClient(supabaseUrl, key);
+  if (isBrowser) {
+    // Reuse a single Supabase client instance across bundles to avoid
+    // multiple GoTrueClient instances which may conflict when sharing
+    // the same storage key in the browser.
+    const GLOBAL_KEY = '__shamanride_supabase_client__';
+    (window as any)[GLOBAL_KEY] = (window as any)[GLOBAL_KEY] || createClient(supabaseUrl, key);
+    supabase = (window as any)[GLOBAL_KEY];
+  } else {
+    supabase = createClient(supabaseUrl, key);
+  }
 } else {
   console.warn('Supabase is not configured. Falling back to localStorage-based local mode.');
 }
 
 export { supabase };
+
+// Keep a cached access token on the window object so other modules (sockets)
+// can read it synchronously without calling getSession() repeatedly.
+if (typeof window !== 'undefined' && supabase && supabase.auth) {
+  try {
+    // Initialize cache from current session (non-blocking)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      (window as any).__shamanride_access_token = session?.access_token ?? null;
+    }).catch(() => {
+      (window as any).__shamanride_access_token = null;
+    });
+
+    // Update the cache on auth state changes
+    supabase.auth.onAuthStateChange((_event: string, session: any) => {
+      (window as any).__shamanride_access_token = session?.access_token ?? null;
+    });
+  } catch (err) {
+    // ignore
+  }
+}
+
+export function getCachedAccessToken() {
+  if (typeof window === 'undefined') return null;
+  return (window as any).__shamanride_access_token ?? null;
+}
+
+// Rate-limited, defensive refresh helper.
+// Avoids spamming Supabase /auth/token when multiple components attempt refreshes.
+export async function safeRefreshSession(opts?: { force?: boolean, minIntervalMs?: number }) {
+  if (!SUPABASE_ENABLED || !supabase || !supabase.auth) return null;
+
+  const minIntervalMs = opts?.minIntervalMs ?? 30 * 1000; // default 30s between refresh attempts
+  if (typeof window === 'undefined') return null;
+
+  (window as any).__shamanride_refresh_lock__ = (window as any).__shamanride_refresh_lock__ || { lastAttempt: 0, failures: 0 };
+  const lock = (window as any).__shamanride_refresh_lock__;
+  const now = Date.now();
+
+  if (!opts?.force && now - (lock.lastAttempt || 0) < minIntervalMs) {
+    // Too soon to attempt another refresh
+    return null;
+  }
+
+  lock.lastAttempt = now;
+
+  try {
+    // Use the Supabase client's refreshSession (it will read current session if not passed)
+    const res = await supabase.auth.refreshSession();
+    lock.failures = 0;
+
+    // Update cached token if present
+    try {
+      const newToken = res?.data?.session?.access_token ?? null;
+      (window as any).__shamanride_access_token = newToken;
+    } catch (e) {
+      // ignore
+    }
+
+    return res;
+  } catch (err) {
+    lock.failures = (lock.failures || 0) + 1;
+    // Exponential backoff applied by callers via minIntervalMs if needed
+    console.warn('safeRefreshSession: refresh failed', err);
+    return null;
+  }
+}
+
+// Synchronously return cached token or attempt a safe refresh if forceRefresh is true.
+export async function safeGetAccessToken({ forceRefresh = false } = {}) {
+  const cached = getCachedAccessToken();
+  if (cached && !forceRefresh) return cached;
+  // Try to refresh in a defensive way (respect caller's forceRefresh flag)
+  await safeRefreshSession({ force: forceRefresh });
+  return getCachedAccessToken();
+}
 
 // Minimal localStorage helpers for fallback mode
 const TABLE_PREFIX = 'rapid-dispatch-';
@@ -172,11 +264,16 @@ export const supabaseService = SUPABASE_ENABLED
            last_service_mileage: v.lastServiceMileage ?? null,
            technical_inspection_expiry: v.technicalInspectionExpiry ?? null,
            vignette_expiry: v.vignetteExpiry ?? null,
-            fuel_type: v.fuelType ? v.fuelType.charAt(0).toUpperCase() + v.fuelType.slice(1).toLowerCase() : null,
-           fuel_consumption: v.fuelConsumption ?? null,
-           phone: v.phone ?? null,
-           email: v.email ?? null,
-         };
+            fuel_type: v.fuelType ?? null,
+            fuel_consumption: v.fuelConsumption ?? null,
+            phone: v.phone ?? null,
+            email: v.email ?? null,
+            shift_start: v.shiftStart ?? null,
+            shift_end: v.shiftEnd ?? null,
+            shift_start_odo: v.shiftStartOdo ?? null,
+            shift_end_odo: v.shiftEndOdo ?? null,
+            last_location_update: v.lastLocationUpdate ?? null,
+          };
        },
        _fromDbVehicle(db: any) {
          return {
@@ -195,10 +292,15 @@ export const supabaseService = SUPABASE_ENABLED
            technicalInspectionExpiry: db.technical_inspection_expiry ?? null,
            vignetteExpiry: db.vignette_expiry ?? null,
             fuelType: db.fuel_type ? db.fuel_type.toUpperCase() : null,
-           fuelConsumption: db.fuel_consumption ?? null,
-           phone: db.phone ?? null,
-           email: db.email ?? null,
-         };
+            fuelConsumption: db.fuel_consumption ?? null,
+            phone: db.phone ?? null,
+            email: db.email ?? null,
+            shiftStart: db.shift_start ?? null,
+            shiftEnd: db.shift_end ?? null,
+            shiftStartOdo: db.shift_start_odo ?? null,
+            shiftEndOdo: db.shift_end_odo ?? null,
+            lastLocationUpdate: db.last_location_update ?? null,
+          };
        },
 
       _toDbTariff(t: any) {
@@ -252,6 +354,7 @@ export const supabaseService = SUPABASE_ENABLED
               estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
                 fuel_cost: r.fuelCost ?? null,
                distance: r.distance ?? null,
+               payment: r.payment ?? null,
              };
 
              // Add timestamp fields if they exist
@@ -288,9 +391,10 @@ export const supabaseService = SUPABASE_ENABLED
               estimatedCompletionTimestamp: db.estimated_completion_timestamp,
               fuelCost: db.fuel_cost ?? null,
              distance: db.distance ?? null,
-             acceptedAt: db.accepted_at ?? null,
-             startedAt: db.started_at ?? null,
-             completedAt: db.completed_at ?? null,
+             payment: db.payment ?? null,
+              acceptedAt: db.accepted_at ? new Date(db.accepted_at).getTime() : null,
+              startedAt: db.started_at ? new Date(db.started_at).getTime() : null,
+              completedAt: db.completed_at ? new Date(db.completed_at).getTime() : null,
              navigationUrl: db.navigation_url ?? null,
            };
        },
@@ -301,18 +405,47 @@ export const supabaseService = SUPABASE_ENABLED
         if (error) throw error;
         return (data || []).map((d: any) => this._fromDbVehicle(d));
       },
-      async updateVehicles(vehicles: any[], options?: { excludeStatus?: boolean }) {
+      async updateVehicles(vehicles: any[], options?: { excludeStatus?: boolean; excludeMileage?: boolean; excludeShiftTimes?: boolean; excludeLastLocationUpdate?: boolean }) {
         const dbRows = vehicles.map(v => {
           const dbVehicle = this._toDbVehicle(v);
-          if (options?.excludeStatus) {
-            // Remove status and updated_at from the update to preserve driver app changes
-            const { status, updated_at, ...vehicleWithoutStatus } = dbVehicle;
-            return vehicleWithoutStatus;
+          if (options?.excludeStatus || options?.excludeMileage || options?.excludeShiftTimes || options?.excludeLastLocationUpdate) {
+            // Remove specified fields from the update to preserve changes from other sources
+            const { status, updated_at, mileage, shift_start, shift_end, last_location_update, ...vehicleWithoutExcluded } = dbVehicle;
+            const result: any = { ...vehicleWithoutExcluded };
+            if (!options?.excludeStatus) {
+              result.status = status;
+              result.updated_at = updated_at;
+            }
+            if (!options?.excludeMileage) {
+              result.mileage = mileage;
+            }
+            if (!options?.excludeShiftTimes) {
+              result.shift_start = shift_start;
+              result.shift_end = shift_end;
+            }
+            if (!options?.excludeLastLocationUpdate) {
+              result.last_location_update = last_location_update;
+            }
+            return result;
           }
           return dbVehicle;
         });
-        const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
-        if (error) throw error;
+
+        console.log('Updating vehicles with data:', JSON.stringify(dbRows, null, 2));
+
+        // Try individual updates instead of bulk upsert to isolate issues
+        for (const dbRow of dbRows) {
+          try {
+            const { error } = await supabase.from('vehicles').upsert(dbRow);
+            if (error) {
+              console.error('Error updating vehicle:', dbRow.id, error);
+              throw error;
+            }
+          } catch (vehicleError) {
+            console.error('Failed to update vehicle:', dbRow.id, vehicleError);
+            throw vehicleError;
+          }
+        }
       },
       async deleteVehicle(vehicleId: number) {
         const { error } = await supabase.from('vehicles').delete().eq('id', vehicleId);
@@ -342,25 +475,38 @@ export const supabaseService = SUPABASE_ENABLED
         if (error) throw error;
       },
 
-       // Ride Logs
-        async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
-          let query = supabase.from('ride_logs').select('*');
-          if (options) {
-            if (options.dateFrom) {
-              // Convert ISO string to Unix timestamp (milliseconds)
-              const dateFromTimestamp = new Date(options.dateFrom).getTime();
-              query = query.gte('timestamp', dateFromTimestamp);
-            }
-            if (options.dateTo) {
-              // Convert ISO string to Unix timestamp (milliseconds)
-              const dateToTimestamp = new Date(options.dateTo).getTime();
-              query = query.lte('timestamp', dateToTimestamp);
-            }
-          } // if no options, fetch all
-          const { data, error } = await query;
-          if (error) throw error;
-          return (data || []).map((d: any) => this._fromDbRideLog(d));
-        },
+        // Ride Logs
+         async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
+           let query = supabase.from('ride_logs').select('*');
+           if (options) {
+             if (options.dateFrom) {
+               // Convert ISO string to Unix timestamp (milliseconds)
+               const dateFromTimestamp = new Date(options.dateFrom).getTime();
+               query = query.gte('timestamp', dateFromTimestamp);
+             }
+             if (options.dateTo) {
+               // Convert ISO string to Unix timestamp (milliseconds)
+               const dateToTimestamp = new Date(options.dateTo).getTime();
+               query = query.lte('timestamp', dateToTimestamp);
+             }
+           } // if no options, fetch all
+           const { data, error } = await query;
+           if (error) throw error;
+           return (data || []).map((d: any) => this._fromDbRideLog(d));
+         },
+         async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
+           let query = supabase.from('ride_logs').select('*').eq('vehicle_id', vehicleId);
+           if (status) {
+             query = query.eq('status', status.toLowerCase());
+           }
+           if (limit) {
+             query = query.limit(limit);
+           }
+           query = query.order('timestamp', { ascending: false });
+           const { data, error } = await query;
+           if (error) throw error;
+           return (data || []).map((d: any) => this._fromDbRideLog(d));
+         },
           async addRideLog(rideLog: any) {
             if (SUPABASE_ENABLED) {
               const { error } = await supabase.from('ride_logs').upsert(this._toDbRideLog(rideLog), { onConflict: 'id' });
@@ -396,17 +542,43 @@ export const supabaseService = SUPABASE_ENABLED
 
       // Notifications
       async getNotifications() {
-        const { data, error } = await supabase.from('notifications').select('*');
-        if (error) throw error;
-        return data || [];
+        return runWithFallback(
+          async () => {
+            const { data, error } = await supabase.from('notifications').select('*');
+            if (error) throw error;
+            return data || [];
+          },
+          async () => readTable('notifications'),
+          'Supabase notifications'
+        );
       },
       async addNotification(notification: any) {
-        const { error } = await supabase.from('notifications').insert(notification);
-        if (error) throw error;
+        return runWithFallback(
+          async () => {
+            // Remove messageKey if it doesn't exist in the database
+            const { messageKey, ...notificationData } = notification;
+            const { error } = await supabase.from('notifications').insert(notificationData);
+            if (error) throw error;
+          },
+          async () => {
+            const existing = readTable('notifications');
+            existing.unshift(notification);
+            writeTable('notifications', existing);
+          },
+          'Supabase addNotification'
+        );
       },
       async updateNotifications(notifications: any[]) {
-        const { error } = await supabase.from('notifications').upsert(notifications, { onConflict: 'id' });
-        if (error) throw error;
+        return runWithFallback(
+          async () => {
+            // Remove messageKey from notifications if it doesn't exist in the database
+            const filteredNotifications = notifications.map(({ messageKey, ...notification }) => notification);
+            const { error } = await supabase.from('notifications').upsert(filteredNotifications, { onConflict: 'id' });
+            if (error) throw error;
+          },
+          async () => writeTable('notifications', notifications),
+          'Supabase updateNotifications'
+        );
       },
 
       // Tariff
@@ -512,8 +684,23 @@ export const supabaseService = SUPABASE_ENABLED
         return data || [];
       },
       async updateDriverScore(driverId: number, scoreData: any) {
-        const { error } = await supabase.from('driver_scores').upsert({ driver_id: driverId, ...scoreData, updated_at: new Date().toISOString() }, { onConflict: 'driver_id' });
-        if (error) throw error;
+        return runWithFallback(
+          async () => {
+            // Remove average_rating if it doesn't exist in the database
+            const { average_rating, ...filteredScoreData } = scoreData;
+            const { error } = await supabase.from('driver_scores').upsert({
+              driver_id: driverId,
+              ...filteredScoreData,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'driver_id' });
+            if (error) throw error;
+          },
+          async () => {
+            // Local fallback - just store in localStorage
+            upsertLocal('driver-scores', { driver_id: driverId, ...scoreData }, 'driver_id');
+          },
+          'Supabase updateDriverScore'
+        );
       },
       async getDriverAchievements(driverId: number) {
         const { data, error } = await supabase.from('achievements').select('*').eq('driver_id', driverId);
@@ -564,22 +751,43 @@ export const supabaseService = SUPABASE_ENABLED
          return data || [];
        },
 
-       // User Settings
-       async getUserSettings(userId: string) {
+       // Driver Messages
+       async getDriverMessages() {
+         const { data, error } = await supabase.from('driver_messages').select('*').order('timestamp', { ascending: false });
+         if (error) throw error;
+         return data || [];
+       },
+       async addDriverMessage(message: any) {
          return runWithFallback(
            async () => {
-             const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', userId).single();
-             if (error && error.code !== 'PGRST116') throw error;
-             return data;
+             const { error } = await supabase.from('driver_messages').insert(message);
+             if (error) throw error;
            },
            async () => {
-             // fallback: read from local user-settings table
-             const all = readTable('user-settings');
-             return all.find((s: any) => String(s.user_id) === String(userId)) || null;
+             const existing = readTable('driver-messages');
+             existing.unshift(message);
+             writeTable('driver-messages', existing);
            },
-           'Supabase user_settings'
+           'Supabase addDriverMessage'
          );
        },
+
+       // User Settings
+        async getUserSettings(userId: string) {
+          return runWithFallback(
+            async () => {
+              const { data, error } = await supabase.from('user_settings').select('*').eq('user_id', userId).single();
+              if (error && error.code !== 'PGRST116') throw error;
+              return data;
+            },
+            async () => {
+              // fallback: read from local user-settings table
+              const all = readTable('user-settings');
+              return all.find((s: any) => String(s.user_id) === String(userId)) || null;
+            },
+            'Supabase user_settings'
+          );
+        },
        async updateUserSettings(userId: string, settings: any) {
          return runWithFallback(
            async () => {
@@ -620,20 +828,31 @@ export const supabaseService = SUPABASE_ENABLED
         deleteLocal('people', personId);
       },
 
-       // Ride Logs
-       async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
-         const all = readTable('ride-log');
-         let filtered = all;
-         if (options) {
-           if (options.dateFrom) {
-             filtered = filtered.filter((r: any) => new Date(r.timestamp) >= new Date(options.dateFrom));
-           }
-           if (options.dateTo) {
-             filtered = filtered.filter((r: any) => new Date(r.timestamp) <= new Date(options.dateTo));
-           }
-         } // if no options, return all
-         return filtered;
-       },
+        // Ride Logs
+        async getRideLogs(options?: { dateFrom?: string; dateTo?: string }) {
+          const all = readTable('ride-log');
+          let filtered = all;
+          if (options) {
+            if (options.dateFrom) {
+              filtered = filtered.filter((r: any) => new Date(r.timestamp) >= new Date(options.dateFrom));
+            }
+            if (options.dateTo) {
+              filtered = filtered.filter((r: any) => new Date(r.timestamp) <= new Date(options.dateTo));
+            }
+          } // if no options, return all
+          return filtered;
+        },
+        async getRideLogsByVehicle(vehicleId: number, status?: string, limit?: number) {
+          const all = readTable('ride-log');
+          let filtered = all.filter((r: any) => r.vehicleId === vehicleId);
+          if (status) {
+            filtered = filtered.filter((r: any) => r.status?.toLowerCase() === status.toLowerCase());
+          }
+          if (limit) {
+            filtered = filtered.slice(0, limit);
+          }
+          return filtered.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        },
            async addRideLog(rideLog: any) {
              const dbData = this._toDbRideLog(rideLog);
              console.log('🚗 addRideLog: sending to database:', {
@@ -779,11 +998,21 @@ export const supabaseService = SUPABASE_ENABLED
         writeTable('manual-entries', existing);
       },
 
-      // User Settings
-      async getUserSettings(userId: string) {
-        const settings = readTable('user-settings').find((s: any) => s.user_id === userId) || null;
-        return settings;
-      },
+       // Driver Messages
+       async getDriverMessages() {
+         return readTable('driver-messages');
+       },
+       async addDriverMessage(message: any) {
+         const existing = readTable('driver-messages');
+         existing.unshift(message);
+         writeTable('driver-messages', existing);
+       },
+
+       // User Settings
+       async getUserSettings(userId: string) {
+         const settings = readTable('user-settings').find((s: any) => s.user_id === userId) || null;
+         return settings;
+       },
       async updateUserSettings(userId: string, settings: any) {
         upsertLocal('user-settings', { user_id: userId, ...settings }, 'user_id');
       },

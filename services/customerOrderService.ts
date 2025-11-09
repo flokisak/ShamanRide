@@ -145,8 +145,16 @@ export async function processCustomerOrder(rideRequest: RideRequest): Promise<Or
         };
     const updatedNotifications = [newNotification, ...notifications];
 
-        // 5. Save updated state via supabaseService (cloud or local fallback)
-        await supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error updating vehicles via supabaseService', err));
+        // 5. Save updated state via syncService (emit) or supabaseService fallback
+        try {
+            const sync = await import('./syncService');
+            await sync.updateVehicles(updatedVehicles).catch(err => console.error('syncService.updateVehicles error', err));
+        } catch (err) {
+            // Fallback to direct supabaseService update
+            await supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error updating vehicles via supabaseService', err));
+        }
+
+        // Persist ride logs and notifications (these are kept as direct writes for now)
         await supabaseService.updateRideLogs(updatedRideLog).catch(err => console.error('Error updating ride logs via supabaseService', err));
         await supabaseService.updateNotifications(updatedNotifications).catch(err => console.error('Error updating notifications via supabaseService', err));
 

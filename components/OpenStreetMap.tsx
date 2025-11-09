@@ -1,25 +1,18 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import type { Vehicle, AssignmentResultData, Person } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { fetchVehiclePositions, GpsVehicle } from '../services/gpsService';
+import { splitAddressAndPlaceId } from '../services/addressUtils';
 
 // Fix for default icon path issue with bundlers
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import iconUrl from 'leaflet/dist/images/marker-icon.png';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-
+// @ts-ignore - _getIconUrl is an internal property that may not be in types
+delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl,
-  iconUrl,
-  shadowUrl,
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
 
@@ -32,10 +25,11 @@ interface OpenStreetMapProps {
 }
 
 type Coords = [number, number]; // [lat, lon]
-type RouteSummary = { distance: string; duration: string; price?: number };
+type RouteSummary = { distance: string; duration: string; price?: number; fallback?: boolean };
 
 // --- Caching and API helpers ---
 const geocodeCache = new Map<string, Coords>();
+const routeCache = new Map<string, {geometry: Coords[], summary: RouteSummary}>();
 const EXPANDED_VIEWBOX = '12.0,46.0,24.0,52.0'; // lon_min,lat_min,lon_max,lat_max
 
 const generateColorForVehicle = (vehicleId: number): string => {
@@ -51,10 +45,9 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
     const fetchNominatimCoords = async (addrToTry: string): Promise<Coords | null> => {
-        const proxyUrl = 'https://corsproxy.io/?';
-        const addr = addrToTry.split('|')[0]; // Strip placeId if present
+        const { text: addr } = splitAddressAndPlaceId(addrToTry); // Strip placeId if present
 
-        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=cz&viewbox=${EXPANDED_VIEWBOX}&accept-language=${lang},en;q=0.5&limit=10`;
+        const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&countrycodes=cz&viewbox=${EXPANDED_VIEWBOX}&accept-language=${lang},en;q=0.5&limit=10`;
 
         const response = await fetch(nominatimUrl, { headers: { 'User-Agent': 'RapidDispatchAI/1.0' } });
         if (!response.ok) return null;
@@ -84,7 +77,7 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
     };
 
     const fetchPhotonCoords = async (addrToTry: string): Promise<Coords | null> => {
-        const addr = addrToTry.split('|')[0];
+        const { text: addr } = splitAddressAndPlaceId(addrToTry);
         const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(addr)}&limit=10&bbox=12.0,46.0,24.0,52.0`;
         const response = await fetch(photonUrl);
         if (!response.ok) return null;
@@ -142,23 +135,135 @@ async function geocodeAddress(address: string, lang: string): Promise<Coords> {
     }
 }
 
+// Haversine distance calculation
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Radius of the Earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
 
 async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summary: RouteSummary} | null> {
     if (waypoints.length < 2) return null;
-    const coordsString = waypoints.map(c => `${c[1]},${c[0]}`).join(';');
-    const url = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson`;
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data.code === 'Ok' && data.routes?.length > 0) {
-        const route = data.routes[0];
-        const geometry = route.geometry.coordinates.map((c: number[]) => [c[1], c[0]]); // Swap lon,lat to lat,lon
-        const summary = {
-            distance: `${(route.distance / 1000).toFixed(1)} km`,
-            duration: `${Math.round(route.duration / 60)} min`
-        };
-        return { geometry, summary };
+
+    // Create cache key from waypoints
+    const cacheKey = waypoints.map(w => `${w[0]},${w[1]}`).join(';');
+
+    // Check cache first
+    const cached = routeCache.get(cacheKey);
+    if (cached) {
+        console.log('🔄 Using cached route for:', cacheKey);
+        return cached;
     }
-    return null;
+
+    console.log('🌐 Calculating route for:', cacheKey);
+
+    try {
+        const coordsString = waypoints.map(c => `${c[1]},${c[0]}`).join(';');
+        const url = `/api/route?coordinates=${encodeURIComponent(coordsString)}`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            console.log(`Routing API returned ${response.status}, trying multiple routing services...`);
+            // Skip to fallback calculation below
+        } else {
+            const data = await response.json();
+
+        // Check if we got a fallback response from server
+        if (data.fallback) {
+            console.log('All routing services unavailable, using local fallback calculation');
+            // Skip to fallback calculation below
+        } else if (data.code === 'Ok' && data.routes?.length > 0) {
+                const route = data.routes[0];
+                // Check if geometry and coordinates exist
+                if (route.geometry && route.geometry.coordinates && Array.isArray(route.geometry.coordinates)) {
+                    // Server returns coordinates as [lat, lng] for Leaflet
+                    const geometry = route.geometry.coordinates;
+                    const summary = {
+                        distance: `${(route.distance / 1000).toFixed(1)} km`,
+                        duration: `${Math.round(route.duration / 60)} min`
+                    };
+                    const result = { geometry, summary };
+                    // Cache successful results for 10 minutes
+                    routeCache.set(cacheKey, result);
+                    setTimeout(() => routeCache.delete(cacheKey), 10 * 60 * 1000);
+                    return result;
+                }
+            }
+        }
+    } catch (error) {
+        console.log('Network error occurred, using fallback calculation:', error.message);
+    }
+
+    // Fallback: improved routing calculation using road-like paths
+    console.log('Using improved fallback routing calculation');
+
+    // Create a more realistic route by adding intermediate waypoints for longer distances
+    const enhancedWaypoints = [];
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const start = waypoints[i];
+        const end = waypoints[i + 1];
+        const distance = haversineDistance(start[0], start[1], end[0], end[1]);
+
+        enhancedWaypoints.push(start);
+
+        // For distances over 10km, add intermediate points to simulate road curvature
+        if (distance > 10) {
+            const numIntermediates = Math.min(Math.floor(distance / 5), 5); // Max 5 intermediates
+            for (let j = 1; j <= numIntermediates; j++) {
+                const ratio = j / (numIntermediates + 1);
+                const lat = start[0] + (end[0] - start[0]) * ratio;
+                const lon = start[1] + (end[1] - start[1]) * ratio;
+                // Add small random variation to simulate road curvature (±0.5km)
+                const variation = 0.005; // ~500m in degrees
+                enhancedWaypoints.push([
+                    lat + (Math.random() - 0.5) * variation,
+                    lon + (Math.random() - 0.5) * variation
+                ]);
+            }
+        }
+    }
+    enhancedWaypoints.push(waypoints[waypoints.length - 1]);
+
+    let totalDistance = 0;
+    for (let i = 1; i < enhancedWaypoints.length; i++) {
+        totalDistance += haversineDistance(
+            enhancedWaypoints[i-1][0], enhancedWaypoints[i-1][1],
+            enhancedWaypoints[i][0], enhancedWaypoints[i][1]
+        );
+    }
+
+    // More realistic speed estimation based on distance
+    // City driving: ~25 km/h, Highway: ~80 km/h, mix for longer distances
+    let avgSpeed;
+    if (totalDistance < 5) {
+        avgSpeed = 25; // City driving
+    } else if (totalDistance < 20) {
+        avgSpeed = 40; // Mixed city/highway
+    } else {
+        avgSpeed = 60; // Mostly highway
+    }
+
+    const estimatedDuration = Math.round((totalDistance / avgSpeed) * 60);
+
+    const result = {
+        geometry: enhancedWaypoints,
+        summary: {
+            distance: `${totalDistance.toFixed(1)} km`,
+            duration: `${estimatedDuration} min`,
+            fallback: true // Mark this as fallback routing
+        }
+    };
+
+    // Cache fallback results too (shorter cache time)
+    routeCache.set(cacheKey, result);
+    setTimeout(() => routeCache.delete(cacheKey), 5 * 60 * 1000); // 5 minutes for fallback
+
+    return result;
 }
 
 // --- Internal Map Components ---
@@ -176,13 +281,17 @@ const VehicleMarker: React.FC<{ vehicle: Vehicle, people: Person[], gpsPosition?
     const { t, language } = useTranslation();
     const [position, setPosition] = useState<Coords | null>(null);
     const driver = people.find(p => p.id === vehicle.driverId);
+    const markerRef = useRef<L.Marker | null>(null);
 
     useEffect(() => {
+        // Always prioritize real-time GPS positions over any cached/stored locations
         if (gpsPosition) {
             setPosition([gpsPosition.lat, gpsPosition.lon]);
         } else if (lastLocation) {
+            // Use last known location from ride data
             setPosition([lastLocation.latitude, lastLocation.longitude]);
         } else {
+            // Only fall back to geocoded address, not ride destination data
             geocodeAddress(vehicle.location, language)
                 .then(setPosition)
                 .catch(err => console.error(err));
@@ -216,10 +325,16 @@ const VehicleMarker: React.FC<{ vehicle: Vehicle, people: Person[], gpsPosition?
         iconAnchor: [20, 20],
         popupAnchor: [0, -20]
     });
-    
+
+    useEffect(() => {
+        if (markerRef.current) {
+            markerRef.current.setIcon(customIcon);
+        }
+    }, [customIcon]);
+
     if (!position) return null;
     return (
-        <Marker position={position} icon={customIcon}>
+        <Marker ref={markerRef} position={position}>
             <Popup>
                 <div className="text-sm">
                     <p className="font-bold text-base">{vehicle.name}</p>
@@ -354,7 +469,7 @@ const RouteDrawer: React.FC<{
     }, [routeToPreview, confirmedAssignment, map, onRouteCalculated, language]);
     
     if (!routeGeometry) return null;
-    return <Polyline positions={routeGeometry} color="#15803d" weight={6} opacity={0.9} dashArray={[10, 5]} />;
+    return <Polyline positions={routeGeometry} pathOptions={{color: "#15803d", weight: 6, opacity: 0.9, dashArray: [10, 5]}} />;
 };
 
 
@@ -408,15 +523,16 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
                     <MapContainer center={center} zoom={11} className="w-full h-full" scrollWheelZoom={true}>
                         <MapResizeController />
                         <MapFlyController flyToCoords={flyToCoords} />
+                        // @ts-expect-error
                         <TileLayer
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
-                      {vehicles.map(v => {
-                           const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
-                           const lastLoc = locations ? locations[v.id.toString()] : undefined;
-                           return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} lastLocation={lastLoc} />;
-                       })}
+                       {vehicles.map(v => {
+                             const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
+                             const lastLoc = locations ? locations[v.id.toString()] : undefined;
+                             return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} lastLocation={lastLoc} />;
+                         })}
 
                         <RouteDrawer
                             routeToPreview={routeToPreview}
@@ -428,6 +544,9 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
                         <div className="absolute bottom-4 left-4 bg-slate-900 p-3 rounded-lg text-white text-sm shadow-lg backdrop-blur-sm animate-fade-in z-[1000]">
                             <p><strong>{t('map.distance')}:</strong> {routeSummary.distance}</p>
                             <p><strong>{t('map.duration')}:</strong> {routeSummary.duration}</p>
+                            {routeSummary.fallback && (
+                                <p className="text-yellow-400 text-xs mt-1">⚠️ Estimated route (OSRM unavailable)</p>
+                            )}
                         </div>
                     )}
                 </div>
@@ -442,28 +561,32 @@ export const OpenStreetMap: React.FC<OpenStreetMapProps> = ({ vehicles, people, 
                 <MapContainer center={center} zoom={11} className="w-full h-full" scrollWheelZoom={true}>
                     <MapResizeController />
                     <MapFlyController flyToCoords={flyToCoords} />
+                    // @ts-expect-error
                     <TileLayer
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                       {vehicles.map(v => {
-                          const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
-                          const lastLoc = locations ? locations[v.id.toString()] : undefined;
-                          return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} lastLocation={lastLoc} />;
-                      })}
+                            const gpsPos = gpsPositions.find(g => g.id === v.id.toString() || g.name === v.name);
+                            const lastLoc = locations ? locations[v.id.toString()] : undefined;
+                            return <VehicleMarker key={v.id} vehicle={v} people={people} gpsPosition={gpsPos} lastLocation={lastLoc} />;
+                        })}
                     <RouteDrawer
                         routeToPreview={routeToPreview}
                         confirmedAssignment={confirmedAssignment}
                         onRouteCalculated={setRouteSummary}
                     />
                 </MapContainer>
-                {routeSummary && (
-                    <div className="absolute bottom-4 left-4 bg-slate-900 p-3 rounded-lg text-white text-sm shadow-lg backdrop-blur-sm animate-fade-in z-[1000]">
-                        <p><strong>{t('map.distance')}:</strong> {routeSummary.distance}</p>
-                        <p><strong>{t('map.duration')}:</strong> {routeSummary.duration}</p>
-                        {routeSummary.price && <p><strong>{t('rideLog.table.price')}:</strong> {routeSummary.price} Kč</p>}
-                    </div>
-                )}
+                    {routeSummary && (
+                        <div className="absolute bottom-4 left-4 bg-slate-900 p-3 rounded-lg text-white text-sm shadow-lg backdrop-blur-sm animate-fade-in z-[1000]">
+                            <p><strong>{t('map.distance')}:</strong> {routeSummary.distance}</p>
+                            <p><strong>{t('map.duration')}:</strong> {routeSummary.duration}</p>
+                            {routeSummary.price && <p><strong>{t('rideLog.table.price')}:</strong> {routeSummary.price} Kč</p>}
+                            {routeSummary.fallback && (
+                                <p className="text-yellow-400 text-xs mt-1">⚠️ Estimated route (OSRM unavailable)</p>
+                            )}
+                        </div>
+                    )}
             </div>
         </div>
     );

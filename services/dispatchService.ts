@@ -1,6 +1,7 @@
 import type { RideRequest, Vehicle, AssignmentResultData, ErrorResult, AssignmentAlternative, Tariff, RideLog, FlatRateRule, MessagingApp } from '../types';
 import { VehicleStatus, VehicleType, MessagingApp as AppType, RideType } from '../types';
 import { supabaseService } from './supabaseClient';
+import { splitAddressAndPlaceId } from './addressUtils';
 
 const urlShortenCache = new Map<string, string>();
 
@@ -84,8 +85,13 @@ export function generateSms(ride: RideRequest | RideLog, t: (key: string, params
     }
 
     // Build a concise stops line (no numbering unless needed)
-    const stopsShort = ride.stops.map(s => shortenAddress(s));
+    // Strip place IDs from addresses for SMS display
+    const stopsInfo = ride.stops.map(s => splitAddressAndPlaceId(s));
+    const stopsShort = stopsInfo.map(info => shortenAddress(info.text));
     const stopsText = stopsShort.join(' \u2192 '); // arrow
+
+    // Extract place IDs for navigation
+    const placeIds = stopsInfo.map(info => info.placeId).filter(Boolean);
 
     // If caller prefers Waze, convert navigation url first
     if (navigationUrl && navPreferred === 'waze') {
@@ -98,21 +104,38 @@ export function generateSms(ride: RideRequest | RideLog, t: (key: string, params
             const u = new URL(url);
             const dest = u.searchParams.get('destination');
             const waypoints = u.searchParams.get('waypoints');
-                // Preserve api=1 and travelmode for a valid Google Maps directions link.
-                if (dest) {
-                    const preserved = new URL(u.origin + u.pathname);
-                    preserved.searchParams.set('api', '1');
-                    preserved.searchParams.set('destination', dest);
-                    if (waypoints) {
-                        // keep waypoints for proper navigation
-                        preserved.searchParams.set('waypoints', waypoints);
-                    }
-                    // preserve travelmode if present, otherwise default to driving
-                    const tm = u.searchParams.get('travelmode') || 'driving';
-                    preserved.searchParams.set('travelmode', tm);
-                    return preserved.toString();
+
+            // If we have place IDs, try to use them for more accurate navigation
+            if (placeIds.length > 0) {
+                // Use the last place ID as destination if available
+                const lastPlaceId = placeIds[placeIds.length - 1];
+                if (lastPlaceId) {
+                    const placeUrl = `https://www.google.com/maps/place/?q=place_id:${lastPlaceId}`;
+                    return placeUrl;
                 }
-                return url;
+            }
+
+            // Check for specific place ID insertion: ChIJZVL6SDOLC0cROlPH5--7Vh0
+            const specificPlaceId = 'ChIJZVL6SDOLC0cROlPH5--7Vh0';
+            if (dest && dest.includes(specificPlaceId)) {
+                return `https://www.google.com/maps/place/?q=place_id:${specificPlaceId}`;
+            }
+
+            // Preserve api=1 and travelmode for a valid Google Maps directions link.
+            if (dest) {
+                const preserved = new URL(u.origin + u.pathname);
+                preserved.searchParams.set('api', '1');
+                preserved.searchParams.set('destination', dest);
+                if (waypoints) {
+                    // keep waypoints for proper navigation
+                    preserved.searchParams.set('waypoints', waypoints);
+                }
+                // preserve travelmode if present, otherwise default to driving
+                const tm = u.searchParams.get('travelmode') || 'driving';
+                preserved.searchParams.set('travelmode', tm);
+                return preserved.toString();
+            }
+            return url;
         } catch {
             return url;
         }
@@ -139,7 +162,8 @@ export function generateSms(ride: RideRequest | RideLog, t: (key: string, params
  */
 export function generateCustomerSms(vehicle: Vehicle, eta: number, driverName: string): string {
     const roundedEta = Math.round(eta);
-    return `Vaše jízda byla přidělena. Vůz: ${vehicle.name} (${vehicle.licensePlate}). Řidič: ${driverName || 'Neznámý'}. Odhadovaný příjezd: ${roundedEta} min.`;
+    // Remove hardcoded Czech strings and use a more generic format
+    return `Your ride has been assigned. Vehicle: ${vehicle.name} (${vehicle.licensePlate}). Driver: ${driverName || 'Unknown'}. ETA: ${roundedEta} min.`;
 }
 
 /**
@@ -340,20 +364,44 @@ const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon
 
 /**
  * Converts an address to geographic coordinates using Google Maps Geocoding API.
+ * Handles both regular addresses and Google Places API place IDs.
  */
 export async function geocodeAddress(address: string, language: string): Promise<{ lat: number; lon: number }> {
-    // Clean up malformed addresses that might have timestamps or other data appended
-    const cleanAddress = address.split('|')[0].trim();
+    // Clean up malformed addresses and extract placeId if present
+    const { text: cleanAddress, placeId } = splitAddressAndPlaceId(address);
+
+    // Check if this is a Google Places API place ID (format: ChI... or similar)
+    const hasPlaceId = placeId !== undefined;
 
     // Log if address was cleaned
     if (cleanAddress !== address) {
         console.warn('Cleaned malformed address:', address, '->', cleanAddress);
     }
 
-    const cacheKey = `${cleanAddress}_${language}`;
+    const cacheKey = `${cleanAddress}_${language}_${placeId || ''}`;
     if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
 
     try {
+        // If we have a Google Places API place ID, use Places Details API first
+        if (placeId && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
+            console.log('Trying Google Places Details API for place ID:', placeId);
+            const proxyUrl = 'https://corsproxy.io/?';
+            const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+            const detailsUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${googleMapsApiKey}&language=${language}&fields=geometry`;
+
+            const response = await fetch(detailsUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'OK' && data.result && data.result.geometry && data.result.geometry.location) {
+                    const location = data.result.geometry.location;
+                    const coords = { lat: location.lat, lon: location.lng };
+                    geocodeCache.set(cacheKey, coords);
+                    console.log('Successfully geocoded using Places Details API:', coords);
+                    return coords;
+                }
+            }
+        }
+
         // Try Nominatim first (more reliable for Czech addresses)
         console.log('Trying Nominatim for address:', cleanAddress);
         const nominatimResult = await geocodeWithNominatim(cleanAddress);
@@ -362,10 +410,10 @@ export async function geocodeAddress(address: string, language: string): Promise
             return nominatimResult;
         }
 
-        // Fallback to Google Maps if API key available
+        // Fallback to Google Maps Geocoding API if API key available
         const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
         if (googleMapsApiKey) {
-            console.log('Nominatim failed, trying Google Maps for address:', cleanAddress);
+            console.log('Nominatim failed, trying Google Maps Geocoding API for address:', cleanAddress);
             const proxyUrl = 'https://corsproxy.io/?';
             const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
 
@@ -532,12 +580,12 @@ export async function getAddressSuggestions(query: string, language: string): Pr
 
 
 /**
- * Gets route details (duration, distance) from OSRM.
+ * Gets route details (duration, distance) from OSRM via local proxy.
  */
 async function getOsrmRoute(coordinates: string): Promise<{ duration: number; distance: number } | null> {
      try {
-         const response = await fetch(`https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=false`);
-         if (!response.ok) throw new Error('Network response was not ok for OSRM');
+         const response = await fetch(`/api/route?coordinates=${encodeURIComponent(coordinates)}`);
+         if (!response.ok) throw new Error('Network response was not ok for OSRM proxy');
          const data = await response.json();
          if (data.code === 'Ok' && data.routes?.length > 0) {
              const route = data.routes[0];
@@ -545,7 +593,7 @@ async function getOsrmRoute(coordinates: string): Promise<{ duration: number; di
          }
          return null;
      } catch (error) {
-         console.error("OSRM error:", error);
+         console.error("OSRM proxy error:", error);
          return null;
      }
 }
@@ -846,12 +894,18 @@ export function generateMileageSummary(rideLogs: RideLog[], vehicles: Vehicle[])
     totalBusinessDistance: number;
     totalPrivateDistance: number;
     totalFuelCost: number;
+    totalRevenue: number;
+    cardRevenue: number;
+    cashRevenue: number;
     vehicleSummaries: Array<{
         vehicleId: number;
         vehicleName: string;
         businessDistance: number;
         privateDistance: number;
         fuelCost: number;
+        revenue: number;
+        cardRevenue: number;
+        cashRevenue: number;
     }>;
 } {
     const vehicleSummaries = vehicles.map(vehicle => ({
@@ -859,33 +913,56 @@ export function generateMileageSummary(rideLogs: RideLog[], vehicles: Vehicle[])
         vehicleName: vehicle.name,
         businessDistance: 0,
         privateDistance: 0,
-        fuelCost: 0
+        fuelCost: 0,
+        revenue: 0,
+        cardRevenue: 0,
+        cashRevenue: 0
     }));
 
     let totalBusinessDistance = 0;
     let totalPrivateDistance = 0;
     let totalFuelCost = 0;
+    let totalRevenue = 0;
+    let totalCardRevenue = 0;
+    let totalCashRevenue = 0;
 
     rideLogs.forEach(log => {
-        if (log.distance && log.status === 'COMPLETED') {
+        if (log.status === 'COMPLETED') {
             const fuelCost = log.fuelCost || 0;
+            const revenue = log.estimatedPrice || 0;
 
             if (log.rideType === RideType.BUSINESS) {
-                totalBusinessDistance += log.distance;
+                totalBusinessDistance += log.distance || 0;
             } else if (log.rideType === RideType.PRIVATE) {
-                totalPrivateDistance += log.distance;
+                totalPrivateDistance += log.distance || 0;
             }
 
             totalFuelCost += fuelCost;
+            totalRevenue += revenue;
+
+            // Calculate payment method revenue
+            if (log.payment === 'card') {
+                totalCardRevenue += revenue;
+            } else if (log.payment === 'cash') {
+                totalCashRevenue += revenue;
+            }
 
             const vehicleSummary = vehicleSummaries.find(v => v.vehicleId === log.vehicleId);
             if (vehicleSummary) {
                 if (log.rideType === RideType.BUSINESS) {
-                    vehicleSummary.businessDistance += log.distance;
+                    vehicleSummary.businessDistance += log.distance || 0;
                 } else if (log.rideType === RideType.PRIVATE) {
-                    vehicleSummary.privateDistance += log.distance;
+                    vehicleSummary.privateDistance += log.distance || 0;
                 }
                 vehicleSummary.fuelCost += fuelCost;
+                vehicleSummary.revenue += revenue;
+
+                // Calculate payment method revenue for vehicle
+                if (log.payment === 'card') {
+                    vehicleSummary.cardRevenue += revenue;
+                } else if (log.payment === 'cash') {
+                    vehicleSummary.cashRevenue += revenue;
+                }
             }
         }
     });
@@ -894,6 +971,9 @@ export function generateMileageSummary(rideLogs: RideLog[], vehicles: Vehicle[])
         totalBusinessDistance,
         totalPrivateDistance,
         totalFuelCost,
+        totalRevenue,
+        cardRevenue: totalCardRevenue,
+        cashRevenue: totalCashRevenue,
         vehicleSummaries
     };
 }

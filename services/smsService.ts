@@ -17,8 +17,12 @@ const LOCAL_KEY = 'rapid-dispatch-sms-messages';
 
 const readLocal = (): SmsMessageRecord[] => {
   try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    return raw ? JSON.parse(raw) : [];
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = localStorage.getItem(LOCAL_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }
+    return [];
   } catch {
     return [];
   }
@@ -26,7 +30,10 @@ const readLocal = (): SmsMessageRecord[] => {
 
 const writeLocal = (rows: SmsMessageRecord[]) => {
   try {
-    localStorage.setItem(LOCAL_KEY, JSON.stringify(rows));
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(rows));
+    }
   } catch {}
 };
 

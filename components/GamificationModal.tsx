@@ -123,7 +123,7 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
               <div className="bg-slate-600 rounded-lg p-4">
                 <div className="text-2xl mb-2">⭐</div>
                 <h5 className="font-medium text-white">Dokonalý řidič</h5>
-                <p className="text-sm text-gray-300">90%+ jízd bez problémů</p>
+                <p className="text-sm text-gray-300">90%+ jízd přijatých do 1 minuty a dokončených bez zrušení</p>
               </div>
               <div className="bg-slate-600 rounded-lg p-4">
                 <div className="text-2xl mb-2">🦌</div>
@@ -139,6 +139,11 @@ export const GamificationModal: React.FC<GamificationModalProps> = ({
                 <div className="text-2xl mb-2">🏃</div>
                 <h5 className="font-medium text-white">Streak Master</h5>
                 <p className="text-sm text-gray-300">Dlouhé série úspěšných jízd</p>
+              </div>
+              <div className="bg-slate-600 rounded-lg p-4">
+                <div className="text-2xl mb-2">⚡</div>
+                <h5 className="font-medium text-white">Bleskový reakční čas</h5>
+                <p className="text-sm text-gray-300">Průměrné skóre rychlosti přijetí 80+ bodů</p>
               </div>
             </div>
           </div>

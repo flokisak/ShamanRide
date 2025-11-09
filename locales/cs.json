@@ -231,6 +231,7 @@
       "pickup": "Vyzvednout",
       "note": "Pozn",
       "price": "Cena",
+      "payment": "Platba",
        "sortBy": "Seřadit podle {label}",
        "changeStatusFor": "Změnit status pro jízdu se zákazníkem {customerName}",
        "markSmsSentFor": "Označit SMS jako odeslanou pro jízdu se zákazníkem {customerName}",
@@ -243,21 +244,23 @@
       "rideType": "Typ jízdy",
       "purpose": "Účel"
     },
-    "edit": {
-      "title": "Upravit záznam jízdy",
-      "assignmentTitle": "Přiřazení",
-      "assignmentHelp": "Vyberte vozidlo pro přiřazení. Řidič se vyplní automaticky, ale můžete ho změnit.",
-      "availableVehicles": "Dostupná vozidla",
-      "selectDriver": "Vyberte řidiče",
-      "rideType": "Typ jízdy",
-      "startMileage": "Počáteční stav km",
-      "endMileage": "Konečný stav km",
-       "purpose": "Účel jízdy",
-       "businessPurpose": "Účel služební jízdy",
-       "estimates": "Odhady",
-       "estimatedPrice": "Odhadovaná cena",
-       "estimatedDuration": "Odhadovaná doba"
-    },
+     "edit": {
+       "title": "Upravit záznam jízdy",
+       "assignmentTitle": "Přiřazení",
+       "assignmentHelp": "Vyberte vozidlo pro přiřazení. Řidič se vyplní automaticky, ale můžete ho změnit.",
+       "availableVehicles": "Dostupná vozidla",
+       "selectDriver": "Vyberte řidiče",
+       "rideType": "Typ jízdy",
+       "startMileage": "Počáteční stav km",
+       "endMileage": "Konečný stav km",
+        "purpose": "Účel jízdy",
+        "businessPurpose": "Účel služební jízdy",
+        "estimates": "Odhady",
+        "estimatedPrice": "Odhadovaná cena",
+        "estimatedDuration": "Odhadovaná doba",
+        "paymentMethod": "Způsob platby",
+        "selectPaymentMethod": "Vyberte způsob platby"
+     },
     "add": {
       "title": "Přidat jízdu",
       "privateRide": "Soukromá jízda",
@@ -499,9 +502,13 @@
      "MANAGEMENT": "Vedení",
      "DISPATCHER": "Dispečer"
    },
-   "personRolePlural": {
-     "DRIVER": "Řidiči",
-     "MANAGEMENT": "Vedení",
-     "DISPATCHER": "Dispečeři"
-   }
+    "personRolePlural": {
+      "DRIVER": "Řidiči",
+      "MANAGEMENT": "Vedení",
+      "DISPATCHER": "Dispečeři"
+    },
+    "paymentMethod": {
+      "cash": "Hotovost",
+      "card": "Karta"
+    }
 }

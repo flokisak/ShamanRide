@@ -18,15 +18,17 @@ export class GamificationService {
     const customerCountScore = this.calculateCustomerCountScore(driverRides);
     const revenueScore = this.calculateRevenueScore(driverRides);
     const perfectRidesScore = this.calculatePerfectRidesScore(driverRides);
+    const acceptanceTimeScore = this.calculateAcceptanceTimeScore(driverRides);
     const deerCollisionScore = await this.calculateDeerCollisionScore(driverId);
     const manualEntryScore = await this.calculateManualEntryScore(driverId);
 
-    // Celkové skóre (vážený průměr) - přidána komponenta pro manuální záznamy
+    // Celkové skóre (vážený průměr) - přidána komponenta pro čas přijetí jízd
     const totalScore = Math.round(
-      fuelEfficiencyScore * 0.20 +
-      customerCountScore * 0.15 +
-      revenueScore * 0.15 +
-      perfectRidesScore * 0.20 +
+      fuelEfficiencyScore * 0.15 +
+      customerCountScore * 0.10 +
+      revenueScore * 0.10 +
+      perfectRidesScore * 0.15 +
+      acceptanceTimeScore * 0.20 +
       deerCollisionScore * 0.10 +
       manualEntryScore * 0.20
     );
@@ -39,10 +41,13 @@ export class GamificationService {
       customer_count_score: customerCountScore,
       revenue_score: revenueScore,
       perfect_rides_score: perfectRidesScore,
+      acceptance_time_score: acceptanceTimeScore,
       deer_collision_score: deerCollisionScore,
       rank: 0, // Bude nastaveno později při získání všech skóre
       updated_at: new Date().toISOString()
     };
+
+    // average_rating field now exists in the database schema
 
     // Uložit skóre do databáze
     await supabaseService.updateDriverScore(driverId, scoreData);
@@ -131,11 +136,51 @@ export class GamificationService {
   private static calculatePerfectRidesScore(rides: any[]): number {
     if (rides.length === 0) return 0;
 
-    // Perfektní jízda = dokončená jízda (nyní všechny dokončené jízdy jsou perfektní díky driver app komunikaci)
-    const perfectRides = rides.filter(ride => ride.status === 'COMPLETED');
+    // Perfektní jízda = dokončená jízda přijatá do 1 minuty bez zrušení
+    const perfectRides = rides.filter(ride => {
+      if (ride.status !== 'COMPLETED') return false;
+
+      // Check if ride was accepted within 1 minute
+      if (!ride.acceptedAt || !ride.timestamp) return false;
+      const acceptanceTime = (ride.acceptedAt - ride.timestamp) / 1000 / 60; // minutes
+      return acceptanceTime <= 1;
+    });
     const perfectRatio = perfectRides.length / rides.length;
 
     return Math.round(perfectRatio * 100);
+  }
+
+  // Výpočet skóre pro rychlost přijetí jízd
+  private static calculateAcceptanceTimeScore(rides: any[]): number {
+    if (rides.length === 0) return 0;
+
+    let totalPoints = 0;
+    let validRides = 0;
+
+    for (const ride of rides) {
+      if (ride.status === 'COMPLETED' && ride.acceptedAt && ride.timestamp) {
+        const acceptanceTime = (ride.acceptedAt - ride.timestamp) / 1000 / 60; // minutes
+
+        let points = 0;
+        if (acceptanceTime <= 1) {
+          points = 10; // Accepted within 1 minute
+        } else if (acceptanceTime <= 3) {
+          points = 5;  // Accepted within 3 minutes
+        } else if (acceptanceTime <= 5) {
+          points = 2;  // Accepted within 5 minutes
+        }
+        // 0 points if not accepted within 5 minutes
+
+        totalPoints += points;
+        validRides++;
+      }
+    }
+
+    if (validRides === 0) return 0;
+
+    // Average points per ride, scaled to 0-100
+    const averagePoints = totalPoints / validRides;
+    return Math.round(Math.min(100, averagePoints * 10)); // Max 100 points
   }
 
   // Easter egg - skóre pro "sražené srnky" (na základě reálných incidentů)
@@ -211,6 +256,8 @@ export class GamificationService {
       manual_entries_points: manualEntriesPoints
     };
 
+    // average_rating field now exists in the database schema
+
     // Výpočet průměrné spotřeby paliva (skutečná spotřeba v L/100km)
     try {
       const vehicles = await supabaseService.getVehicles();
@@ -280,9 +327,22 @@ export class GamificationService {
         driver_id: driverId,
         type: AchievementType.PERFECT_RIDES,
         title: 'Dokonalý řidič',
-        description: '90%+ jízd bez problémů',
+        description: '90%+ jízd přijatých do 1 minuty a dokončených bez zrušení',
         icon: '⭐',
         rarity: 'legendary',
+        unlocked_at: new Date().toISOString()
+      });
+    }
+
+    // Achievement za rychlé přijetí jízd
+    if (scoreData.acceptance_time_score >= 80 && !achievementTypes.includes(AchievementType.FAST_ACCEPTANCE)) {
+      newAchievements.push({
+        driver_id: driverId,
+        type: AchievementType.FAST_ACCEPTANCE,
+        title: 'Bleskový reakční čas',
+        description: 'Průměrné skóre rychlosti přijetí 80+ bodů',
+        icon: '⚡',
+        rarity: 'rare',
         unlocked_at: new Date().toISOString()
       });
     }

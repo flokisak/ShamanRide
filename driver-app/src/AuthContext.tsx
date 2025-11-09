@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
-import { authService } from './supabaseClient';
+import { authService, stopAuthKeepAlive } from './supabaseClient';
 
 // Define the shape of the context
 interface AuthContextType {
@@ -41,6 +41,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Auth state changed:', event, session);
         setUser(session?.user ?? null);
         setLoading(false);
+        // If the session ended, stop the keep-alive timer
+        if (!session) {
+          try {
+            stopAuthKeepAlive();
+          } catch (err) {
+            console.warn('Failed to stop auth keep-alive after sign-out:', err);
+          }
+        }
       }
     );
 
@@ -72,6 +80,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await authService.signOut();
       setUser(null);
+      // Also stop keep-alive when user explicitly signs out
+      try {
+        stopAuthKeepAlive();
+      } catch (err) {
+        console.warn('Failed to stop auth keep-alive on signOut:', err);
+      }
     } finally {
       setLoading(false);
     }

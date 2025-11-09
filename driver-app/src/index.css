@@ -83,3 +83,35 @@
 .icon-pop:hover {
   transform: scale(1.1);
 }
+
+/* Notification flashing animation */
+@keyframes flash-notification {
+  0%, 50%, 100% {
+    background-color: rgba(var(--nord-aurora-3), 0.2);
+    border-color: rgb(var(--nord-aurora-3));
+    box-shadow: 0 0 20px rgba(var(--nord-aurora-3), 0.3);
+  }
+  25%, 75% {
+    background-color: rgba(var(--nord-polar-1), 0.8);
+    border-color: rgba(var(--nord-polar-4), 0.3);
+    box-shadow: 0 8px 32px rgba(15, 23, 42, 0.4);
+  }
+}
+
+.flash-notification {
+  animation: flash-notification 1.5s ease-in-out infinite;
+}
+
+/* Pulse animation for subtle highlighting */
+@keyframes pulse-highlight {
+  0%, 100% {
+    background-color: rgba(var(--nord-aurora-4), 0.1);
+  }
+  50% {
+    background-color: rgba(var(--nord-aurora-4), 0.2);
+  }
+}
+
+.pulse-highlight {
+  animation: pulse-highlight 2s ease-in-out infinite;
+}

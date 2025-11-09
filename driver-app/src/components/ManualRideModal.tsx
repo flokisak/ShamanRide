@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { CloseIcon, CheckCircleIcon, AlertTriangleIcon } from '../icons';
+import { AutocompleteInputField } from './AutocompleteInputField';
 import { supabaseService, SUPABASE_ENABLED } from '../supabaseClient';
+import { persistRide, updateVehicles as syncUpdateVehicles } from '../utils/syncService';
 import { RideLog, RideStatus, RideType, DEFAULT_TARIFF } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 
@@ -9,8 +11,12 @@ interface ManualRideModalProps {
     vehicleNumber: number;
     licensePlate: string;
     onRideAdded: (ride?: RideLog) => void;
-    onNavigateToDestination?: (stops: string[], navApp?: 'google' | 'mapy') => void;
-    preferredNavApp?: 'google' | 'mapy';
+    socket?: any;
+    socketConnected?: boolean;
+    onNavigateToDestination?: (stops: string[], navApp?: 'google' | 'mapy' | 'waze') => void;
+    preferredNavApp?: 'google' | 'mapy' | 'waze';
+    currentLocation?: { lat: number; lng: number } | null;
+    currentRide?: RideLog | null;
 }
 
 type ModalState = 'form' | 'loading' | 'success' | 'error';
@@ -20,17 +26,43 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
     vehicleNumber,
     licensePlate,
     onRideAdded,
+    socket,
+    socketConnected,
     onNavigateToDestination,
-    preferredNavApp = 'google'
+    preferredNavApp = 'google',
+    currentLocation,
+    currentRide
 }) => {
     console.log('ManualRideModal opened with:', { vehicleNumber, licensePlate });
     console.log('SUPABASE_ENABLED:', SUPABASE_ENABLED);
     const { t } = useTranslation();
-    const [stops, setStops] = useState<string[]>(['', '']);
-    const [customerName, setCustomerName] = useState('');
-    const [customerPhone, setCustomerPhone] = useState('');
-    const [passengers, setPassengers] = useState(1);
-    const [notes, setNotes] = useState('');
+
+    // If a current ride appears while the modal is open, close the modal.
+    // Use an effect (instead of an early return) to avoid breaking the rules of hooks
+    // and to ensure hook call order remains stable across renders.
+    useEffect(() => {
+        if (currentRide) {
+            console.warn('Closing manual ride modal because an active ride exists:', currentRide.id);
+            // small delay to allow any animations/cleanup
+            const id = setTimeout(() => onClose(), 100);
+            return () => clearTimeout(id);
+        }
+        return;
+    }, [currentRide, onClose]);
+    // Initialize stops with current location as start if available
+    const [stops, setStops] = useState<string[]>(() => {
+        const initialStops = ['']; // destination
+        if (currentLocation) {
+            initialStops.unshift(`${currentLocation.lat.toFixed(6)}, ${currentLocation.lng.toFixed(6)}`);
+        } else {
+            initialStops.unshift('Aktuální poloha'); // Fallback if no GPS
+        }
+        return initialStops;
+    });
+    const [destination, setDestination] = useState('');
+    const [destinationPlaceId, setDestinationPlaceId] = useState('');
+    const [waypoints, setWaypoints] = useState<string[]>([]);
+    const [waypointsPlaceIds, setWaypointsPlaceIds] = useState<string[]>([]);
     const [estimatedDistance, setEstimatedDistance] = useState<number | undefined>();
     const [estimatedPrice, setEstimatedPrice] = useState<number | undefined>();
     const [modalState, setModalState] = useState<ModalState>('form');
@@ -53,14 +85,52 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
         }
     }, [estimatedDistance]);
 
-    const handleStopChange = (index: number, value: string) => {
+    const handleDestinationChange = (value: string) => {
+        setDestination(value);
+        // clear previously selected placeId when user types manually
+        setDestinationPlaceId('');
         const newStops = [...stops];
-        newStops[index] = value;
+        newStops[stops.length - 1] = value; // Last element is destination
         setStops(newStops);
     };
 
+    const addWaypoint = () => {
+        setWaypoints([...waypoints, '']);
+        const newStops = [...stops];
+        newStops.splice(newStops.length - 1, 0, ''); // Insert before destination
+        setStops(newStops);
+        setWaypointsPlaceIds(prev => [...prev, '']);
+    };
+
+    const handleWaypointChange = (index: number, value: string) => {
+        const newWaypoints = [...waypoints];
+        newWaypoints[index] = value;
+        setWaypoints(newWaypoints);
+
+        // clear placeId for this waypoint when user types
+        setWaypointsPlaceIds(prev => {
+            const p = [...prev];
+            p[index] = '';
+            return p;
+        });
+
+        const newStops = [...stops];
+        newStops[index + 1] = value; // Waypoints start at index 1
+        setStops(newStops);
+    };
+
+    const removeWaypoint = (index: number) => {
+        const newWaypoints = waypoints.filter((_, i) => i !== index);
+        setWaypoints(newWaypoints);
+
+        const newStops = [...stops];
+        newStops.splice(index + 1, 1); // Remove the waypoint
+        setStops(newStops);
+        setWaypointsPlaceIds(prev => prev.filter((_, i) => i !== index));
+    };
+
     const validate = () => {
-        if (!stops[0].trim() || !stops[1].trim()) {
+        if (!destination.trim()) {
             return false;
         }
         return true;
@@ -80,12 +150,33 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
         setError(null);
         setModalState('loading');
 
+        // Double-check that there's no active ride before proceeding
+        if (currentRide) {
+            setError('Nelze vytvořit novou jízdu - existuje aktivní jízda. Dokončete prosím aktuální jízdu.');
+            setModalState('error');
+            return;
+        }
+
         try {
             // Calculate estimated completion time (assume 30 minutes for now)
             const estimatedCompletionTimestamp = Date.now() + 30 * 60 * 1000;
 
             // Create new ride log entry - first as PENDING, then immediately accept it
             const rideId = `manual-ride-${Date.now()}`;
+            // Combine stops with placeIds for geocoding while keeping UI clean
+            const combinedStops = stops.map((s, i) => {
+                // last element is destination
+                if (i === stops.length - 1) {
+                    return destinationPlaceId ? `${s}|${destinationPlaceId}` : s;
+                }
+                // waypoints start at index 1 (if there is a pickup at index 0)
+                if (i > 0 && i < stops.length - 1) {
+                    const wpIndex = i - 1;
+                    return waypointsPlaceIds[wpIndex] ? `${s}|${waypointsPlaceIds[wpIndex]}` : s;
+                }
+                return s;
+            });
+
             const newRide: RideLog = {
                 id: rideId,
                 timestamp: Date.now(),
@@ -94,14 +185,14 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 driverName: null, // Will be set by the system
                 vehicleType: null,
                 rideType: RideType.BUSINESS,
-                customerName: customerName || 'Neznámý zákazník',
-                customerPhone: customerPhone || '',
-                stops,
-                passengers: passengers || 1,
+                customerName: 'Přímý zákazník',
+                customerPhone: '',
+                stops: combinedStops,
+                passengers: 1,
                 pickupTime: 'ihned',
                 status: RideStatus.Pending, // Create as pending first so dispatcher can see it's assigned
                 vehicleId: vehicleNumber,
-                notes: notes || 'Přímá objednávka řidiče',
+                notes: 'Přímá objednávka řidiče',
                 estimatedPrice,
                 estimatedPickupTimestamp: Date.now(),
                 estimatedCompletionTimestamp,
@@ -122,10 +213,17 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 fullRide: newRide
             });
 
-            // Add the ride as pending first
-            console.log('Adding ride to database:', newRide);
-            const result1 = await supabaseService.addRideLog(newRide);
-            console.log('First addRideLog result:', result1);
+            // Add the ride as pending first, then immediately accept it.
+            // If Supabase is enabled and socket is connected, emit to server (server will persist).
+            // Otherwise fall back to local supabaseService persistence.
+            console.log('Adding ride (pending) to system:', newRide);
+            try {
+                await persistRide(newRide);
+                console.log('persistRide called for pending ride (driver)');
+            } catch (err) {
+                console.warn('persistRide failed for pending ride, falling back to supabaseService.addRideLog', err);
+                await supabaseService.addRideLog(newRide);
+            }
 
             // Immediately accept/start the ride
             const acceptedRide: RideLog = {
@@ -135,16 +233,27 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 startedAt: Date.now()
             };
 
-            console.log('Updating ride to in progress:', acceptedRide);
-            const result2 = await supabaseService.addRideLog(acceptedRide);
-            console.log('Second addRideLog result:', result2);
+            console.log('Starting ride (in progress):', acceptedRide);
+            try {
+                await persistRide(acceptedRide);
+                console.log('persistRide called for accepted ride (driver)');
+            } catch (err) {
+                console.warn('persistRide failed for accepted ride, falling back to supabaseService.addRideLog', err);
+                await supabaseService.addRideLog(acceptedRide);
+            }
 
             // Update vehicle status to BUSY
             const vehicles = await supabaseService.getVehicles();
             const updatedVehicles = vehicles.map(v =>
                 v.id === vehicleNumber ? { ...v, status: 'BUSY', freeAt: estimatedCompletionTimestamp } : v
             );
-            await supabaseService.updateVehicles(updatedVehicles);
+            try {
+                await syncUpdateVehicles(updatedVehicles);
+                console.log('syncUpdateVehicles called after manual ride creation');
+            } catch (err) {
+                console.warn('syncUpdateVehicles failed, falling back to supabaseService.updateVehicles', err);
+                await supabaseService.updateVehicles(updatedVehicles);
+            }
 
             setModalState('success');
 
@@ -175,9 +284,28 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                     <div className="text-center p-8">
                         <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
                         <h3 className="text-2xl font-bold text-white mb-2">Jízda byla přidána!</h3>
-                        <p className="text-gray-300">
-                            Jízda pro {customerName} byla úspěšně přidána a zahájena.
+                        <p className="text-gray-300 mb-4">
+                            Přímá jízda byla úspěšně přidána a zahájena.
                         </p>
+                        {onNavigateToDestination && (
+                            <button
+                                onClick={() => {
+                                    // use combinedStops so navigation can use placeIds when available
+                                    const combinedStopsForNav = stops.map((s, i) => {
+                                        if (i === stops.length - 1) return destinationPlaceId ? `${s}|${destinationPlaceId}` : s;
+                                        if (i > 0 && i < stops.length - 1) {
+                                            const wpIndex = i - 1;
+                                            return waypointsPlaceIds[wpIndex] ? `${s}|${waypointsPlaceIds[wpIndex]}` : s;
+                                        }
+                                        return s;
+                                    });
+                                    onNavigateToDestination(combinedStopsForNav, preferredNavApp);
+                                }}
+                                className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-lg btn-modern text-white font-medium text-lg shadow-lg"
+                            >
+                                🗺️ Otevřít navigaci ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
+                            </button>
+                        )}
                     </div>
                 );
             case 'error':
@@ -196,126 +324,101 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 return (
                     <form onSubmit={handleSubmit}>
                         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odkud</label>
-                                 <input
-                                     type="text"
-                                     value={stops[0]}
-                                     onChange={(e) => handleStopChange(0, e.target.value)}
-                                     placeholder="Adresa vyzvednutí"
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                     required
-                                 />
-                             </div>
+                              {/* Starting point info */}
+                              {currentLocation && (
+                                  <div className="bg-slate-700/50 rounded-lg p-3">
+                                      <p className="text-sm text-gray-300">
+                                          <span className="font-medium">Začátek:</span> Aktuální poloha řidiče ({currentLocation.lat.toFixed(4)}, {currentLocation.lng.toFixed(4)})
+                                      </p>
+                                  </div>
+                              )}
 
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Kam</label>
-                                 <input
-                                     type="text"
-                                     value={stops[1]}
-                                     onChange={(e) => handleStopChange(1, e.target.value)}
-                                     placeholder="Adresa cíle"
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                     required
-                                 />
-                             </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">Cíl</label>
+                                  <AutocompleteInputField
+                                      id="manual-destination"
+                                      value={destination}
+                                      onChange={(val) => handleDestinationChange(val)}
+                                      onSelectPlaceId={(pid) => setDestinationPlaceId(pid || '')}
+                                      suggestionMode="remote"
+                                      placeholder="Adresa cíle"
+                                  />
+                              </div>
 
-                             {/* Navigation Button */}
-                             {stops[0] && stops[1] && onNavigateToDestination && (
-                                 <div className="mt-2">
-                                     <button
-                                         type="button"
-                                         onClick={() => onNavigateToDestination(stops, preferredNavApp)}
-                                         className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium text-sm"
-                                     >
-                                         🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
-                                     </button>
-                                 </div>
-                             )}
+                              {/* Waypoints */}
+                              {waypoints.map((waypoint, index) => (
+                                  <div key={index}>
+                                      <div className="flex items-center justify-between mb-1">
+                                          <label className="block text-sm font-medium text-gray-300">Mezizastávka {index + 1}</label>
+                                          <button
+                                              type="button"
+                                              onClick={() => removeWaypoint(index)}
+                                              className="text-red-400 hover:text-red-300 text-sm"
+                                          >
+                                              Odebrat
+                                          </button>
+                                      </div>
+                                      <AutocompleteInputField
+                                          id={`manual-waypoint-${index}`}
+                                          value={waypoint}
+                                          onChange={(val) => handleWaypointChange(index, val)}
+                                          onSelectPlaceId={(pid) => setWaypointsPlaceIds(prev => {
+                                              const p = [...prev];
+                                              p[index] = pid || '';
+                                              return p;
+                                          })}
+                                          suggestionMode="remote"
+                                          placeholder="Adresa mezizastávky"
+                                      />
+                                  </div>
+                              ))}
 
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná vzdálenost (km) - volitelné</label>
-                                 <input
-                                     type="number"
-                                     value={estimatedDistance || ''}
-                                     onChange={(e) => setEstimatedDistance(e.target.value ? parseFloat(e.target.value) : undefined)}
-                                     placeholder="Např. 15.5"
-                                     min="0"
-                                     step="0.1"
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                 />
-                                  <p className="text-xs text-gray-400 mt-1">
-                                      Volitelné - slouží pouze pro automatický výpočet ceny podle tarifů
-                                  </p>
-                             </div>
+                              <button
+                                  type="button"
+                                  onClick={addWaypoint}
+                                  className="w-full bg-slate-600 hover:bg-slate-500 py-2 rounded-lg text-white font-medium text-sm"
+                              >
+                                  ➕ Přidat mezizastávku
+                              </button>
 
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">Jméno zákazníka (volitelné)</label>
-                                <input
-                                    type="text"
-                                    value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
-                                    placeholder="Jméno a příjmení"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">Odhadovaná vzdálenost (km) - volitelné</label>
+                                  <input
+                                      type="number"
+                                      value={estimatedDistance || ''}
+                                      onChange={(e) => setEstimatedDistance(e.target.value ? parseFloat(e.target.value) : undefined)}
+                                      placeholder="Např. 15.5"
+                                      min="0"
+                                      step="0.1"
+                                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                  />
+                                   <p className="text-xs text-gray-400 mt-1">
+                                       Volitelné - slouží pouze pro automatický výpočet ceny podle tarifů
+                                   </p>
+                              </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Telefon (volitelné)</label>
-                                <input
-                                    type="tel"
-                                    value={customerPhone}
-                                    onChange={(e) => setCustomerPhone(e.target.value)}
-                                    placeholder="+420 XXX XXX XXX"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
+                              <div>
+                                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                                      Odhadovaná cena {estimatedDistance ? '(vypočítáno z vzdálenosti)' : '(volitelné)'}
+                                  </label>
+                                  <input
+                                      type="number"
+                                      value={estimatedPrice || ''}
+                                      onChange={(e) => setEstimatedPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                                      placeholder={estimatedDistance ? `${calculatePrice(estimatedDistance)} Kč` : "Zadejte částku v Kč"}
+                                      className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                  />
+                                  {estimatedDistance && estimatedPrice && (
+                                      <p className="text-xs text-green-400 mt-1">
+                                          Automaticky vypočítáno: {calculatePrice(estimatedDistance)} Kč
+                                          {estimatedPrice !== calculatePrice(estimatedDistance) && (
+                                              <span className="text-yellow-400 ml-2">(manuálně upraveno)</span>
+                                          )}
+                                      </p>
+                                  )}
+                              </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Počet cestujících (volitelné)</label>
-                                <input
-                                    type="number"
-                                    value={passengers}
-                                    onChange={(e) => setPassengers(parseInt(e.target.value, 10) || 1)}
-                                    min="1"
-                                    max="8"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
-
-                             <div>
-                                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                                     Odhadovaná cena {estimatedDistance ? '(vypočítáno z vzdálenosti)' : '(volitelné)'}
-                                 </label>
-                                 <input
-                                     type="number"
-                                     value={estimatedPrice || ''}
-                                     onChange={(e) => setEstimatedPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                                     placeholder={estimatedDistance ? `${calculatePrice(estimatedDistance)} Kč` : "Zadejte částku v Kč"}
-                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                 />
-                                 {estimatedDistance && estimatedPrice && (
-                                     <p className="text-xs text-green-400 mt-1">
-                                         Automaticky vypočítáno: {calculatePrice(estimatedDistance)} Kč
-                                         {estimatedPrice !== calculatePrice(estimatedDistance) && (
-                                             <span className="text-yellow-400 ml-2">(manuálně upraveno)</span>
-                                         )}
-                                     </p>
-                                 )}
-                             </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Poznámky (volitelné)</label>
-                                <textarea
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    placeholder="Další informace o jízdě..."
-                                    rows={3}
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                />
-                            </div>
-
-                            {error && <p className="text-sm text-red-400">{error}</p>}
+                             {error && <p className="text-sm text-red-400">{error}</p>}
                         </div>
 
                         <div className="flex justify-end items-center p-6 bg-slate-900 border-t border-slate-700 rounded-b-lg space-x-3">

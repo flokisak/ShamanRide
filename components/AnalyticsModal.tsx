@@ -74,6 +74,14 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
         const totalFuelCost = completedRides.reduce((sum, log) => sum + (log.fuelCost || 0), 0);
         const ridesCancelled = filteredRideLog.filter(log => log.status === RideStatus.Cancelled).length;
 
+        // Calculate separate card and cash revenue
+        const cardRevenue = completedRides
+            .filter(log => log.payment === 'card')
+            .reduce((sum, log) => sum + (log.estimatedPrice || 0), 0);
+        const cashRevenue = completedRides
+            .filter(log => log.payment === 'cash')
+            .reduce((sum, log) => sum + (log.estimatedPrice || 0), 0);
+
         const vehicleStats: Record<string, { rideCount: number; revenue: number; fuelCost: number; vehicleName: string, vehicleLicensePlate: string }> = {};
 
         vehicles.forEach(v => {
@@ -117,6 +125,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
             totalFuelCost,
             ridesCancelled,
             avgPricePerRide: completedRides.length > 0 ? (totalRevenue / completedRides.length) : 0,
+            cardRevenue,
+            cashRevenue,
             vehicleStats: vehicleStatsArray,
             chartData,
         };
@@ -251,11 +261,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
                     </div>
                     
                     {/* Stat cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                         <StatCard title={t('analytics.cards.completedRides')} value={analyticsData.completedRides} />
                         <StatCard title={t('analytics.cards.totalRevenue')} value={`${analyticsData.totalRevenue.toLocaleString(language)} Kč`} />
+                        <StatCard title="💳 Karta" value={`${analyticsData.cardRevenue.toLocaleString(language)} Kč`} />
+                        <StatCard title="💵 Hotovost" value={`${analyticsData.cashRevenue.toLocaleString(language)} Kč`} />
                         <StatCard title={t('analytics.cards.totalFuelCost')} value={`${analyticsData.totalFuelCost.toLocaleString(language)} Kč`} icon={<FuelIcon size={32}/>} />
-                        <StatCard title={t('analytics.cards.avgPrice')} value={`${analyticsData.avgPricePerRide.toFixed(0)} Kč`} />
                         <StatCard title={t('analytics.cards.cancelledRides')} value={analyticsData.ridesCancelled} />
                     </div>
 
@@ -275,19 +286,37 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
                                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-medium text-gray-300 font-sans">{t('analytics.table.licensePlate')}</th>
                                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-medium text-gray-300 font-sans">{t('analytics.table.completedRides')}</th>
                                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-medium text-gray-300 font-sans">{t('analytics.table.revenue')}</th>
+                                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-medium text-gray-300 font-sans">💳 Karta</th>
+                                         <th scope="col" className="px-3 py-3.5 text-left text-sm font-medium text-gray-300 font-sans">💵 Hotovost</th>
                                          <th scope="col" className="px-3 py-3.5 text-left text-sm font-medium text-gray-300 font-sans">{t('analytics.table.fuelCost')}</th>
                                      </tr>
                                  </thead>
                                  <tbody>
-                                    {analyticsData.vehicleStats.map((stat, index) => (
-                                        <tr key={index}>
-                                            <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">{stat.vehicleName}</td>
-                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-400 font-mono">{stat.vehicleLicensePlate}</td>
-                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{stat.rideCount}</td>
-                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{stat.revenue.toFixed(0)} Kč</td>
-                                            <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{stat.fuelCost.toFixed(0)} Kč</td>
-                                        </tr>
-                                    ))}
+                                    {analyticsData.vehicleStats.map((stat, index) => {
+                                        // Calculate card and cash revenue for this vehicle
+                                        const vehicleRides = filteredRideLog.filter(log =>
+                                            log.vehicleId === vehicles.find(v => v.name === stat.vehicleName)?.id &&
+                                            log.status === RideStatus.Completed
+                                        );
+                                        const cardRevenue = vehicleRides
+                                            .filter(log => log.payment === 'card')
+                                            .reduce((sum, log) => sum + (log.estimatedPrice || 0), 0);
+                                        const cashRevenue = vehicleRides
+                                            .filter(log => log.payment === 'cash')
+                                            .reduce((sum, log) => sum + (log.estimatedPrice || 0), 0);
+
+                                        return (
+                                            <tr key={index}>
+                                                <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-white sm:pl-6">{stat.vehicleName}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-400 font-mono">{stat.vehicleLicensePlate}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{stat.rideCount}</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{stat.revenue.toFixed(0)} Kč</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-blue-300">{cardRevenue.toFixed(0)} Kč</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-green-300">{cashRevenue.toFixed(0)} Kč</td>
+                                                <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-300">{stat.fuelCost.toFixed(0)} Kč</td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

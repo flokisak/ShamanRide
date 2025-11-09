@@ -241,16 +241,23 @@
       "editRideFor": "Fahrt für Kunde {customerName} bearbeiten",
       "deleteRideFor": "Fahrt für Kunde {customerName} löschen"
     },
-    "edit": {
-      "title": "Fahrteintrag bearbeiten",
-      "assignmentTitle": "Zuweisung",
-      "assignmentHelp": "Wählen Sie ein Fahrzeug zur Zuweisung aus. Der Fahrer wird automatisch ausgefüllt, kann aber geändert werden.",
-       "availableVehicles": "Verfügbare Fahrzeuge",
-       "selectDriver": "Fahrer auswählen",
-       "estimates": "Schätzungen",
-       "estimatedPrice": "Geschätzter Preis",
-       "estimatedDuration": "Geschätzte Dauer"
-    }
+     "edit": {
+       "title": "Fahrteintrag bearbeiten",
+       "assignmentTitle": "Zuweisung",
+       "assignmentHelp": "Wählen Sie ein Fahrzeug zur Zuweisung aus. Der Fahrer wird automatisch ausgefüllt, kann aber geändert werden.",
+        "availableVehicles": "Verfügbare Fahrzeuge",
+        "selectDriver": "Fahrer auswählen",
+        "estimates": "Schätzungen",
+        "estimatedPrice": "Geschätzter Preis",
+        "estimatedDuration": "Geschätzte Dauer",
+        "paymentMethod": "Zahlungsmethode",
+        "selectPaymentMethod": "Zahlungsmethode auswählen",
+        "rideType": "Fahrtart",
+        "purpose": "Zweck",
+        "businessPurpose": "Geschäftszweck",
+        "startMileage": "Startkilometerstand",
+        "endMileage": "Endkilometerstand"
+     }
     ,
     "smsPreview": {
       "title": "SMS Vorschau",
@@ -444,9 +451,17 @@
      "MANAGEMENT": "Management",
      "DISPATCHER": "Disponent"
    },
-   "personRolePlural": {
-     "DRIVER": "Fahrer",
-     "MANAGEMENT": "Management",
-     "DISPATCHER": "Disponenten"
-   }
+    "personRolePlural": {
+      "DRIVER": "Fahrer",
+      "MANAGEMENT": "Management",
+      "DISPATCHER": "Disponenten"
+    },
+    "paymentMethod": {
+      "cash": "Barzahlung",
+      "card": "Karte"
+    },
+    "rideType": {
+      "PRIVATE": "Privat",
+      "BUSINESS": "Geschäftlich"
+    }
 }

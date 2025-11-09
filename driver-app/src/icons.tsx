@@ -26,3 +26,14 @@ export const AlertTriangleIcon: React.FC<IconProps> = ({ className, size = 24 })
         <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
 );
+
+export const TrophyIcon: React.FC<IconProps> = ({ className, size = 24 }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+        <path d="M4 22h16" />
+        <path d="M10 14.66V17c0 .55-.47.2-.67.2" />
+        <path d="m14 14.66-.67.2V17" />
+        <path d="M12 2l3 6h6l-5 4 2 6-5-4-5 4 2-6-5-4h6l3-6z" />
+    </svg>
+);

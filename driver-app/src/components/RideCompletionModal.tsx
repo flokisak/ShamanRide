@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import { CloseIcon, CheckCircleIcon, AlertTriangleIcon } from '../icons';
-import { supabase, supabaseService } from '../supabaseClient';
-import { RideLog, RideStatus } from '../types';
+import { supabase, supabaseService, SUPABASE_ENABLED } from '../supabaseClient';
+import { persistRide } from '../utils/syncService';
+import { RideLog, RideStatus, PaymentMethod } from '../types';
 
 interface RideCompletionModalProps {
     onClose: () => void;
     ride: RideLog;
     vehicleNumber: number;
     onRideCompleted: () => void;
+    socket?: any;
+    socketConnected?: boolean;
 }
 
 type ModalState = 'form' | 'loading' | 'success' | 'error';
@@ -17,8 +20,10 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
     ride,
     vehicleNumber,
     onRideCompleted
+    , socket, socketConnected
 }) => {
     const [finalPrice, setFinalPrice] = useState<number | undefined>(ride.estimatedPrice);
+    const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(PaymentMethod.Card);
     const [modalState, setModalState] = useState<ModalState>('form');
     const [error, setError] = useState<string | null>(null);
 
@@ -32,26 +37,25 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
         setModalState('loading');
 
         try {
-            // Update the ride with final price and completed status
+            // Update the ride with final price, payment method and completed status
             const updatedRide = {
                 ...ride,
                 status: RideStatus.Completed,
                 estimatedPrice: finalPrice, // Use final price as estimated price
+                payment: paymentMethod,
                 completedAt: Date.now()
             };
 
-            // Update the ride in the database
-            console.log('completeRide: Completing ride:', ride.id, 'with status:', updatedRide.status, 'price:', finalPrice);
-            console.log('completeRide: Updated ride object:', updatedRide);
-            console.log('completeRide: Calling supabaseService.addRideLog...');
-            console.log('completeRide: SUPABASE_ENABLED =', supabaseService.SUPABASE_ENABLED);
-            try {
-              await supabaseService.addRideLog(updatedRide);
-              console.log('completeRide: Ride completion database update completed successfully');
-            } catch (dbError) {
-              console.error('completeRide: Database update failed:', dbError);
-              throw dbError; // Re-throw to be caught by outer try-catch
-            }
+                        // Update the ride in the database (or emit to server when online)
+                        console.log('completeRide: Completing ride:', ride.id, 'with status:', updatedRide.status, 'price:', finalPrice);
+                        console.log('completeRide: Updated ride object:', updatedRide);
+                        try {
+                            await persistRide(updatedRide);
+                            console.log('persistRide called for ride completion');
+                        } catch (err) {
+                            console.warn('persistRide failed for ride completion, falling back to supabaseService.addRideLog', err);
+                            await supabaseService.addRideLog(updatedRide);
+                        }
 
             // Note: Real-time postgres_changes subscription handles notifications automatically
 
@@ -85,7 +89,7 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
                         <CheckCircleIcon className="w-16 h-16 text-green-400 mx-auto mb-4" />
                         <h3 className="text-2xl font-bold text-white mb-2">Jízda dokončena!</h3>
                         <p className="text-gray-300">
-                            Jízda byla úspěšně dokončena s cenou {finalPrice} Kč.
+                            Jízda byla úspěšně dokončena s cenou {finalPrice} Kč ({paymentMethod === PaymentMethod.Card ? 'karta' : 'hotovost'}).
                         </p>
                     </div>
                 );
@@ -112,19 +116,47 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
                                 </p>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Konečná cena (Kč)</label>
-                                <input
-                                    type="number"
-                                    value={finalPrice || ''}
-                                    onChange={(e) => setFinalPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
-                                    placeholder="Zadejte konečnou cenu"
-                                    className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
-                                    min="0"
-                                    step="1"
-                                    autoFocus
-                                />
-                            </div>
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300 mb-1">Konečná cena (Kč)</label>
+                                 <input
+                                     type="number"
+                                     value={finalPrice || ''}
+                                     onChange={(e) => setFinalPrice(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+                                     placeholder="Zadejte konečnou cenu"
+                                     className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                     min="0"
+                                     step="1"
+                                     autoFocus
+                                 />
+                             </div>
+
+                             <div>
+                                 <label className="block text-sm font-medium text-gray-300 mb-2">Způsob platby</label>
+                                 <div className="flex space-x-3">
+                                     <button
+                                         type="button"
+                                         onClick={() => setPaymentMethod(PaymentMethod.Card)}
+                                         className={`flex-1 py-2 px-3 rounded-lg border-2 font-medium transition-all ${
+                                             paymentMethod === PaymentMethod.Card
+                                                 ? 'bg-blue-600 border-blue-500 text-white'
+                                                 : 'bg-slate-700 border-slate-600 text-gray-300 hover:bg-slate-600'
+                                         }`}
+                                     >
+                                         💳 Karta
+                                     </button>
+                                     <button
+                                         type="button"
+                                         onClick={() => setPaymentMethod(PaymentMethod.Cash)}
+                                         className={`flex-1 py-2 px-3 rounded-lg border-2 font-medium transition-all ${
+                                             paymentMethod === PaymentMethod.Cash
+                                                 ? 'bg-green-600 border-green-500 text-white'
+                                                 : 'bg-slate-700 border-slate-600 text-gray-300 hover:bg-slate-600'
+                                         }`}
+                                     >
+                                         💵 Hotovost
+                                     </button>
+                                 </div>
+                             </div>
 
                             {error && <p className="text-sm text-red-400">{error}</p>}
                         </div>

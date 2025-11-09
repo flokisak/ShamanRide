@@ -15,6 +15,8 @@ type ModalState = 'form' | 'loading' | 'success' | 'error';
 export const OrderModal: React.FC<OrderModalProps> = ({ onClose }) => {
     const { t, language } = useTranslation();
     const [stops, setStops] = useState<string[]>(['', '']);
+    // Parallel array to store optional placeIds for each stop (keeps UI clean)
+    const [stopPlaceIds, setStopPlaceIds] = useState<string[]>(['', '']);
     const [customerName, setCustomerName] = useState('');
     const [customerPhone, setCustomerPhone] = useState('');
     const [phoneEdited, setPhoneEdited] = useState(false);
@@ -31,6 +33,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({ onClose }) => {
         const newStops = [...stops];
         newStops[index] = value;
         setStops(newStops);
+        // Clear any previously selected placeId for this index when user types manually
+        setStopPlaceIds(prev => {
+            const p = [...prev];
+            p[index] = '';
+            return p;
+        });
     };
 
     const formatDateForPicker = (date: Date): string => {
@@ -98,8 +106,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({ onClose }) => {
         setError(null);
         setModalState('loading');
 
+        // Combine stops with placeIds for geocoding while keeping UI values clean
+        const combinedStops = stops.map((s, i) => stopPlaceIds[i] ? `${s}|${stopPlaceIds[i]}` : s);
+
         const rideRequest: RideRequest = {
-            stops,
+            stops: combinedStops,
             customerName,
             customerPhone,
             passengers,
@@ -156,8 +167,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({ onClose }) => {
                 return (
                     <form onSubmit={handleSubmit}>
                         <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
-                            <AutocompleteInputField id="pickup" value={stops[0]} onChange={(val) => handleStopChange(0, val)} suggestionMode="remote" placeholder="Odkud pojedete?" isFirst />
-                            <AutocompleteInputField id="destination" value={stops[1]} onChange={(val) => handleStopChange(1, val)} suggestionMode="remote" placeholder="Kam to bude?" />
+                            <AutocompleteInputField id="pickup" value={stops[0]} onChange={(val) => handleStopChange(0, val)} onSelectPlaceId={(pid) => setStopPlaceIds(prev => { const p=[...prev]; p[0]=pid||''; return p; })} suggestionMode="remote" placeholder="Odkud pojedete?" isFirst />
+                            <AutocompleteInputField id="destination" value={stops[1]} onChange={(val) => handleStopChange(1, val)} onSelectPlaceId={(pid) => setStopPlaceIds(prev => { const p=[...prev]; p[1]=pid||''; return p; })} suggestionMode="remote" placeholder="Kam to bude?" />
                             <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Vaše jméno" className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" required />
                             <div>
                                 <input
