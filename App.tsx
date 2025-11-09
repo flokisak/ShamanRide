@@ -2101,22 +2101,19 @@ const AppContent: React.FC = () => {
       <NotificationCenter notifications={notifications} onDismiss={handleDismissNotification} />
         <header className="glass border-b border-slate-300 px-4 py-2 mb-4 flex-shrink-0 animate-slide-in">
            <div className="flex justify-between items-center">
-             {/* Logo and Brand */}
-             <div className="flex items-center space-x-3">
-               <div className="flex items-center space-x-2">
-                  <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                    <svg className="text-white w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5H15V3H13V5H11V3H9V5H6.5C5.84 5 5.29 5.42 5.08 6.01L3 12V20C3 20.55 3.45 21 4 21H5C5.55 21 6 20.55 6 20V19H18V20C18 20.55 18.45 21 19 21H20C20.55 21 21 20.55 21 20V12L18.92 6.01ZM7 17C6.45 17 6 16.55 6 16S6.45 15 7 15 8 15.45 8 16 7.55 17 7 17ZM17 17C16.45 17 16 16.55 16 16S16.45 15 17 15 18 15.45 18 16 17.55 17 17 17ZM5 13L6.5 7H17.5L19 13H5Z"/>
-                    </svg>
-                  </div>
-                   <div>
-                     <h1 className="text-lg font-bold bg-gradient-to-r from-[#81A1C1] to-[#5E81AC] bg-clip-text text-transparent">
-                       TaxiRide
-                     </h1>
-                     <p className="text-xs text-slate-400">Dispatch & Fleet</p>
+              {/* Logo and Brand */}
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-2">
+                   <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg overflow-hidden">
+                     <img src="/icon.png" alt="ShamanRide" className="w-6 h-6 object-contain" />
                    </div>
-               </div>
-             </div>
+                    <div>
+                      <h1 className="text-lg font-bold bg-gradient-to-r from-[#81A1C1] to-[#5E81AC] bg-clip-text text-transparent">
+                        ShamanRide
+                      </h1>
+                    </div>
+                </div>
+              </div>
 
              {/* Search Bar and Navigation */}
              <div className="flex items-center space-x-4">

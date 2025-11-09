@@ -84,7 +84,7 @@ const LandingPage: React.FC = () => {
                     const ci = await supabaseService.getCompanyInfo();
                     if (!ci) {
                         await supabaseService.updateCompanyInfo({
-                            name: 'TaxiRide',
+                            name: 'ShamanRide',
                             address: 'Mikulov, Česká republika',
                             phone: '+420 728 548 373',
                             email: 'info@shamanride.cz',
@@ -107,7 +107,7 @@ const LandingPage: React.FC = () => {
                 await supabaseService.getTariff().then(async (tf) => { if (!tf) await supabaseService.updateTariff({ startingFee: 50, pricePerKmCar: 40, pricePerKmVan: 60, flatRates: [ { id: 1, name: "V rámci Hustopečí", priceCar: 80, priceVan: 120 }, { id: 2, name: "V rámci Mikulova", priceCar: 100, priceVan: 150 }, { id: 3, name: "Zaječí - diskotéka Retro", priceCar: 200, priceVan: 300 }, ], timeBasedTariffs: [], }); });
                 await supabaseService.getFuelPrices().then(async (fp) => { if (!fp) await supabaseService.updateFuelPrices({ DIESEL: 37.5, PETROL: 38.9 }); });
                 await supabaseService.getMessagingApp().then(async (ma) => { if (!ma) await supabaseService.updateMessagingApp('SMS' as any); });
-                await supabaseService.getCompanyInfo().then(async (ci) => { if (!ci) await supabaseService.updateCompanyInfo({ name: 'TaxiRide', address: 'Mikulov, Česká republika', phone: '+420 728 548 373', email: 'info@taxiride.cz', ico: '12345678', dic: 'CZ12345678', logoUrl: null, }); });
+                await supabaseService.getCompanyInfo().then(async (ci) => { if (!ci) await supabaseService.updateCompanyInfo({ name: 'ShamanRide', address: 'Mikulov, Česká republika', phone: '+420 728 548 373', email: 'info@shamanride.cz', ico: '12345678', dic: 'CZ12345678', logoUrl: null, }); });
             } catch (err) {
                 console.error('Error ensuring local defaults via supabaseService', err);
             }
@@ -171,7 +171,7 @@ const LandingPage: React.FC = () => {
             </main>
 
             <footer className="container mx-auto px-6 py-8 text-center text-gray-500">
-                <p>&copy; {new Date().getFullYear()} TaxiRide. Všechna práva vyhrazena.</p>
+                <p>&copy; {new Date().getFullYear()} ShamanRide. Všechna práva vyhrazena.</p>
                 <p className="mt-2">Kontakt: <a href="tel:+420728548373" className="hover:text-[#81A1C1]">728 548 373</a> | <a href="mailto:info@shamanride.cz" className="hover:text-[#81A1C1]">info@shamanride.cz</a></p>
             </footer>
 
