@@ -13,6 +13,7 @@ import {
 import { Person, Vehicle, VehicleStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { streamClient, initializeStreamChat, createDispatcherDriverChannel, createShiftChannel, getUserChannels } from '../services/streamChatService';
+import { notifyUser } from '../services/notifications';
 import 'stream-chat-react/dist/css/v2/index.css';
 
 // Error boundary for Chat component
@@ -282,6 +283,39 @@ export const StreamChatComponent: React.FC<StreamChatComponentProps> = ({
       streamClient.off('connection.changed', handleConnectionChange);
     };
   }, []);
+
+  // Listen for new messages and show notifications
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const handleNewMessage = (event: any) => {
+      // Only show notification if the message is not from the current user
+      if (event.message?.user?.id !== streamClient.userID) {
+        const channel = event.channel;
+        const senderName = event.message.user?.name || 'Neznámý uživatel';
+        const channelName = getChannelDisplayName(channel);
+
+        // Show notification for new messages
+        notifyUser('message', {
+          title: `Nová zpráva od ${senderName}`,
+          body: `V chatu ${channelName}: ${event.message.text?.substring(0, 50)}${event.message.text?.length > 50 ? '...' : ''}`,
+          focusStealing: false, // Don't steal focus for message notifications
+        });
+
+        console.log('New message notification shown:', {
+          sender: senderName,
+          channel: channelName,
+          message: event.message.text
+        });
+      }
+    };
+
+    streamClient.on('message.new', handleNewMessage);
+
+    return () => {
+      streamClient.off('message.new', handleNewMessage);
+    };
+  }, [isInitialized, vehicles]);
 
   // Create channels when vehicles are loaded
   useEffect(() => {
