@@ -592,7 +592,7 @@ const Dashboard: React.FC = () => {
 
         if (!token) {
           console.error('Driver Dashboard: no access token available, aborting socket connection');
-          setRealtimeConnectionStatus('error');
+          setRealtimeConnectionStatus('disconnected');
           setSocketConnected(false);
           return;
         }

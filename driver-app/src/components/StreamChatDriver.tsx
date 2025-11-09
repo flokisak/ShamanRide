@@ -100,6 +100,22 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
   const [driverId, setDriverId] = useState<string>('');
   const isMobile = useIsMobile();
 
+  const getChannelDisplayName = (channel: any) => {
+    if (channel.id.includes('dispatcher-driver')) {
+      return 'Dispečer';
+    } else if (channel.id.includes('driver-driver')) {
+      // Extract the other driver's ID
+      const match = channel.id.match(/driver-driver-(\d+)-(\d+)/);
+      if (match) {
+        const driver1 = parseInt(match[1]);
+        const driver2 = parseInt(match[2]);
+        const otherDriverId = driver1 === vehicleNumber ? driver2 : driver1;
+        const otherDriver = otherDrivers.find(d => d.id === otherDriverId);
+        return otherDriver ? otherDriver.name : `Řidič ${otherDriverId}`;
+      }
+    }
+    return channel.id;
+  };
 
   // Request notification permissions and register for push notifications
   useEffect(() => {
@@ -200,12 +216,12 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
           const registration = await navigator.serviceWorker.ready;
 
           // Register background sync for data synchronization
-          await registration.sync.register('background-sync');
+          await (registration as any).sync.register('background-sync');
           console.log('Background sync registered');
 
           // Register periodic sync if available (for location updates)
           if ('periodicSync' in window.ServiceWorkerRegistration.prototype) {
-            await registration.periodicSync.register('location-update', {
+            await (registration as any).periodicSync.register('location-update', {
               minInterval: 5 * 60 * 1000 // 5 minutes
             });
             console.log('Periodic location sync registered');
@@ -220,63 +236,72 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
   }, []);
 
   // Initialize Stream Chat for driver
-  useEffect(() => {
-    const initChat = async () => {
-      if (!vehicleNumber) return;
+   useEffect(() => {
+     const initChat = async () => {
+       if (!vehicleNumber) return;
 
-      console.log('Stream Chat: Starting initialization for vehicle:', vehicleNumber);
+       console.log('Stream Chat: Starting initialization for vehicle:', vehicleNumber);
 
-      try {
-        const driverUserId = `driver_${vehicleNumber}`;
-        setDriverId(driverUserId);
+       try {
+         const driverUserId = `driver_${vehicleNumber}`;
+         setDriverId(driverUserId);
 
-        // Check if Supabase user is authenticated
-        console.log('Stream Chat: Checking Supabase authentication...');
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (error) {
-          console.error('Stream Chat: Authentication error:', error);
-          return;
-        }
-        if (!user) {
-          console.warn('Stream Chat: User not authenticated, skipping initialization');
-          return;
-        }
-        const userName = user?.user_metadata?.name || user?.email || `Driver ${vehicleNumber}`;
-        console.log('Stream Chat: User authenticated:', userName);
+         // Check if Supabase user is authenticated
+         console.log('Stream Chat: Checking Supabase authentication...');
+         const { data: { user }, error } = await supabase.auth.getUser();
+         if (error) {
+           console.error('Stream Chat: Authentication error:', error);
+           return;
+         }
+         if (!user) {
+           console.warn('Stream Chat: User not authenticated, skipping initialization');
+           return;
+         }
+         const userName = user?.user_metadata?.name || user?.email || `Driver ${vehicleNumber}`;
+         console.log('Stream Chat: User authenticated:', userName);
 
-        // Initialize with driver user
-        console.log('Stream Chat: Calling initializeStreamChat...');
-        console.log('Stream Chat: Device info - UserAgent:', navigator.userAgent);
-        console.log('Stream Chat: Device info - Is mobile:', /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+         // Initialize with driver user
+         console.log('Stream Chat: Calling initializeStreamChat...');
+         console.log('Stream Chat: Device info - UserAgent:', navigator.userAgent);
+         console.log('Stream Chat: Device info - Is mobile:', /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
 
-        await initializeStreamChat(driverUserId, {
-          name: userName,
-          role: 'driver',
-          vehicleId: vehicleNumber
-        });
-        setIsInitialized(true);
-        console.log('Stream Chat initialized for driver:', driverUserId);
-      } catch (error) {
-        console.error('Failed to initialize Stream Chat for driver:', error);
-        console.error('Stream Chat error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        // Don't set initialized state on error to allow retry
-      }
-    };
+         await initializeStreamChat(driverUserId, {
+           name: userName,
+           role: 'driver',
+           vehicleId: vehicleNumber
+         });
+         setIsInitialized(true);
+         console.log('Stream Chat initialized for driver:', driverUserId);
+       } catch (error) {
+         console.error('Failed to initialize Stream Chat for driver:', error);
+         console.error('Stream Chat error details:', {
+           message: error.message,
+           stack: error.stack,
+           name: error.name
+         });
 
-    initChat();
+         // Check if it's a CORS/network error and add retry logic
+         if (error.message?.includes('CORS') || error.message?.includes('Network') || error.message?.includes('fetch')) {
+           console.warn('Stream Chat: CORS/Network error detected, will retry in 30 seconds');
+           setTimeout(() => {
+             console.log('Stream Chat: Retrying initialization after CORS error');
+             initChat();
+           }, 30000); // Retry after 30 seconds
+         }
+         // Don't set initialized state on error to allow retry
+       }
+     };
 
-    return () => {
-      if (streamClient.user) {
-        streamClient.disconnectUser().catch(error =>
-          console.warn('Error disconnecting Stream Chat:', error)
-        );
-      }
-    };
-  }, [vehicleNumber]); // Only depend on vehicleNumber to prevent excessive re-initialization
+     initChat();
+
+     return () => {
+       if (streamClient.user) {
+         streamClient.disconnectUser().catch(error =>
+           console.warn('Error disconnecting Stream Chat:', error)
+         );
+       }
+     };
+   }, [vehicleNumber]); // Only depend on vehicleNumber to prevent excessive re-initialization
 
   // Create channels when initialized
    useEffect(() => {
@@ -395,23 +420,6 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
       loadChannels();
     }, [isInitialized, driverId, vehicleNumber, otherDrivers]);
 
-    const getChannelDisplayName = (channel: any) => {
-      if (channel.id.includes('dispatcher-driver')) {
-        return 'Dispečer';
-      } else if (channel.id.includes('driver-driver')) {
-        // Extract the other driver's ID
-        const match = channel.id.match(/driver-driver-(\d+)-(\d+)/);
-        if (match) {
-          const driver1 = parseInt(match[1]);
-          const driver2 = parseInt(match[2]);
-          const otherDriverId = driver1 === vehicleNumber ? driver2 : driver1;
-          const otherDriver = otherDrivers.find(d => d.id === otherDriverId);
-          return otherDriver ? otherDriver.name : `Řidič ${otherDriverId}`;
-        }
-      }
-      return channel.id;
-    };
-
     const getChannelIcon = (channel: any) => {
       if (channel.id.includes('dispatcher-driver')) {
         return (
@@ -501,48 +509,35 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
   };
 
   // Compact ChannelList component for drivers (desktop)
-  const CompactChannelList = () => {
-    const [channels, setChannels] = useState<any[]>([]);
+   const CompactChannelList = () => {
+     const [channels, setChannels] = useState<any[]>([]);
 
-    useEffect(() => {
-      if (!isInitialized || !driverId) return;
+     useEffect(() => {
+       if (!isInitialized || !driverId) return;
 
-      const loadChannels = async () => {
-        try {
-          const userChannels = await getUserChannels(driverId);
-          // Sort channels: dispatcher first, then driver-to-driver
-          const sortedChannels = userChannels.sort((a, b) => {
-            const aIsDispatcher = a.id.includes('dispatcher-driver');
-            const bIsDispatcher = b.id.includes('dispatcher-driver');
-            if (aIsDispatcher && !bIsDispatcher) return -1;
-            if (!aIsDispatcher && bIsDispatcher) return 1;
-            return 0;
-          });
-          setChannels(sortedChannels);
-        } catch (error) {
-          console.error('Error loading channels for driver:', error);
-        }
-      };
+       const loadChannels = async () => {
+         try {
+           const userChannels = await getUserChannels(driverId);
+           // Sort channels: dispatcher first, then driver-to-driver
+           const sortedChannels = userChannels.sort((a, b) => {
+             const aIsDispatcher = a.id.includes('dispatcher-driver');
+             const bIsDispatcher = b.id.includes('dispatcher-driver');
+             if (aIsDispatcher && !bIsDispatcher) return -1;
+             if (!aIsDispatcher && bIsDispatcher) return 1;
+             return 0;
+           });
+           setChannels(sortedChannels);
+         } catch (error) {
+           console.error('Error loading channels for driver:', error);
+           // If it's a CORS/network error, show a user-friendly message
+           if (error.message?.includes('CORS') || error.message?.includes('Network') || error.message?.includes('fetch')) {
+             console.warn('Channel loading failed due to network/CORS issues - chat may be temporarily unavailable');
+           }
+         }
+       };
 
-      loadChannels();
-    }, [isInitialized, driverId, vehicleNumber, otherDrivers]);
-
-    const getChannelDisplayName = (channel: any) => {
-      if (channel.id.includes('dispatcher-driver')) {
-        return 'Dispečer';
-      } else if (channel.id.includes('driver-driver')) {
-        // Extract the other driver's ID
-        const match = channel.id.match(/driver-driver-(\d+)-(\d+)/);
-        if (match) {
-          const driver1 = parseInt(match[1]);
-          const driver2 = parseInt(match[2]);
-          const otherDriverId = driver1 === vehicleNumber ? driver2 : driver1;
-          const otherDriver = otherDrivers.find(d => d.id === otherDriverId);
-          return otherDriver ? otherDriver.name : `Řidič ${otherDriverId}`;
-        }
-      }
-      return channel.id;
-    };
+       loadChannels();
+      }, [isInitialized, driverId, vehicleNumber, otherDrivers]);
 
     const getChannelIcon = (channel: any) => {
       if (channel.id.includes('dispatcher-driver')) {

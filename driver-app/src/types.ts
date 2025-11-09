@@ -281,6 +281,7 @@ export interface DriverScore {
   customer_count_score: number;
   revenue_score: number;
   perfect_rides_score: number;
+  acceptance_time_score: number;
   deer_collision_score: number; // Easter egg
   rank: number;
   updated_at: string;

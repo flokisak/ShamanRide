@@ -90,19 +90,56 @@ export async function safeRefreshSession(opts?: { force?: boolean, minIntervalMs
   lock.lastAttempt = now;
 
   try {
-    // Use the Supabase client's refreshSession (it will read current session if not passed)
-    const res = await supabase.auth.refreshSession();
+    // Try to get the current session first
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (!currentSession?.refresh_token) {
+      console.warn('safeRefreshSession: No refresh token available');
+      return null;
+    }
+
+    // Use our proxy endpoint to avoid CORS issues
+    const proxyResponse = await fetch('/api/auth-refresh', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        refresh_token: currentSession.refresh_token
+      })
+    });
+
+    if (!proxyResponse.ok) {
+      const errorData = await proxyResponse.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${proxyResponse.status}`);
+    }
+
+    const proxyData = await proxyResponse.json();
+
+    if (!proxyData.success || !proxyData.data) {
+      throw new Error(proxyData.error || 'Refresh failed');
+    }
+
+    // Update the Supabase client with the new session data
+    const newSession = {
+      access_token: proxyData.data.access_token,
+      refresh_token: proxyData.data.refresh_token || currentSession.refresh_token,
+      expires_at: proxyData.data.expires_at,
+      user: proxyData.data.user || currentSession.user
+    };
+
+    // Manually update the session in Supabase client
+    await supabase.auth.setSession(newSession);
+
     lock.failures = 0;
 
-    // Update cached token if present
+    // Update cached token
     try {
-      const newToken = res?.data?.session?.access_token ?? null;
-      (window as any).__shamanride_access_token = newToken;
+      (window as any).__shamanride_access_token = newSession.access_token;
     } catch (e) {
       // ignore
     }
 
-    return res;
+    return { data: { session: newSession } };
   } catch (err) {
     lock.failures = (lock.failures || 0) + 1;
     // Exponential backoff applied by callers via minIntervalMs if needed
