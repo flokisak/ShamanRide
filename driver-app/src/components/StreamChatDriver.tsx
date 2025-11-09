@@ -86,12 +86,14 @@ interface StreamChatDriverProps {
   vehicleNumber: number;
   driverName?: string;
   otherDrivers?: any[];
+  resetToDispatcher?: number; // Timestamp when to reset to dispatcher
 }
 
 export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
   vehicleNumber,
   driverName,
-  otherDrivers = []
+  otherDrivers = [],
+  resetToDispatcher
 }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentChannel, setCurrentChannel] = useState<any>(null);
@@ -277,39 +279,61 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
   }, [vehicleNumber]); // Only depend on vehicleNumber to prevent excessive re-initialization
 
   // Create channels when initialized
+   useEffect(() => {
+     if (!isInitialized || !driverId || !vehicleNumber) return;
+
+     const createChannels = async () => {
+       try {
+         // Ensure client is connected before creating channels
+         if (!streamClient.user || !streamClient.userID) {
+           console.warn('Stream Chat client not connected, skipping channel creation');
+           return;
+         }
+
+         // Create dispatcher channel
+         await createDispatcherDriverChannel('dispatcher', vehicleNumber.toString());
+         console.log('Dispatcher-driver channel created/verified');
+
+         // Create driver-to-driver channels with other drivers
+         if (otherDrivers.length > 0) {
+           for (const otherDriver of otherDrivers) {
+             try {
+               await createDriverDriverChannel(vehicleNumber.toString(), otherDriver.id.toString());
+               console.log(`Driver-to-driver channel created with driver ${otherDriver.id}`);
+             } catch (error) {
+               console.warn(`Driver-to-driver channel creation failed for driver ${otherDriver.id} (might already exist):`, error);
+             }
+           }
+         }
+
+
+       } catch (error) {
+         console.warn('Channel creation failed:', error);
+       }
+     };
+
+     createChannels();
+    }, [isInitialized, driverId, vehicleNumber]); // Removed currentChannel dependency to prevent loops
+
+  // Reset to dispatcher channel when requested
   useEffect(() => {
-    if (!isInitialized || !driverId || !vehicleNumber) return;
-
-    const createChannels = async () => {
-      try {
-        // Ensure client is connected before creating channels
-        if (!streamClient.user || !streamClient.userID) {
-          console.warn('Stream Chat client not connected, skipping channel creation');
-          return;
-        }
-
-        // Create dispatcher channel
-        await createDispatcherDriverChannel('dispatcher', vehicleNumber.toString());
-        console.log('Dispatcher-driver channel created/verified');
-
-        // Create driver-to-driver channels with other drivers
-        if (otherDrivers.length > 0) {
-          for (const otherDriver of otherDrivers) {
-            try {
-              await createDriverDriverChannel(vehicleNumber.toString(), otherDriver.id.toString());
-              console.log(`Driver-to-driver channel created with driver ${otherDriver.id}`);
-            } catch (error) {
-              console.warn(`Driver-to-driver channel creation failed for driver ${otherDriver.id} (might already exist):`, error);
-            }
+    if (resetToDispatcher && isInitialized && driverId) {
+      const selectDispatcherChannel = async () => {
+        try {
+          const userChannels = await getUserChannels(driverId);
+          const dispatcherChannel = userChannels.find(channel => channel.id.includes('dispatcher-driver'));
+          if (dispatcherChannel) {
+            setCurrentChannel(dispatcherChannel);
+            console.log('Reset to dispatcher channel:', dispatcherChannel.id);
           }
+        } catch (error) {
+          console.warn('Failed to reset to dispatcher channel:', error);
         }
-      } catch (error) {
-        console.warn('Channel creation failed:', error);
-      }
-    };
+      };
 
-    createChannels();
-   }, [isInitialized, driverId, vehicleNumber]); // Removed otherDrivers dependency to prevent excessive re-creation
+      selectDispatcherChannel();
+    }
+  }, [resetToDispatcher, isInitialized, driverId]);
 
   // Listen for new messages and show notifications
   useEffect(() => {

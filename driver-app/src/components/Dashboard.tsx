@@ -96,6 +96,7 @@ const Dashboard: React.FC = () => {
     const [driverInfo, setDriverInfo] = useState<{id: number, name: string} | null>(null);
     const [flashingRides, setFlashingRides] = useState<Set<string>>(new Set());
     const [activeCard, setActiveCard] = useState<'operations' | 'chat' | 'settings'>('operations');
+    const [chatCardActivated, setChatCardActivated] = useState<number>(0);
 
   // Driver-specific sync function using driver app's socket
   const syncUpdateVehicles = useCallback(async (updatedVehicles: any[], options?: any) => {
@@ -2208,6 +2209,7 @@ const Dashboard: React.FC = () => {
                 vehicleNumber={vehicleNumber || 0}
                 driverName={user?.user_metadata?.name || user?.email || `Driver ${vehicleNumber}`}
                 otherDrivers={otherDrivers}
+                resetToDispatcher={chatCardActivated}
                 key={`chat-${vehicleNumber}`} // Stable key to prevent unnecessary re-mounts
               />
             </div>
@@ -2655,7 +2657,10 @@ const Dashboard: React.FC = () => {
                 </div>
               </button>
               <button
-                onClick={() => setActiveCard('chat')}
+                onClick={() => {
+                  setActiveCard('chat');
+                  setChatCardActivated(Date.now());
+                }}
                 className={`flex-1 py-3 px-4 rounded-xl text-xs font-medium transition-all duration-200 ${
                   activeCard === 'chat'
                     ? 'bg-blue-600 text-white shadow-lg'
