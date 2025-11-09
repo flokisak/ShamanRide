@@ -158,9 +158,53 @@ app.use(express.json());
      } catch (err: any) {
        res.status(500).json({ success: false, error: err.message });
      }
-   });
+  });
 
- app.post('/api/webhook/sms-received', async (req, res) => {
+  // Push notification subscription endpoint
+  app.post('/api/push-subscription', async (req, res) => {
+    try {
+      const { subscription, vehicleNumber, userAgent } = req.body;
+
+      if (!subscription || !vehicleNumber) {
+        return res.status(400).json({ success: false, error: 'Missing subscription or vehicle number' });
+      }
+
+      // Store subscription in database or in-memory store
+      // For now, we'll just log it and return success
+      console.log('Push subscription received:', {
+        vehicleNumber,
+        endpoint: subscription.endpoint,
+        userAgent
+      });
+
+      // In production, you would store this in your database
+      // associated with the driver/vehicle
+
+      res.json({ success: true, message: 'Subscription stored' });
+    } catch (error: any) {
+      console.error('Push subscription error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Notification action endpoint
+  app.post('/api/notification-action', async (req, res) => {
+    try {
+      const { action, notificationData } = req.body;
+
+      console.log('Notification action received:', { action, notificationData });
+
+      // Handle notification actions (accept/decline rides, etc.)
+      // This would integrate with your ride management system
+
+      res.json({ success: true, message: 'Action processed' });
+    } catch (error: any) {
+      console.error('Notification action error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/webhook/sms-received', async (req, res) => {
    try {
      const { phone, message, timestamp } = req.body;
 

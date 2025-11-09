@@ -1,27 +1,140 @@
-// Custom service worker for push notifications
-const CACHE_NAME = 'shamanride-driver-v1';
+// Enhanced service worker for APK-ready PWA
+const CACHE_NAME = 'shamanride-driver-v2.0.0';
+const STATIC_CACHE = 'shamanride-static-v2.0.0';
+const DYNAMIC_CACHE = 'shamanride-dynamic-v2.0.0';
 
-// Install event - cache resources
+// Resources to cache immediately
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/android-launchericon-192-192.png',
+  '/android-launchericon-512-512.png',
+  '/favicon.svg'
+];
+
+// Install event - cache essential resources for offline functionality
 self.addEventListener('install', (event) => {
-  console.log('Service worker installing');
-  self.skipWaiting();
+  console.log('Service worker installing - caching static assets');
+  event.waitUntil(
+    Promise.all([
+      caches.open(STATIC_CACHE).then(cache => {
+        console.log('Caching static assets');
+        return cache.addAll(STATIC_ASSETS);
+      }),
+      self.skipWaiting()
+    ])
+  );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and take control
 self.addEventListener('activate', (event) => {
-  console.log('Service worker activating');
+  console.log('Service worker activating - cleaning caches');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
+    Promise.all([
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (!cacheName.includes('shamanride')) {
+              console.log('Deleting non-ShamanRide cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      self.clients.claim()
+    ])
+  );
+});
+
+// Fetch event - handle caching and offline functionality
+self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip non-GET requests and external requests
+  if (request.method !== 'GET' || !url.origin.includes(self.location.origin)) {
+    return;
+  }
+
+  // Cache-first strategy for static assets
+  if (STATIC_ASSETS.some(asset => url.pathname.endsWith(asset))) {
+    event.respondWith(
+      caches.match(request).then(response => {
+        return response || fetch(request).then(fetchResponse => {
+          return caches.open(STATIC_CACHE).then(cache => {
+            cache.put(request, fetchResponse.clone());
+            return fetchResponse;
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // Network-first strategy for API calls (with cache fallback)
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Cache successful API responses
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(DYNAMIC_CACHE).then(cache => {
+              cache.put(request, responseClone);
+            });
           }
+          return response;
         })
-      );
-    }).then(() => {
-      return self.clients.claim();
+        .catch(() => {
+          // Return cached version if network fails
+          return caches.match(request);
+        })
+    );
+    return;
+  }
+
+  // Handle navigation requests with offline fallback
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Cache successful navigation responses
+          if (response.ok) {
+            caches.open(DYNAMIC_CACHE).then(cache => {
+              cache.put(request, response.clone());
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // Return cached page or offline fallback
+          return caches.match(request).then(cachedResponse => {
+            return cachedResponse || caches.match('/').then(rootResponse => {
+              return rootResponse || new Response(
+                '<html><body><h1>You are offline</h1><p>The app will work when connection is restored.</p></body></html>',
+                { headers: { 'Content-Type': 'text/html' } }
+              );
+            });
+          });
+        })
+    );
+    return;
+  }
+
+  // Stale-while-revalidate for other requests
+  event.respondWith(
+    caches.match(request).then(cachedResponse => {
+      const fetchPromise = fetch(request).then(networkResponse => {
+        if (networkResponse.ok) {
+          caches.open(DYNAMIC_CACHE).then(cache => {
+            cache.put(request, networkResponse.clone());
+          });
+        }
+        return networkResponse;
+      });
+
+      return cachedResponse || fetchPromise;
     })
   );
 });
@@ -49,82 +162,110 @@ function vibrateDeviceInSW(pattern = [200, 100, 200]) {
   }
 }
 
-// Push event - handle incoming push notifications with Android Chrome optimizations
+// Push event - handle incoming push notifications for native Android APK
 self.addEventListener('push', (event) => {
-  console.log('Push received:', event);
+  console.log('Push notification received:', event);
 
   let data = {};
   if (event.data) {
-    data = event.data.json();
-  }
-
-  // Android Chrome specific notification options
-  const isAndroidChrome = navigator.userAgent.includes('Android') && navigator.userAgent.includes('Chrome') && !navigator.userAgent.includes('Edg');
-
-  const options = {
-    body: data.body || 'You have a new notification',
-    icon: isAndroidChrome ? '/android-launchericon-192-192.png' : '/pwa-192x192.svg',
-    badge: isAndroidChrome ? '/android-launchericon-96-96.png' : '/pwa-192x192.svg',
-    vibrate: data.vibrate || [200, 100, 200],
-    requireInteraction: data.type === 'ride', // Keep ride notifications visible
-    silent: isAndroidChrome ? true : false, // Android Chrome handles sound better when silent
-    tag: data.tag || `push-${Date.now()}`,
-    data: data.data || {}
-  };
-
-  // Enhanced vibration patterns for Android Chrome
-  if (isAndroidChrome) {
-    if (data.type === 'ride') {
-      options.vibrate = [400, 200, 400, 200, 400]; // Stronger, longer buzzes for rides
-    } else if (data.type === 'message') {
-      options.vibrate = [150, 100, 150]; // Clearer pattern for messages
-    } else {
-      options.vibrate = [250, 150, 250];
+    try {
+      data = event.data.json();
+    } catch (e) {
+      console.warn('Failed to parse push data:', e);
+      data = { title: 'Notification', body: event.data.text() };
     }
   }
 
-  // Trigger vibration from service worker
-  vibrateDeviceInSW(options.vibrate);
+  const options = {
+    body: data.body || 'You have a new notification',
+    icon: '/android-launchericon-192-192.png',
+    badge: '/android-launchericon-96-96.png',
+    vibrate: data.vibrate || [200, 100, 200],
+    requireInteraction: data.type === 'ride' || data.type === 'urgent', // Keep important notifications visible
+    silent: false, // Enable system sound for native Android
+    tag: data.tag || `shamanride-${data.type || 'general'}-${Date.now()}`,
+    data: {
+      url: data.url || '/',
+      type: data.type || 'general',
+      ...data.data
+    },
+    // Notification actions for native Android
+    actions: data.type === 'ride' ? [
+      {
+        action: 'accept',
+        title: 'Přijmout',
+        icon: '/android-launchericon-96-96.png'
+      },
+      {
+        action: 'decline',
+        title: 'Odmítnout',
+        icon: '/android-launchericon-96-96.png'
+      }
+    ] : []
+  };
 
-  // Android Chrome specific handling
-  if (isAndroidChrome) {
-    console.log('Android Chrome push notification:', data.title, options);
+  // Native Android specific optimizations
+  if (data.type === 'ride') {
+    options.vibrate = [400, 200, 400, 200, 400]; // Strong pattern for rides
+  } else if (data.type === 'message') {
+    options.vibrate = [150, 100, 150]; // Quick pattern for messages
   }
 
-  // Try to wake up the app if it's in background
+  // Trigger vibration
+  vibrateDeviceInSW(options.vibrate);
+
   event.waitUntil(
     Promise.all([
-      self.registration.showNotification(data.title || 'Need For Taxi', options),
-      // Send message to main thread to trigger sound if app is running
+      // Show the notification
+      self.registration.showNotification(data.title || 'ShamanRide Driver', options),
+
+      // Send message to main thread for additional handling
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+        const message = {
+          type: 'NOTIFICATION_RECEIVED',
+          notificationType: data.type || 'general',
+          title: data.title,
+          body: data.body,
+          data: data.data
+        };
+
         clients.forEach(client => {
-          client.postMessage({
-            type: 'NOTIFICATION_RECEIVED',
-            notificationType: data.type || 'general',
-            title: data.title,
-            body: data.body,
-            isAndroidChrome: isAndroidChrome
-          });
+          client.postMessage(message);
         });
+
+        // If no clients are open, open the app
+        if (clients.length === 0 && data.type === 'ride') {
+          return self.clients.openWindow('/');
+        }
       })
     ])
   );
 });
 
-// Notification click event - handle when user clicks on notification
+// Notification click event - handle when user clicks on notification or actions
 self.addEventListener('notificationclick', (event) => {
   console.log('Notification click received:', event);
+  console.log('Action:', event.action);
+  console.log('Notification data:', event.notification.data);
 
   event.notification.close();
 
-  // Focus existing window or open new one
+  // Handle notification actions
+  if (event.action) {
+    event.waitUntil(
+      handleNotificationAction(event.action, event.notification.data)
+    );
+    return;
+  }
+
+  // Default click behavior - focus existing window or open new one
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const url = event.notification.data?.url || '/';
 
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if (client.url === url && 'focus' in client) {
+        if ('focus' in client) {
           return client.focus();
         }
       }
@@ -136,16 +277,92 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+// Handle notification actions (like accept/decline ride)
+async function handleNotificationAction(action, notificationData) {
+  console.log('Handling notification action:', action, notificationData);
+
+  try {
+    // Send action to server
+    const response = await fetch('/api/notification-action', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action,
+        notificationData,
+        timestamp: Date.now()
+      })
+    });
+
+    if (response.ok) {
+      console.log('Notification action processed successfully');
+    } else {
+      console.warn('Failed to process notification action');
+    }
+  } catch (error) {
+    console.error('Error processing notification action:', error);
+  }
+
+  // Open the app
+  const clientList = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+  for (let client of clientList) {
+    if ('focus' in client) {
+      return client.focus();
+    }
+  }
+
+  if (clients.openWindow) {
+    return clients.openWindow('/');
+  }
+}
+
+// Message event - handle messages from main thread
+self.addEventListener('message', (event) => {
+  console.log('Service worker received message:', event.data);
+
+  if (event.data && event.data.type) {
+    switch (event.data.type) {
+      case 'SKIP_WAITING':
+        self.skipWaiting();
+        break;
+      case 'GET_VERSION':
+        event.ports[0].postMessage({ version: '2.0.0' });
+        break;
+      case 'CACHE_DATA':
+        // Cache data for offline use
+        if (event.data.key && event.data.data) {
+          caches.open(DYNAMIC_CACHE).then(cache => {
+            const response = new Response(JSON.stringify(event.data.data));
+            cache.put(`/api/${event.data.key}`, response);
+          });
+        }
+        break;
+      default:
+        console.log('Unknown message type:', event.data.type);
+    }
+  }
+});
+
 // Background sync for offline functionality
 self.addEventListener('sync', (event) => {
   console.log('Background sync triggered:', event.tag);
 
-  if (event.tag === 'background-sync') {
-    event.waitUntil(doBackgroundSync());
-  } else if (event.tag === 'location-sync') {
-    event.waitUntil(syncLocationData());
-  } else if (event.tag === 'message-sync') {
-    event.waitUntil(syncPendingMessages());
+  switch (event.tag) {
+    case 'background-sync':
+      event.waitUntil(doBackgroundSync());
+      break;
+    case 'location-sync':
+      event.waitUntil(syncLocationData());
+      break;
+    case 'message-sync':
+      event.waitUntil(syncPendingMessages());
+      break;
+    case 'ride-sync':
+      event.waitUntil(syncRideUpdates());
+      break;
+    default:
+      console.log('Unknown sync tag:', event.tag);
   }
 });
 

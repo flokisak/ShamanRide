@@ -99,19 +99,122 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
   const isMobile = useIsMobile();
 
 
-  // Request notification permissions on mount
+  // Request notification permissions and register for push notifications
   useEffect(() => {
-    const requestPermissions = async () => {
+    const setupNotifications = async () => {
       try {
+        // Request notification permissions
         if ('Notification' in window && Notification.permission === 'default') {
-          await Notification.requestPermission();
+          const permission = await Notification.requestPermission();
+          console.log('Notification permission:', permission);
+        }
+
+        // Register for push notifications if service worker is available
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+          const registration = await navigator.serviceWorker.ready;
+          console.log('Service worker ready for push notifications');
+
+          // Check if already subscribed
+          let subscription = await registration.pushManager.getSubscription();
+
+          if (!subscription) {
+            try {
+              // Create push subscription
+              subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(
+                  // This should be your VAPID public key
+                  'BKxQzAkNzN2Q4Q7W5QyNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQxNzQ'
+                )
+              });
+
+              console.log('Push subscription created:', subscription);
+
+              // Send subscription to server
+              await fetch('/api/push-subscription', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  subscription,
+                  vehicleNumber,
+                  userAgent: navigator.userAgent
+                })
+              });
+
+            } catch (error) {
+              console.warn('Failed to subscribe to push notifications:', error);
+            }
+          }
         }
       } catch (error) {
-        console.warn('Could not request notification permissions:', error);
+        console.warn('Could not setup notifications:', error);
       }
     };
 
-    requestPermissions();
+    setupNotifications();
+  }, [vehicleNumber]);
+
+  // Helper function to convert VAPID key
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  // Listen for messages from service worker
+  useEffect(() => {
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NOTIFICATION_RECEIVED') {
+        console.log('Received notification from service worker:', event.data);
+
+        // Show additional in-app notification if needed
+        // The service worker already shows the system notification
+      }
+    };
+
+    navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage);
+
+    return () => {
+      navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage);
+    };
+  }, []);
+
+  // Register background sync
+  useEffect(() => {
+    const registerBackgroundSync = async () => {
+      try {
+        if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
+          const registration = await navigator.serviceWorker.ready;
+
+          // Register background sync for data synchronization
+          await registration.sync.register('background-sync');
+          console.log('Background sync registered');
+
+          // Register periodic sync if available (for location updates)
+          if ('periodicSync' in window.ServiceWorkerRegistration.prototype) {
+            await registration.periodicSync.register('location-update', {
+              minInterval: 5 * 60 * 1000 // 5 minutes
+            });
+            console.log('Periodic location sync registered');
+          }
+        }
+      } catch (error) {
+        console.warn('Background sync registration failed:', error);
+      }
+    };
+
+    registerBackgroundSync();
   }, []);
 
   // Initialize Stream Chat for driver

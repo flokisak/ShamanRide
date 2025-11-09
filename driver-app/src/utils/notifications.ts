@@ -1,16 +1,15 @@
-// Enhanced notification utilities optimized for Chrome Android PWA
+// Enhanced notification utilities optimized for Native Android APK
 
-// Detect Android Chrome specifically
-const isAndroidChrome = (): boolean => {
-  const ua = navigator.userAgent;
-  return /Android/i.test(ua) && /Chrome/i.test(ua) && !/Edg/i.test(ua);
+// Detect Android platform
+const isAndroid = (): boolean => {
+  return /Android/i.test(navigator.userAgent);
 };
 
-// Request notification permissions with Android Chrome optimizations
+// Request notification permissions for native Android
 export const requestNotificationPermission = async (): Promise<boolean> => {
   try {
     if (!('Notification' in window)) {
-      console.warn('This browser does not support notifications');
+      console.warn('This platform does not support notifications');
       return false;
     }
 
@@ -23,21 +22,8 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
       return false;
     }
 
-    // On Android Chrome, we need to ensure we're in a user gesture context
-    if (isAndroidChrome()) {
-      console.log('Android Chrome detected - requesting notification permission');
-
-      // Add a small delay to ensure user gesture context
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
+    // For native Android, request permission directly
     const permission = await Notification.requestPermission();
-
-    if (isAndroidChrome() && permission === 'default') {
-      console.warn('Android Chrome: Permission request was dismissed, will try again on next user interaction');
-      return false;
-    }
-
     return permission === 'granted';
   } catch (error) {
     console.error('Error requesting notification permission:', error);
@@ -45,33 +31,32 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
   }
 };
 
-// Show system notification optimized for Android Chrome
+// Show system notification optimized for native Android
 export const showSystemNotification = (title: string, options: NotificationOptions = {}) => {
   try {
     if (Notification.permission === 'granted') {
-      // Android Chrome specific notification options
+      // Native Android notification options
       const androidOptions: NotificationOptions = {
-        icon: '/android-launchericon-192-192.png', // Use PNG for better Android compatibility
+        icon: '/android-launchericon-192-192.png',
         badge: '/android-launchericon-96-96.png',
         requireInteraction: false,
-        silent: false, // Let system handle sound to avoid conflicts
+        silent: false, // Let system handle sound for native Android
         ...options
       };
 
-      // On Android Chrome, ensure proper notification behavior
-      if (isAndroidChrome()) {
-        // Android Chrome works better with these settings
+      // For native Android, use system sounds and optimize for mobile
+      if (isAndroid()) {
         androidOptions.requireInteraction = options.requireInteraction || false;
-        androidOptions.silent = true; // Disable system sound to avoid conflicts with our custom sound
+        androidOptions.silent = false; // Enable system sound for better reliability
         androidOptions.tag = options.tag || `notification-${Date.now()}`;
 
-        console.log('Android Chrome notification:', title, androidOptions);
+        console.log('Native Android notification:', title, androidOptions);
       }
 
       const notification = new Notification(title, androidOptions);
 
-      // Auto-close timing optimized for Android Chrome
-      const autoCloseDelay = isAndroidChrome() ? 8000 : 5000; // Longer on Android for better visibility
+      // Auto-close timing for native Android
+      const autoCloseDelay = 6000; // Standard timing for mobile notifications
       setTimeout(() => {
         try {
           notification.close();
@@ -92,7 +77,7 @@ export const showSystemNotification = (title: string, options: NotificationOptio
 let globalAudioContext: AudioContext | null = null;
 let audioContextInitialized = false;
 
-// Initialize audio context with Android Chrome optimizations
+// Initialize audio context for native Android
 export const initializeAudioContext = async (): Promise<boolean> => {
   try {
     if (!window.AudioContext && !(window as any).webkitAudioContext) {
@@ -106,36 +91,20 @@ export const initializeAudioContext = async (): Promise<boolean> => {
 
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
 
-    // On Android Chrome, create context with specific options for better compatibility
-    if (isAndroidChrome()) {
-      try {
-        // Try with latency hint for better mobile performance
-        globalAudioContext = new AudioContextClass({
-          latencyHint: 'interactive',
-          sampleRate: 44100 // Standard sample rate for Android
-        });
-        console.log('Android Chrome: Audio context created with mobile optimizations');
-      } catch (androidError) {
-        console.warn('Android Chrome: Failed to create optimized audio context, falling back to default');
-        globalAudioContext = new AudioContextClass();
-      }
-    } else {
-      globalAudioContext = new AudioContextClass();
-    }
+    // For native Android, create context with standard settings
+    globalAudioContext = new AudioContextClass({
+      latencyHint: 'interactive',
+      sampleRate: 44100
+    });
 
-    // Resume context immediately if suspended (critical on mobile)
+    // Resume context immediately if suspended
     if (globalAudioContext.state === 'suspended') {
       try {
         await globalAudioContext.resume();
         console.log('Audio context resumed successfully');
       } catch (resumeError) {
         console.warn('Failed to resume audio context:', resumeError);
-
-        // On Android Chrome, sometimes we need to wait for user interaction
-        if (isAndroidChrome()) {
-          console.log('Android Chrome: Will retry audio context resume on next user interaction');
-          return false;
-        }
+        return false;
       }
     }
 
@@ -147,7 +116,7 @@ export const initializeAudioContext = async (): Promise<boolean> => {
   }
 };
 
-// Play notification sound optimized for Android Chrome PWA
+// Play notification sound optimized for native Android
 export const playNotificationSound = async (frequency: number = 800, duration: number = 0.2): Promise<void> => {
   try {
     // Initialize audio context if needed
@@ -166,26 +135,18 @@ export const playNotificationSound = async (frequency: number = 800, duration: n
       throw new Error('Audio context not available');
     }
 
-    // Android Chrome specific handling
-    if (isAndroidChrome()) {
-      // Check if we need to resume context (very common on Android Chrome)
-      if (globalAudioContext.state === 'suspended') {
-        try {
-          await globalAudioContext.resume();
-          console.log('Android Chrome: Audio context resumed for notification');
-        } catch (resumeError) {
-          console.warn('Android Chrome: Could not resume audio context, will retry on next user interaction');
-          // Don't play sound now, wait for user interaction
-          if ('vibrate' in navigator) {
-            navigator.vibrate([200, 100, 200]);
-          }
-          return;
+    // Ensure context is running
+    if (globalAudioContext.state === 'suspended') {
+      try {
+        await globalAudioContext.resume();
+        console.log('Audio context resumed for notification');
+      } catch (resumeError) {
+        console.warn('Could not resume audio context:', resumeError);
+        if ('vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200]);
         }
+        return;
       }
-
-      // On Android Chrome, sometimes the context becomes suspended even after resume
-      // Add a small delay to ensure it's stable
-      await new Promise(resolve => setTimeout(resolve, 50));
     }
 
     // Ensure context is still running
@@ -197,7 +158,7 @@ export const playNotificationSound = async (frequency: number = 800, duration: n
       return;
     }
 
-    // Create and play sound with Android Chrome optimizations
+    // Create and play sound optimized for native Android
     const playSound = () => {
       try {
         // Create oscillator for beep sound
@@ -209,19 +170,11 @@ export const playNotificationSound = async (frequency: number = 800, duration: n
 
         // Configure beep sound
         oscillator.frequency.setValueAtTime(frequency, globalAudioContext!.currentTime);
-        oscillator.type = 'sine';
+        oscillator.type = 'square'; // Square wave for better audibility on mobile
 
-        // Android Chrome specific volume adjustments
-        let baseVolume = document.hidden ? 0.7 : 0.5; // Louder for background on Android
-
-        if (isAndroidChrome()) {
-          // Android Chrome often needs higher volume
-          baseVolume = Math.min(baseVolume * 1.8, 0.9);
-          // Use square wave for better audibility on Android speakers
-          oscillator.type = 'square';
-        }
-
-        const volume = Math.min(baseVolume, 0.9); // Cap at 90% to avoid distortion
+        // Volume settings for native Android
+        const baseVolume = document.hidden ? 0.8 : 0.6; // Louder for background
+        const volume = Math.min(baseVolume, 0.9); // Cap at 90%
 
         gainNode.gain.setValueAtTime(volume, globalAudioContext!.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, globalAudioContext!.currentTime + duration);
@@ -239,7 +192,7 @@ export const playNotificationSound = async (frequency: number = 800, duration: n
           }
         }, (duration + 0.1) * 1000);
 
-        console.log(`Android Chrome notification sound: ${frequency}Hz, ${duration}s, volume: ${volume}, type: ${oscillator.type}`);
+        console.log(`Native Android notification sound: ${frequency}Hz, ${duration}s, volume: ${volume}`);
       } catch (error) {
         console.error('Error creating sound:', error);
         // Fallback to vibration
@@ -252,25 +205,25 @@ export const playNotificationSound = async (frequency: number = 800, duration: n
     // Play the sound
     playSound();
 
-    // On Android Chrome, add extra attempts for background playback
-    if (document.hidden && isAndroidChrome()) {
+    // For native Android, add extra attempts for reliability
+    if (document.hidden && isAndroid()) {
       setTimeout(() => {
         if (globalAudioContext?.state === 'running') {
           playSound();
         }
-      }, 300);
+      }, 200);
     }
 
   } catch (error) {
     console.error('Error in playNotificationSound:', error);
     // Final fallback to vibration
     if ('vibrate' in navigator) {
-      navigator.vibrate([200, 100, 200, 100, 200, 100, 200]);
+      navigator.vibrate([200, 100, 200, 100, 200]);
     }
   }
 };
 
-// Vibrate device with Android Chrome optimizations
+// Vibrate device for native Android
 export const vibrateDevice = (pattern: number | number[] = [200, 100, 200]) => {
   try {
     if (!('vibrate' in navigator)) {
@@ -278,34 +231,22 @@ export const vibrateDevice = (pattern: number | number[] = [200, 100, 200]) => {
       return;
     }
 
-    // Android Chrome specific vibration handling
-    if (isAndroidChrome()) {
-      // Android Chrome has limitations on vibration patterns
-      // Convert complex patterns to simpler ones that work reliably
+    // For native Android, use vibration patterns directly
+    if (isAndroid()) {
       let androidPattern: number[];
 
       if (Array.isArray(pattern)) {
-        if (pattern.length > 6) {
-          // Simplify long patterns for Android Chrome
-          androidPattern = [300, 150, 300, 150, 300];
-        } else {
-          androidPattern = pattern;
-        }
+        // Use pattern as-is for native Android (more reliable)
+        androidPattern = pattern;
       } else {
         // Single number - create a simple pattern
         androidPattern = [pattern, 100, pattern];
       }
 
-      // Ensure pattern doesn't exceed Android Chrome limits
-      const totalDuration = androidPattern.reduce((sum, duration) => sum + duration, 0);
-      if (totalDuration > 10000) { // 10 second limit
-        androidPattern = [300, 150, 300, 150, 300];
-      }
-
       navigator.vibrate(androidPattern);
-      console.log('Android Chrome vibration:', androidPattern);
+      console.log('Native Android vibration:', androidPattern);
     } else {
-      // Standard vibration for other browsers
+      // Standard vibration for other platforms
       navigator.vibrate(pattern);
     }
   } catch (error) {
@@ -326,7 +267,7 @@ const getNotificationSettings = () => {
   return null;
 };
 
-// Enhanced notification function optimized for Android Chrome PWA
+// Enhanced notification function optimized for native Android
 export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general', customOptions?: {
   sound?: boolean;
   vibration?: boolean;
@@ -347,7 +288,7 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
     case 'ride':
       options = {
         ...defaults,
-        vibrationPattern: isAndroidChrome() ? [400, 200, 400, 200, 400] : [300, 100, 300, 100, 300], // Stronger vibration for Android
+        vibrationPattern: [400, 200, 400, 200, 400], // Strong vibration for rides
         title: 'Nová jízda!',
         body: 'Byla vám přiřazena nová jízda'
       };
@@ -355,7 +296,7 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
     case 'message':
       options = {
         ...defaults,
-        vibrationPattern: isAndroidChrome() ? [150, 100, 150] : [100, 50, 100], // Clearer pattern for Android
+        vibrationPattern: [150, 100, 150], // Clear pattern for messages
         title: 'Nová zpráva',
         body: 'Máte novou zprávu od dispečera'
       };
@@ -363,7 +304,7 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
     default:
       options = {
         ...defaults,
-        vibrationPattern: isAndroidChrome() ? [250, 150, 250] : [200, 100, 200],
+        vibrationPattern: [250, 150, 250],
         title: 'Upozornění',
         body: 'Máte nové upozornění'
       };
@@ -371,23 +312,23 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
 
   const finalOptions = { ...options, ...customOptions };
 
-  // Android Chrome specific notification handling
-  if (isAndroidChrome()) {
-    console.log(`Android Chrome notification: ${type}`, finalOptions);
+  // Log notification for native Android
+  if (isAndroid()) {
+    console.log(`Native Android notification: ${type}`, finalOptions);
   }
 
-  // Play sound with Android Chrome optimizations
+  // Play sound optimized for native Android
   if (finalOptions.sound) {
     const playSound = async () => {
       try {
         if (type === 'ride') {
-          // Different sound for rides (higher pitch, longer for Android)
-          await playNotificationSound(isAndroidChrome() ? 1200 : 1000, isAndroidChrome() ? 0.6 : 0.5);
+          // Different sound for rides (higher pitch, longer)
+          await playNotificationSound(1200, 0.6);
         } else if (type === 'message') {
-          // Different sound for messages (lower pitch, clearer for Android)
-          await playNotificationSound(isAndroidChrome() ? 700 : 600, isAndroidChrome() ? 0.4 : 0.3);
+          // Different sound for messages (lower pitch, clearer)
+          await playNotificationSound(700, 0.4);
         } else {
-          await playNotificationSound(isAndroidChrome() ? 900 : 800, isAndroidChrome() ? 0.4 : 0.3);
+          await playNotificationSound(900, 0.4);
         }
       } catch (error) {
         console.error('Error playing notification sound:', error);
@@ -397,25 +338,25 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
     // Play sound immediately and await it
     await playSound();
 
-    // On Android Chrome, add extra sound attempts for reliability
-    if (isAndroidChrome() && document.hidden) {
-      setTimeout(() => playSound(), 500);
+    // For native Android, add extra sound attempts for reliability
+    if (isAndroid() && document.hidden) {
+      setTimeout(() => playSound(), 300);
     }
   }
 
-  // Vibrate with Android optimizations
+  // Vibrate with native Android patterns
   if (finalOptions.vibration) {
     vibrateDevice(finalOptions.vibrationPattern);
   }
 
-  // Show system notification with Android Chrome optimizations
+  // Show system notification optimized for native Android
   if (finalOptions.systemNotification && finalOptions.title) {
     const notificationOptions = {
       body: finalOptions.body,
-      icon: isAndroidChrome() ? '/android-launchericon-192-192.png' : '/pwa-192x192.svg',
-      badge: isAndroidChrome() ? '/android-launchericon-96-96.png' : '/pwa-192x192.svg',
-      requireInteraction: type === 'ride', // Keep ride notifications visible until clicked
-      silent: isAndroidChrome() ? true : false, // Android Chrome handles sound better when silent=true
+      icon: '/android-launchericon-192-192.png',
+      badge: '/android-launchericon-96-96.png',
+      requireInteraction: type === 'ride', // Keep ride notifications visible
+      silent: false, // Enable system sound for native Android
       tag: type === 'ride' ? 'new-ride' : `notification-${Date.now()}`, // Group ride notifications
     };
 
@@ -521,10 +462,8 @@ function arrayBufferToBase64(buffer: ArrayBuffer) {
   return window.btoa(binary);
 }
 
-// Screen Wake Lock management optimized for Android Chrome
+// Screen Wake Lock management for native Android
 let wakeLock: WakeLockSentinel | null = null;
-let wakeLockRetryCount = 0;
-const MAX_WAKE_LOCK_RETRIES = 3;
 
 export const requestWakeLock = async (): Promise<boolean> => {
   try {
@@ -538,50 +477,16 @@ export const requestWakeLock = async (): Promise<boolean> => {
       return true;
     }
 
-    // Android Chrome specific wake lock handling
-    if (isAndroidChrome()) {
-      console.log('Android Chrome: Requesting wake lock with mobile optimizations');
+    // For native Android, request wake lock directly
+    wakeLock = await navigator.wakeLock.request('screen');
+    console.log('Screen wake lock acquired');
 
-      // On Android Chrome, wake locks can be unreliable, so we add retry logic
-      let attempts = 0;
-      while (attempts < MAX_WAKE_LOCK_RETRIES) {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-          console.log('Android Chrome: Screen wake lock acquired on attempt', attempts + 1);
+    wakeLock.addEventListener('release', () => {
+      console.log('Screen wake lock released');
+      wakeLock = null;
+    });
 
-          wakeLock.addEventListener('release', () => {
-            console.log('Android Chrome: Screen wake lock released');
-            wakeLock = null;
-            wakeLockRetryCount = 0;
-          });
-
-          wakeLockRetryCount = 0;
-          return true;
-        } catch (error) {
-          attempts++;
-          console.warn(`Android Chrome: Wake lock attempt ${attempts} failed:`, error);
-
-          if (attempts < MAX_WAKE_LOCK_RETRIES) {
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
-          }
-        }
-      }
-
-      console.error('Android Chrome: Failed to acquire wake lock after all retries');
-      return false;
-    } else {
-      // Standard wake lock for other browsers
-      wakeLock = await navigator.wakeLock.request('screen');
-      console.log('Screen wake lock acquired');
-
-      wakeLock.addEventListener('release', () => {
-        console.log('Screen wake lock released');
-        wakeLock = null;
-      });
-
-      return true;
-    }
+    return true;
   } catch (error) {
     console.error('Error requesting wake lock:', error);
     return false;
@@ -600,10 +505,10 @@ export const isWakeLockSupported = (): boolean => {
   return 'wakeLock' in navigator;
 };
 
-// Initialize notifications optimized for Android Chrome PWA
+// Initialize notifications optimized for native Android
 export const initializeNotifications = async (userId?: string, vapidPublicKey?: string) => {
-  if (isAndroidChrome()) {
-    console.log('Android Chrome PWA detected - initializing with mobile optimizations');
+  if (isAndroid()) {
+    console.log('Native Android detected - initializing with mobile optimizations');
   }
 
   // Initialize audio context early for better mobile support
@@ -614,40 +519,21 @@ export const initializeNotifications = async (userId?: string, vapidPublicKey?: 
     console.warn('Audio context initialization failed - will retry on user interaction');
   }
 
-  // On Android Chrome, we need to be more careful with permission requests
-  if (isAndroidChrome()) {
-    // Delay permission request slightly to ensure proper context
-    setTimeout(async () => {
-      const permissionGranted = await requestNotificationPermission();
-      if (permissionGranted) {
-        console.log('Android Chrome: Notification permissions granted');
+  // For native Android, request permissions directly
+  const permissionGranted = await requestNotificationPermission();
+  if (permissionGranted) {
+    console.log('Notification permissions granted');
 
-        // Register for push notifications with Android-specific handling
-        const subscription = await registerPushNotifications(vapidPublicKey);
-        if (subscription && userId) {
-          await sendSubscriptionToServer(subscription, userId);
-        }
-      } else {
-        console.warn('Android Chrome: Notification permissions not granted');
-      }
-    }, 200);
-  } else {
-    // Standard initialization for other browsers
-    const permissionGranted = await requestNotificationPermission();
-    if (permissionGranted) {
-      console.log('Notification permissions granted');
-
-      // Register for push notifications
-      const subscription = await registerPushNotifications(vapidPublicKey);
-      if (subscription && userId) {
-        await sendSubscriptionToServer(subscription, userId);
-      }
-    } else {
-      console.warn('Notification permissions not granted');
+    // Register for push notifications
+    const subscription = await registerPushNotifications(vapidPublicKey);
+    if (subscription && userId) {
+      await sendSubscriptionToServer(subscription, userId);
     }
+  } else {
+    console.warn('Notification permissions not granted');
   }
 
-  // Request wake lock with Android Chrome optimizations
+  // Request wake lock for native Android
   const wakeLockGranted = await requestWakeLock();
   if (wakeLockGranted) {
     console.log('Screen wake lock enabled - display will stay on while app is active');
@@ -655,17 +541,15 @@ export const initializeNotifications = async (userId?: string, vapidPublicKey?: 
     console.warn('Screen wake lock not available - display may turn off');
   }
 
-  // Android Chrome specific: Set up visibility change listener for audio context management
-  if (isAndroidChrome()) {
-    document.addEventListener('visibilitychange', async () => {
-      if (!document.hidden && globalAudioContext?.state === 'suspended') {
-        try {
-          await globalAudioContext.resume();
-          console.log('Android Chrome: Audio context resumed on visibility change');
-        } catch (error) {
-          console.warn('Android Chrome: Failed to resume audio context on visibility change');
-        }
+  // Set up visibility change listener for audio context management
+  document.addEventListener('visibilitychange', async () => {
+    if (!document.hidden && globalAudioContext?.state === 'suspended') {
+      try {
+        await globalAudioContext.resume();
+        console.log('Audio context resumed on visibility change');
+      } catch (error) {
+        console.warn('Failed to resume audio context on visibility change');
       }
-    });
-  }
+    }
+  });
 };

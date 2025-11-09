@@ -14,21 +14,41 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-       manifest: {
-         name: 'Need For Taxi',
-         short_name: 'Need For Taxi',
-         description: 'Fast and furious taxi driver app',
-         theme_color: '#2e3440', // Nord polar-1
-         background_color: '#2e3440', // Nord polar-1
-         display: 'standalone',
-         orientation: 'portrait',
-         scope: '/',
-         start_url: '/',
-         // Android Chrome specific optimizations
-         categories: ['business', 'productivity', 'transportation'],
-         lang: 'cs',
-         dir: 'ltr',
-         prefer_related_applications: false,
+        manifest: {
+          name: 'ShamanRide Driver',
+          short_name: 'ShamanRide',
+          description: 'Professional taxi driver app with real-time dispatch, GPS tracking, and gamification',
+          theme_color: '#2e3440', // Nord polar-1
+          background_color: '#2e3440', // Nord polar-1
+          display: 'standalone',
+          orientation: 'portrait',
+          scope: '/',
+          start_url: '/',
+          // Enhanced APK-ready configuration
+          categories: ['business', 'productivity', 'transportation', 'navigation'],
+          lang: 'cs',
+          dir: 'ltr',
+          prefer_related_applications: false,
+          // APK-specific settings
+          iarc_rating_id: '',
+          related_applications: [],
+          // Enhanced PWA capabilities for APK
+          shortcuts: [
+            {
+              name: 'Active Rides',
+              short_name: 'Rides',
+              description: 'View and manage active rides',
+              url: '/#rides',
+              icons: [{ src: 'android-launchericon-96-96.png', sizes: '96x96' }]
+            },
+            {
+              name: 'Chat',
+              short_name: 'Chat',
+              description: 'Communicate with dispatch',
+              url: '/#chat',
+              icons: [{ src: 'android-launchericon-96-96.png', sizes: '96x96' }]
+            }
+          ],
          icons: [
            // Android Chrome optimized icons - PNG preferred for better compatibility
            {
