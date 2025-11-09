@@ -11,6 +11,10 @@ export function isSmsGateConfigured(): boolean {
 
 export async function sendSmsViaSmsGate(recipients: string[], message: string): Promise<{ success: boolean; data?: any; error?: any }> {
   try {
+    if (!API_BASE) {
+      return { success: false, error: 'API_BASE_URL not configured. Please set VITE_API_BASE_URL environment variable.' };
+    }
+
     const res = await fetch(`${API_BASE}/api/send-sms`, {
       method: 'POST',
       headers: {
@@ -19,16 +23,24 @@ export async function sendSmsViaSmsGate(recipients: string[], message: string): 
       body: JSON.stringify({ recipients, message }),
     });
 
-    const data = await res.json().catch(() => ({}));
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      // If JSON parsing fails, create a meaningful error
+      data = { error: `HTTP ${res.status}: ${res.statusText}`, rawResponse: await res.text().catch(() => 'Unable to read response') };
+    }
+
     if (!res.ok) {
-      console.warn('SMS gateway failed:', { status: res.status, body: data });
-      return { success: false, error: data };
+      console.warn('SMS gateway failed:', { status: res.status, statusText: res.statusText, body: data });
+      return { success: false, error: data.error || `HTTP ${res.status}: ${res.statusText}` };
     }
 
     return { success: true, data };
-  } catch (err) {
+  } catch (err: any) {
     console.warn('SMS server not available:', err);
-    return { success: false, error: err.message };
+    const errorMessage = err.message || 'Network error or server unreachable';
+    return { success: false, error: `Connection failed: ${errorMessage}. Make sure the backend server is running on ${API_BASE || 'configured API_BASE_URL'}.` };
   }
 }
 

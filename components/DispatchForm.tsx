@@ -190,12 +190,15 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
         await smsService.saveOutgoing(record);
         setChatRecords(prev => [record, ...prev]);
         setSmsMessage('');
-      } else {
-        console.error('Failed to send SMS:', result.error);
-      }
-    } catch (error) {
-      console.error('Error sending SMS:', error);
-    }
+       } else {
+         console.error('Failed to send SMS:', result.error);
+         // Show user-friendly error notification
+         alert(`Failed to send SMS: ${typeof result.error === 'string' ? result.error : 'Unknown error'}`);
+       }
+     } catch (error) {
+       console.error('Error sending SMS:', error);
+       alert(`Error sending SMS: ${error instanceof Error ? error.message : 'Unknown error'}`);
+     }
   };
 
   const handlePOISearch = (stopIndex: number) => {

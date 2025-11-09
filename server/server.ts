@@ -26,6 +26,9 @@ if (fs.existsSync(configPath)) {
     ASG_USERNAME: process.env.ASG_USERNAME,
     ASG_PASSWORD: process.env.ASG_PASSWORD,
     ASG_SERVER: process.env.ASG_SERVER,
+    SMS_SERVER: process.env.SMS_SERVER,
+    SMS_USERNAME: process.env.SMS_USERNAME,
+    SMS_PASSWORD: process.env.SMS_PASSWORD,
   };
 }
 
@@ -35,66 +38,127 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-app.post('/api/send-sms', async (req, res) => {
-  const { recipients, message }: { recipients: string[]; message: string } = req.body;
+  app.post('/api/send-sms', async (req, res) => {
+    const { recipients, message }: { recipients: string[]; message: string } = req.body;
 
-  if (!recipients || !Array.isArray(recipients) || recipients.length === 0 || !message) {
-    return res.status(400).json({ success: false, error: 'Invalid recipients or message' });
-  }
+    if (!recipients || !Array.isArray(recipients) || recipients.length === 0 || !message) {
+      return res.status(400).json({ success: false, error: 'Invalid recipients or message' });
+    }
 
-  try {
-    // Path to smsgate binary
-    const smsgatePath = path.join(process.cwd(), '..', 'smsgate');
+    try {
+      // Check if we're in Vercel/serverless environment
+      const isVercel = process.env.VERCEL || process.env.LAMBDA_TASK_ROOT;
 
-    // Prepare arguments
-    const args = ['send'];
-    recipients.forEach(phone => {
-      // Normalize phone to E.164 format, assuming Czech Republic +420
-      const normalizedPhone = phone.startsWith('+') ? phone : `+420${phone.replace(/\s/g, '')}`;
-      args.push('--phone', normalizedPhone);
-    });
-    args.push(message);
+      if (isVercel) {
+        // Use HTTP API for Vercel deployment
+        const smsServer = process.env.SMS_SERVER;
+        const smsUsername = process.env.SMS_USERNAME;
+        const smsPassword = process.env.SMS_PASSWORD;
 
-    // Spawn smsgate process
-    const smsgate = spawn(smsgatePath, args, {
-      env: {
-        ...process.env,
-        ASG_USERNAME: config.ASG_USERNAME,
-        ASG_PASSWORD: config.ASG_PASSWORD,
-      },
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
+        if (!smsServer || !smsUsername || !smsPassword) {
+          return res.status(500).json({
+            success: false,
+            error: 'SMS configuration missing. Please set SMS_SERVER, SMS_USERNAME, and SMS_PASSWORD environment variables.'
+          });
+        }
 
-    let stdout = '';
-    let stderr = '';
+        // Send SMS via HTTP API
+        const results = [];
+        for (const phone of recipients) {
+          try {
+            // Normalize phone to E.164 format, assuming Czech Republic +420
+            const normalizedPhone = phone.startsWith('+') ? phone : `+420${phone.replace(/\s/g, '')}`;
 
-    smsgate.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
+            // This is a generic HTTP API call - adjust based on your SMS provider
+            const smsResponse = await fetch(smsServer, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Basic ${Buffer.from(`${smsUsername}:${smsPassword}`).toString('base64')}`
+              },
+              body: JSON.stringify({
+                to: normalizedPhone,
+                message: message
+              })
+            });
 
-    smsgate.stderr.on('data', (data) => {
-      stderr += data.toString();
-    });
+            if (!smsResponse.ok) {
+              const errorText = await smsResponse.text();
+              results.push({ phone: normalizedPhone, success: false, error: `HTTP ${smsResponse.status}: ${errorText}` });
+            } else {
+              const responseData = await smsResponse.json().catch(() => ({}));
+              results.push({ phone: normalizedPhone, success: true, data: responseData });
+            }
+          } catch (phoneErr: any) {
+            results.push({ phone, success: false, error: phoneErr.message });
+          }
+        }
 
-    smsgate.on('close', (code) => {
-      console.log(`SMS gate exited with code ${code}`);
-      console.log(`stdout: ${stdout}`);
-      console.log(`stderr: ${stderr}`);
-      if (code === 0) {
-        res.json({ success: true, data: stdout });
+        // Check if all SMS were sent successfully
+        const allSuccessful = results.every(r => r.success);
+        if (allSuccessful) {
+          res.json({ success: true, data: results });
+        } else {
+          res.status(500).json({
+            success: false,
+            error: 'Some SMS failed to send',
+            details: results
+          });
+        }
       } else {
-        res.status(500).json({ success: false, error: stderr || 'SMS sending failed' });
+        // Use local smsgate binary for local development
+        const smsgatePath = path.join(process.cwd(), '..', 'smsgate');
+
+        // Prepare arguments
+        const args = ['send'];
+        recipients.forEach(phone => {
+          // Normalize phone to E.164 format, assuming Czech Republic +420
+          const normalizedPhone = phone.startsWith('+') ? phone : `+420${phone.replace(/\s/g, '')}`;
+          args.push('--phone', normalizedPhone);
+        });
+        args.push(message);
+
+        // Spawn smsgate process
+        const smsgate = spawn(smsgatePath, args, {
+          env: {
+            ...process.env,
+            ASG_USERNAME: config.ASG_USERNAME,
+            ASG_PASSWORD: config.ASG_PASSWORD,
+          },
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        smsgate.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        smsgate.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        smsgate.on('close', (code) => {
+          console.log(`SMS gate exited with code ${code}`);
+          console.log(`stdout: ${stdout}`);
+          console.log(`stderr: ${stderr}`);
+          if (code === 0) {
+            res.json({ success: true, data: stdout });
+          } else {
+            res.status(500).json({ success: false, error: stderr || 'SMS sending failed' });
+          }
+        });
+
+        smsgate.on('error', (err) => {
+          res.status(500).json({ success: false, error: err.message });
+        });
       }
-    });
 
-    smsgate.on('error', (err) => {
-      res.status(500).json({ success: false, error: err.message });
-    });
-
-   } catch (err: any) {
-     res.status(500).json({ success: false, error: err.message });
-   }
- });
+     } catch (err: any) {
+       res.status(500).json({ success: false, error: err.message });
+     }
+   });
 
  app.post('/api/webhook/sms-received', async (req, res) => {
    try {
