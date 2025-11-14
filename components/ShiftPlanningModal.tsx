@@ -834,11 +834,12 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
                           shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
                           shift.status === ShiftPlanStatus.Cancelled ? 'bg-red-100 text-red-800' :
                           'bg-blue-100 text-blue-800'
-                        }`}>
-                          {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
-                           shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
-                           shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' : 'Zrušeno'}
-                        </span>
+                         }`}>
+                           {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
+                            shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
+                            shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' : 'Zrušeno'}
+                         </span>
+                         </span>
                       </div>
                     </div>
                     </div>
