@@ -246,24 +246,31 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                 const isToday = isSameDay(day, new Date());
 
-                return (
-                  <div
-                    key={index}
-                    className={`
-                      relative p-2 h-24 border rounded-lg cursor-pointer transition-all
-                      ${isSelected ? 'bg-blue-50 border-blue-400' : 'border-gray-200'}
-                      ${isToday ? 'ring-2 ring-blue-400' : ''}
-                      ${shifts.length > 0 ? 'bg-blue-50' : ''}
-                      hover:bg-gray-50
-                    `}
-                  >
-                    <div className={`
-                      text-sm font-medium mb-1
-                      ${isToday ? 'text-blue-600' : 'text-gray-700'}
-                      ${!isSameMonth(day, currentMonth) ? 'text-gray-400' : ''}
-                    `}>
-                      {format(day, 'd')}
-                    </div>
+                 return (
+                   <div
+                     key={index}
+                     onClick={() => {
+                       setSelectedDate(day);
+                       setViewMode('day');
+                     }}
+                     className={`
+                       relative p-2 h-24 border rounded-lg cursor-pointer transition-all
+                       ${isSelected ? 'bg-blue-50 border-blue-400' : 'border-gray-200'}
+                       ${isToday ? 'ring-2 ring-blue-400' : ''}
+                       ${shifts.length > 0 ? 'bg-blue-50' : ''}
+                       hover:bg-gray-50
+                     `}
+                   >
+                     <div className={`
+                       text-sm font-medium mb-1
+                       ${isToday ? 'text-blue-600' : 'text-gray-700'}
+                       ${!isSameMonth(day, currentMonth) ? 'text-gray-400' : ''}
+                     `}>
+                       {format(day, 'd')}
+                       {shifts.length > 0 && (
+                         <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mt-1"></div>
+                       )}
+                     </div>
 
                     {/* Shift Indicators */}
                     <div className="space-y-1">
@@ -783,18 +790,34 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
           </div>
         )}
 
-        {/* Day View */}
-        {viewMode === 'day' && (
-          <div className="mt-6 border-t pt-6">
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                Směny pro {format(currentMonth, 'MMMM yyyy', { locale: cs })}
-              </h3>
-              
-              {shiftPlans
-                .filter(shift => isSameMonth(new Date(shift.plannedStart), currentMonth))
-                .sort((a, b) => new Date(a.plannedStart).getTime() - new Date(b.plannedStart).getTime())
-                .map((shift, index) => (
+         {/* Day View */}
+         {viewMode === 'day' && (
+           <div className="mt-6 border-t pt-6">
+             {!selectedDate && (
+               <div className="text-center text-gray-500 mb-4">
+                 Vyberte den v měsíčním pohledu pro zobrazení směn
+               </div>
+             )}
+             {selectedDate && (
+           <div className="mt-6 border-t pt-6">
+             <div className="space-y-4">
+               <div className="flex items-center justify-between mb-4">
+                 <h3 className="text-lg font-semibold text-gray-800">
+                  Směny pro {format(selectedDate, 'd. MMMM yyyy', { locale: cs })}
+                 </h3>
+                 <button
+                   type="button"
+                   onClick={() => setViewMode('month')}
+                   className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm"
+                 >
+                   ← Zpět na měsíc
+                 </button>
+               </div>
+               
+               {shiftPlans
+                 .filter(shift => isSameDay(new Date(shift.plannedStart), selectedDate))
+                 .sort((a, b) => new Date(a.plannedStart).getTime() - new Date(b.plannedStart).getTime())
+                 .map((shift, index) => (
                   <div key={shift.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
                       <div>
