@@ -848,7 +848,11 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
         )}
       </div>
     </div>
-  );
+     </div>
+     </div>
+     )}
+   );
+};
 };
 
 export default ShiftPlanningModal;

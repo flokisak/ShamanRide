@@ -1462,11 +1462,11 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+          </div>
 
-         </div>
-       </div>
-       );
-  };
-  
- export default Dashboard;
+          </div>
+        </div>
+         );
+};
+
+export default Dashboard;
