@@ -17,3 +17,23 @@ root.render(
     </LanguageProvider>
   </React.StrictMode>
 );
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js')
+    .then((registration) => {
+      console.log('Service Worker registered successfully:', registration);
+
+      // Request notification permission
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') {
+            console.log('Notification permission granted');
+          }
+        });
+      }
+    })
+    .catch((error) => {
+      console.log('Service Worker registration failed:', error);
+    });
+}
