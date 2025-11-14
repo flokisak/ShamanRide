@@ -1107,9 +1107,10 @@ const Dashboard: React.FC = () => {
         else vehicleStatus = status.toUpperCase();
       }
 
-      console.log(`Updating vehicle ${vehicleNumber} status to ${vehicleStatus}`);
+       console.log(`Updating vehicle ${vehicleNumber} status to ${vehicleStatus}`);
+       console.log('Emitting vehicle_status_changed:', { vehicleId: vehicleNumber, status: vehicleStatus, driverStatus: status });
 
-      // Update vehicle status using service - prefer server-authoritative socket when available
+       // Update vehicle status using service - prefer server-authoritative socket when available
       try {
         if (SUPABASE_ENABLED && socket && socketConnected) {
           try {

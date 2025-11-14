@@ -57,6 +57,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip service worker handling for static assets to avoid caching issues
+  if (url.pathname.startsWith('/assets/')) {
+    return;
+  }
+
   // Cache-first strategy for static assets
   if (STATIC_ASSETS.some(asset => url.pathname.endsWith(asset))) {
     event.respondWith(
