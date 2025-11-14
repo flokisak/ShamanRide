@@ -290,7 +290,7 @@ io.on('connection', (socket) => {
       // Update vehicle status in Supabase
       const { error } = await supabase
         .from('vehicles')
-        .update({ vehicle_status: status, updated_at: new Date().toISOString() })
+        .update({ status, updated_at: new Date().toISOString() })
         .eq('id', vehicleId);
 
       if (error) {

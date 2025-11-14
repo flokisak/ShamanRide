@@ -319,7 +319,7 @@ export const supabaseService = SUPABASE_ENABLED
            driverId: db.driver_id ?? null,
            licensePlate: db.license_plate ?? null,
            type: db.type,
-            status: db.vehicle_status || db.status,
+            status: db.vehicle_status?.toUpperCase(),
            location: db.location ?? null,
            capacity: db.capacity ?? null,
            mileage: db.mileage ?? null,
@@ -438,7 +438,7 @@ export const supabaseService = SUPABASE_ENABLED
 
       // Vehicles
       async getVehicles() {
-        const { data, error } = await supabase.from('vehicles').select('id, name, driver_id, license_plate, type, vehicle_status, location, capacity, mileage, free_at, service_interval, last_service_mileage, technical_inspection_expiry, vignette_expiry, fuel_type, fuel_consumption, phone, email, shift_start, shift_end, shift_start_odo, shift_end_odo, last_location_update, updated_at');
+        const { data, error } = await supabase.from('vehicles').select('*');
         if (error) throw error;
         console.log('Fetched vehicles from DB:', data);
         const mapped = (data || []).map((d: any) => this._fromDbVehicle(d));
