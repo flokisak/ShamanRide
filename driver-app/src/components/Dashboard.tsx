@@ -70,6 +70,7 @@ const Dashboard: React.FC = () => {
     return null;
   });
   const [driverInfo, setDriverInfo] = useState<any>(null);
+  const [selectedDriver, setSelectedDriver] = useState<any>(null);
   // Initialize shift state from localStorage synchronously
     const getInitialShiftValue = (key: string, defaultValue: any = null) => {
       const value = localStorage.getItem(key);
@@ -195,6 +196,7 @@ const Dashboard: React.FC = () => {
 
         // Set driver info from selected driver data
         setDriverInfo({ id: parseInt(selectedDriverId), name: selectedDriverName || `Driver ${selectedDriverId}` });
+        setSelectedDriver({ id: parseInt(selectedDriverId), name: selectedDriverName || `Driver ${selectedDriverId}` });
         console.log('Driver info from selection:', selectedDriverId, selectedDriverName);
 
         // Load shift start/end timestamps from database if available
@@ -390,9 +392,9 @@ const Dashboard: React.FC = () => {
         // Load shift plans for selected driver or all if no driver selected
         if (selectedDriver) {
           loadShiftPlans(shiftPlanningService, selectedDriver.id);
-        } else if (driverInfo) {
-          // Fallback to authenticated driver if available
-          loadShiftPlans(shiftPlanningService, driverInfo?.id);
+        } else if (selectedDriver) {
+          // Use selected driver if available
+          loadShiftPlans(shiftPlanningService, selectedDriver?.id);
         } else {
           // Load all shift plans for dispatcher view
           loadAllShiftPlans(shiftPlanningService);
@@ -439,11 +441,11 @@ const Dashboard: React.FC = () => {
           driverId: selectedDriver.id,
           driverName: selectedDriver.name
         };
-      } else if (driverInfo) {
+      } else if (selectedDriver) {
         finalShiftPlan = {
           ...finalShiftPlan,
-          driverId: driverInfo?.id,
-          driverName: driverInfo?.name
+          driverId: selectedDriver.id,
+          driverName: selectedDriver.name
         };
       }
       
@@ -458,10 +460,10 @@ const Dashboard: React.FC = () => {
         // Create single shift
         await shiftPlanningService.createShiftPlan(finalShiftPlan);
       }
-      
+
        // Reload shift plans
        if (selectedDriver) {
-         await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+         await loadShiftPlans(shiftPlanningService, selectedDriver?.id);
        } else if (driverInfo) {
          await loadShiftPlans(shiftPlanningService, driverInfo?.id);
        } else {
@@ -478,10 +480,10 @@ const Dashboard: React.FC = () => {
     
     try {
       await shiftPlanningService.updateShiftPlan(id, updates);
-      
+
        // Reload shift plans
        if (selectedDriver) {
-         await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+         await loadShiftPlans(shiftPlanningService, selectedDriver?.id);
        } else if (driverInfo) {
          await loadShiftPlans(shiftPlanningService, driverInfo?.id);
        } else {
@@ -498,10 +500,10 @@ const Dashboard: React.FC = () => {
     
     try {
       await shiftPlanningService.deleteShiftPlan(id);
-      
+
        // Reload shift plans
        if (selectedDriver) {
-         await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+         await loadShiftPlans(shiftPlanningService, selectedDriver?.id);
        } else if (driverInfo) {
          await loadShiftPlans(shiftPlanningService, driverInfo?.id);
        } else {
