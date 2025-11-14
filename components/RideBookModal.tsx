@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { RideLog, Vehicle, Person, RideType, CompanyInfo } from '../types';
-import { CloseIcon, DownloadIcon, EditIcon, TrashIcon, PlusIcon } from './icons';
+import { CloseIcon, DownloadIcon, EditIcon, TrashIcon, PlusIcon, CopyIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 import { generateMileageSummary } from '../services/dispatchService';
 
@@ -11,6 +11,7 @@ interface RideBookModalProps {
   companyInfo: CompanyInfo;
   onEdit: (log: RideLog) => void;
   onDelete: (logId: string) => void;
+  onDuplicate: (log: RideLog) => void;
   onAdd: () => void;
   onClose: () => void;
 }
@@ -22,6 +23,7 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
   companyInfo,
   onEdit,
   onDelete,
+  onDuplicate,
   onAdd,
   onClose
 }) => {
@@ -436,24 +438,31 @@ export const RideBookModal: React.FC<RideBookModalProps> = ({
                           {log.rideType === RideType.PRIVATE ? log.purpose : log.businessPurpose || '-'}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm">
-                        <div className="flex gap-2">
+                       <td className="px-4 py-3 text-sm">
+                         <div className="flex gap-2">
+                            <button
+                              onClick={() => onEdit(log)}
+                              className="text-[#81A1C1] hover:text-[#88C0D0] transition-colors"
+                              title="Upravit"
+                            >
+                             <EditIcon size={16} />
+                           </button>
                            <button
-                             onClick={() => onEdit(log)}
-                             className="text-[#81A1C1] hover:text-[#88C0D0] transition-colors"
-                             title="Upravit"
+                             onClick={() => onDuplicate(log)}
+                             className="text-green-400 hover:text-green-300 transition-colors"
+                             title="Duplikovat"
                            >
-                            <EditIcon size={16} />
-                          </button>
-                          <button
-                            onClick={() => onDelete(log.id)}
-                            className="text-red-400 hover:text-red-300 transition-colors"
-                            title="Smazat"
-                          >
-                            <TrashIcon size={16} />
-                          </button>
-                        </div>
-                      </td>
+                             <CopyIcon size={16} />
+                           </button>
+                           <button
+                             onClick={() => onDelete(log.id)}
+                             className="text-red-400 hover:text-red-300 transition-colors"
+                             title="Smazat"
+                           >
+                             <TrashIcon size={16} />
+                           </button>
+                         </div>
+                       </td>
                     </tr>
                   );
                 })}
