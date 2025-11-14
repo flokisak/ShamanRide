@@ -161,21 +161,16 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black/70 z-50 flex justify-center items-start pt-8 p-4 animate-fade-in overflow-y-auto">
+      <div className="bg-slate-800 rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-slide-in">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">Plánování směn řidičů</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+        <div className="flex justify-between items-center p-6 border-b border-slate-700">
+          <h2 className="text-xl font-semibold text-white">Plánování směn řidičů</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {/* Error Display */}
@@ -186,29 +181,29 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
         )}
 
         {/* Controls */}
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-6 border-b border-slate-700">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {viewMode === 'month' ? (
                 <>
                   <button
                     onClick={previousMonth}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
 
-                  <h3 className="text-lg font-semibold text-gray-800">
+                  <h3 className="text-lg font-semibold text-white">
                     {format(currentMonth, 'MMMM yyyy', { locale: cs })}
                   </h3>
 
                   <button
                     onClick={nextMonth}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </button>
@@ -217,14 +212,14 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => setViewMode('month')}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
 
-                  <h3 className="text-lg font-semibold text-gray-800">
+                  <h3 className="text-lg font-semibold text-white">
                     {selectedDate ? format(selectedDate, 'd. MMMM yyyy', { locale: cs }) : 'Vyberte den'}
                   </h3>
                 </div>
@@ -239,7 +234,7 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                   className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                     viewMode === 'month'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      : 'bg-slate-600 text-gray-300 hover:bg-slate-500'
                   }`}
                 >
                   📅 Měsíc
@@ -251,8 +246,8 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                     viewMode === 'day'
                       ? 'bg-blue-600 text-white'
                       : selectedDate
-                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      ? 'bg-slate-600 text-gray-300 hover:bg-slate-500'
+                      : 'bg-slate-700 text-gray-500 cursor-not-allowed'
                   }`}
                 >
                   📅 Den
@@ -345,63 +340,64 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
             /* Day View */
             <div className="space-y-4">
               {selectedDate ? (
-                <>
+                <div>
                   <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-semibold text-gray-800">
+                    <h3 className="text-xl font-semibold text-white">
                       Směny pro {format(selectedDate, 'd. MMMM yyyy', { locale: cs })}
                     </h3>
                     <button
-                      onClick={() => setViewMode('month')}
-                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors"
+                      onClick={handleCreateShift}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
                     >
-                      ← Zpět na měsíc
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Nová směna
                     </button>
                   </div>
 
-                  <div className="space-y-3">
-                    {getShiftsForDate(selectedDate).length > 0 ? (
-                      getShiftsForDate(selectedDate).map((shift) => (
-                        <div
-                          key={shift.id}
-                          className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow"
-                        >
+                  {getShiftsForDate(selectedDate).length > 0 ? (
+                    <div className="space-y-3">
+                      {getShiftsForDate(selectedDate).map((shift) => (
+                        <div key={shift.id} className="bg-slate-700 rounded-lg p-4 border border-slate-600">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                              <div className={`w-3 h-3 rounded-full ${
-                                shift.status === ShiftPlanStatus.Planned ? 'bg-blue-500' :
-                                shift.status === ShiftPlanStatus.Active ? 'bg-green-500' :
-                                shift.status === ShiftPlanStatus.Completed ? 'bg-gray-500' :
-                                'bg-red-500'
-                              }`} />
-                              <div>
-                                <h4 className="font-medium text-gray-900">
-                                  {shift.driverName || 'Neznámý řidič'}
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h4 className="text-lg font-medium text-white">
+                                  {shift.driverName}
                                 </h4>
-                                <p className="text-sm text-gray-600">
-                                  {format(new Date(shift.plannedStart), 'HH:mm')} - {format(new Date(shift.plannedEnd), 'HH:mm')}
-                                </p>
+                                <span className={`px-2 py-1 text-xs rounded-full ${
+                                  shift.status === ShiftPlanStatus.Planned ? 'bg-blue-100 text-blue-800' :
+                                  shift.status === ShiftPlanStatus.Active ? 'bg-green-100 text-green-800' :
+                                  shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
+                                  'bg-red-100 text-red-800'
+                                }`}>
+                                  {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
+                                   shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
+                                   shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' :
+                                   'Zrušeno'}
+                                </span>
+                              </div>
+
+                              <div className="text-gray-300 text-sm space-y-1">
+                                <div>
+                                  <span className="font-medium">Začátek:</span> {format(new Date(shift.plannedStart), 'd. MMMM yyyy HH:mm', { locale: cs })}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Konec:</span> {format(new Date(shift.plannedEnd), 'd. MMMM yyyy HH:mm', { locale: cs })}
+                                </div>
                                 {shift.notes && (
-                                  <p className="text-sm text-gray-500 mt-1">{shift.notes}</p>
+                                  <div>
+                                    <span className="font-medium">Poznámky:</span> {shift.notes}
+                                  </div>
                                 )}
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 text-xs rounded-full ${
-                                shift.status === ShiftPlanStatus.Planned ? 'bg-blue-100 text-blue-800' :
-                                shift.status === ShiftPlanStatus.Active ? 'bg-green-100 text-green-800' :
-                                shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
-                                 shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
-                                 shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' :
-                                 'Zrušeno'}
-                              </span>
-
+                            <div className="flex items-center gap-2 ml-4">
                               <button
                                 onClick={() => handleShiftClick(shift)}
-                                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                className="p-2 text-gray-400 hover:text-blue-400 hover:bg-slate-600 rounded-lg transition-colors"
                                 title="Upravit směnu"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -415,7 +411,7 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                                     handleDeleteShift(shift.id);
                                   }
                                 }}
-                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-2 text-gray-400 hover:text-red-400 hover:bg-slate-600 rounded-lg transition-colors"
                                 title="Smazat směnu"
                               >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -425,40 +421,40 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                             </div>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-12">
-                        <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <svg className="w-12 h-12 text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <h3 className="text-lg font-medium text-white mb-2">
+                        Žádné směny pro tento den
+                      </h3>
+                      <p className="text-gray-400 mb-6">
+                        Pro tento den nejsou naplánované žádné směny.
+                      </p>
+                      <button
+                        onClick={handleCreateShift}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">
-                          Žádné směny pro tento den
-                        </h3>
-                        <p className="text-gray-500 mb-6">
-                          Pro tento den nejsou naplánované žádné směny.
-                        </p>
-                        <button
-                          onClick={handleCreateShift}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                          </svg>
-                          Vytvořit směnu
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
+                        Vytvořit směnu
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <div className="text-center py-12">
                   <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  <h3 className="text-lg font-medium text-white mb-2">
                     Vyberte den
                   </h3>
-                  <p className="text-gray-500">
+                  <p className="text-gray-400">
                     Klikněte na den v měsíčním pohledu pro zobrazení detailů.
                   </p>
                 </div>
@@ -469,23 +465,23 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
 
         {/* Legend - only show in month view */}
         {viewMode === 'month' && (
-          <div className="p-4 border-t border-gray-200 bg-gray-50">
+          <div className="p-4 border-t border-slate-700 bg-slate-800">
             <div className="flex flex-wrap gap-6 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-blue-500" />
-                <span className="text-gray-600">Plánováno</span>
+                <span className="text-gray-300">Plánováno</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-green-500" />
-                <span className="text-gray-600">Aktivní</span>
+                <span className="text-gray-300">Aktivní</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-gray-500" />
-                <span className="text-gray-600">Dokončeno</span>
+                <span className="text-gray-300">Dokončeno</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 rounded-full bg-red-500" />
-                <span className="text-gray-600">Zrušeno</span>
+                <span className="text-gray-300">Zrušeno</span>
               </div>
             </div>
           </div>

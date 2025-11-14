@@ -68,7 +68,8 @@ class ChatErrorBoundary extends React.Component<
 interface StreamChatComponentProps {
   vehicles: Vehicle[];
   people: Person[];
-  onChannelSelect: (channel: any) => void;
+  onNewMessage?: (vehicleId: any, message: any, options: any) => void;
+  onChannelSelect?: (channel: any) => void;
   selectedChannelId?: string;
   refreshTrigger?: number; // Optional trigger to refresh channels
 }
@@ -103,7 +104,7 @@ const CustomChannelList: React.FC<{
     try {
       // Small delay to avoid immediate rate limiting after initialization
       await new Promise(resolve => setTimeout(resolve, 500));
-      const userChannels = await getUserChannels('dispatcher');
+      const userChannels = await getUserChannels('dispatcher', vehicles);
       setChannels(userChannels);
     } catch (error) {
       console.error('Error loading channels:', error);

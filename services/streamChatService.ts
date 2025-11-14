@@ -195,7 +195,7 @@ export const addDriverToShiftChannel = async (shiftId: string, driverId: string)
   }
 };
 
-export const getUserChannels = async (userId: string, retryCount = 0) => {
+export const getUserChannels = async (userId: string, vehicles: any[] = [], retryCount = 0) => {
   // Check cache first
   const cacheKey = `channels_${userId}`;
   const cached = channelCache.get(cacheKey);
@@ -205,7 +205,12 @@ export const getUserChannels = async (userId: string, retryCount = 0) => {
   }
 
   try {
+    // Create filter for active vehicle channels and general dispatcher channel
+    const vehicleChannelIds = vehicles.map(vehicle => `dispatcher-driver-${vehicle.id}`);
+    const allowedChannelIds = [...vehicleChannelIds, 'dispatcher-general'];
+
     const filter = {
+      id: { $in: allowedChannelIds },
       members: { $in: [userId] }
     };
 
@@ -216,7 +221,7 @@ export const getUserChannels = async (userId: string, retryCount = 0) => {
       watch: true,
     });
 
-    console.log(`Found ${channels.length} channels for user ${userId}`);
+    console.log(`Found ${channels.length} channels for user ${userId} (filtered to ${allowedChannelIds.length} allowed channels)`);
 
     // Cache the result
     channelCache.set(cacheKey, { channels, timestamp: Date.now() });
