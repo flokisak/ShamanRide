@@ -391,7 +391,7 @@ const Dashboard: React.FC = () => {
       if (shiftPlanningService) {
         // Load shift plans for selected driver or all if no driver selected
         if (selectedDriver) {
-          loadShiftPlans(shiftPlanningService, selectedDriver.id);
+          loadShiftPlans(shiftPlanningService, selectedDriver?.id);
         } else if (selectedDriver) {
           // Use selected driver if available
           loadShiftPlans(shiftPlanningService, selectedDriver?.id);
@@ -438,14 +438,14 @@ const Dashboard: React.FC = () => {
       if (selectedDriver) {
         finalShiftPlan = {
           ...finalShiftPlan,
-          driverId: selectedDriver.id,
-          driverName: selectedDriver.name
+          driverId: selectedDriver?.id,
+          driverName: selectedDriver?.name
         };
-      } else if (selectedDriver) {
+      } else if (driverInfo) {
         finalShiftPlan = {
           ...finalShiftPlan,
-          driverId: selectedDriver.id,
-          driverName: selectedDriver.name
+          driverId: driverInfo?.id,
+          driverName: driverInfo?.name
         };
       }
       
