@@ -61,8 +61,15 @@ const Dashboard: React.FC = () => {
     const [showRideHistory, setShowRideHistory] = useState(false);
      const [showShiftModal, setShowShiftModal] = useState(false);
      const [showGamificationModal, setShowGamificationModal] = useState(false);
-     const [showNotificationSettingsModal, setShowNotificationSettingsModal] = useState(false);
-    // Initialize shift state from localStorage synchronously
+  const [showNotificationSettingsModal, setShowNotificationSettingsModal] = useState(false);
+  const [shiftPlanningService, setShiftPlanningService] = useState<ShiftPlanningService | null>(() => {
+    // Initialize immediately if supabase is available
+    if (supabase) {
+      return new ShiftPlanningService(supabase);
+    }
+    return null;
+  });
+  // Initialize shift state from localStorage synchronously
     const getInitialShiftValue = (key: string, defaultValue: any = null) => {
       const value = localStorage.getItem(key);
       if (value === null) return defaultValue;
@@ -376,24 +383,21 @@ const Dashboard: React.FC = () => {
 
 
 
-   // Initialize shift planning service
-   useEffect(() => {
-     if (supabase) {
-       const service = new ShiftPlanningService(supabase);
-       setShiftPlanningService(service);
-       
-       // Load shift plans for selected driver or all if no driver selected
-       if (selectedDriver) {
-         loadShiftPlans(service, selectedDriver.id);
-       } else if (driverInfo) {
-         // Fallback to authenticated driver if available
-         loadShiftPlans(service, driverInfo.id);
-       } else {
-         // Load all shift plans for dispatcher view
-         loadAllShiftPlans(service);
-       }
-     }
-   }, [supabase, driverInfo, selectedDriver]);
+    // Load shift plans when service is available and driver changes
+    useEffect(() => {
+      if (shiftPlanningService) {
+        // Load shift plans for selected driver or all if no driver selected
+        if (selectedDriver) {
+          loadShiftPlans(shiftPlanningService, selectedDriver.id);
+        } else if (driverInfo) {
+          // Fallback to authenticated driver if available
+          loadShiftPlans(shiftPlanningService, driverInfo.id);
+        } else {
+          // Load all shift plans for dispatcher view
+          loadAllShiftPlans(shiftPlanningService);
+        }
+      }
+    }, [shiftPlanningService, driverInfo, selectedDriver]);
 
   const loadShiftPlans = async (service: ShiftPlanningService, driverId: number) => {
     try {
