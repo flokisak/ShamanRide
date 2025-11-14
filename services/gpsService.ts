@@ -45,7 +45,7 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
     // Get vehicle information
     const { data: vehicles, error: vehiclesError } = await supabase
       .from('vehicles')
-      .select('id, name, status')
+      .select('id, name, vehicle_status')
       .in('id', vehicleIds);
 
     if (vehiclesError) {
@@ -70,7 +70,7 @@ export async function fetchVehiclePositions(): Promise<GpsVehicle[]> {
           lat: location.latitude,
           lon: location.longitude,
           lastUpdate: location.timestamp,
-          status: vehicle.status,
+          status: vehicle.vehicle_status,
         });
       }
     });

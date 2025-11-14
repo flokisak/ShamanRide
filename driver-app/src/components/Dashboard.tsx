@@ -14,6 +14,7 @@ import { ShiftModal } from './ShiftModal';
 import { GamificationModal } from './GamificationModal';
 import { NotificationSettingsModal } from './NotificationSettingsModal';
 import { StreamChatDriver } from './StreamChatDriver';
+import { testNotifications } from '../utils/testNotifications';
 
 import io from 'socket.io-client';
 import { safeGetAccessToken, getCachedAccessToken } from '../supabaseClient';
@@ -2529,10 +2530,16 @@ const Dashboard: React.FC = () => {
             {/* Gamification Button */}
             <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
               <button
-                onClick={() => setShowGamificationModal(true)}
-                className="w-full bg-yellow-600 hover:bg-yellow-700 py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg"
+                onClick={() => setShowNotificationSettingsModal(true)}
+                className="w-full py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg bg-slate-700 hover:bg-slate-600"
               >
-                🏆 Gamifikace
+                ⚙️ Nastavení notifikací
+              </button>
+              <button
+                onClick={() => testNotifications()}
+                className="w-full py-2 rounded-lg btn-modern text-white font-medium bg-purple-600 hover:bg-purple-700"
+              >
+                🧪 Testovat notifikace
               </button>
               <p className="text-xs text-slate-400 mt-2 text-center">
                 Zobrazit skóre, achievement a pořadí řidičů

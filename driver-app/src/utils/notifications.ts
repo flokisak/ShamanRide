@@ -135,21 +135,30 @@ export const playNotificationSound = async (frequency: number = 800, duration: n
       throw new Error('Audio context not available');
     }
 
-    // Ensure context is running
+    // Ensure context is running with user interaction fallback
     if (globalAudioContext.state === 'suspended') {
       try {
         await globalAudioContext.resume();
         console.log('Audio context resumed for notification');
       } catch (resumeError) {
         console.warn('Could not resume audio context:', resumeError);
-        if ('vibrate' in navigator) {
-          navigator.vibrate([200, 100, 200]);
+        // Try to create a new context
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          globalAudioContext = new AudioContextClass();
+          audioContextInitialized = true;
+          await globalAudioContext.resume();
+        } catch (contextError) {
+          console.warn('Failed to create new audio context:', contextError);
+          if ('vibrate' in navigator) {
+            navigator.vibrate([200, 100, 200]);
+          }
+          return;
         }
-        return;
       }
     }
 
-    // Ensure context is still running
+    // Final check if context is running
     if (globalAudioContext.state !== 'running') {
       console.warn('Audio context not in running state:', globalAudioContext.state);
       if ('vibrate' in navigator) {
@@ -158,60 +167,46 @@ export const playNotificationSound = async (frequency: number = 800, duration: n
       return;
     }
 
-    // Create and play sound optimized for native Android
-    const playSound = () => {
+    // Create and play sound with immediate execution
+    const oscillator = globalAudioContext.createOscillator();
+    const gainNode = globalAudioContext.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(globalAudioContext.destination);
+
+    // Configure beep sound for better mobile audibility
+    oscillator.frequency.setValueAtTime(frequency, globalAudioContext.currentTime);
+    oscillator.type = 'square'; // Square wave for better penetration on mobile
+
+    // Volume settings optimized for mobile
+    const baseVolume = document.hidden ? 0.8 : 0.6;
+    const volume = Math.min(baseVolume, 0.9);
+
+    gainNode.gain.setValueAtTime(volume, globalAudioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, globalAudioContext.currentTime + duration);
+
+    oscillator.start(globalAudioContext.currentTime);
+    oscillator.stop(globalAudioContext.currentTime + duration);
+
+    // Clean up after sound ends
+    setTimeout(() => {
       try {
-        // Create oscillator for beep sound
-        const oscillator = globalAudioContext!.createOscillator();
-        const gainNode = globalAudioContext!.createGain();
-
-        oscillator.connect(gainNode);
-        gainNode.connect(globalAudioContext!.destination);
-
-        // Configure beep sound
-        oscillator.frequency.setValueAtTime(frequency, globalAudioContext!.currentTime);
-        oscillator.type = 'square'; // Square wave for better audibility on mobile
-
-        // Volume settings for native Android
-        const baseVolume = document.hidden ? 0.8 : 0.6; // Louder for background
-        const volume = Math.min(baseVolume, 0.9); // Cap at 90%
-
-        gainNode.gain.setValueAtTime(volume, globalAudioContext!.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, globalAudioContext!.currentTime + duration);
-
-        oscillator.start(globalAudioContext!.currentTime);
-        oscillator.stop(globalAudioContext!.currentTime + duration);
-
-        // Clean up after sound ends
-        setTimeout(() => {
-          try {
-            oscillator.disconnect();
-            gainNode.disconnect();
-          } catch (cleanupError) {
-            // Ignore cleanup errors
-          }
-        }, (duration + 0.1) * 1000);
-
-        console.log(`Native Android notification sound: ${frequency}Hz, ${duration}s, volume: ${volume}`);
-      } catch (error) {
-        console.error('Error creating sound:', error);
-        // Fallback to vibration
-        if ('vibrate' in navigator) {
-          navigator.vibrate([200, 100, 200, 100, 200]);
-        }
+        oscillator.disconnect();
+        gainNode.disconnect();
+      } catch (cleanupError) {
+        // Ignore cleanup errors
       }
-    };
+    }, (duration + 0.1) * 1000);
 
-    // Play the sound
-    playSound();
+    console.log(`Notification sound played: ${frequency}Hz, ${duration}s, volume: ${volume}`);
 
-    // For native Android, add extra attempts for reliability
-    if (document.hidden && isAndroid()) {
+    // For Android, add a second attempt for reliability
+    if (isAndroid() && document.hidden) {
       setTimeout(() => {
         if (globalAudioContext?.state === 'running') {
-          playSound();
+          playNotificationSound(frequency * 0.8, duration * 0.8); // Slightly different pitch
         }
-      }, 200);
+      }, 150);
     }
 
   } catch (error) {
@@ -275,7 +270,14 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
   title?: string;
   body?: string;
 }): Promise<void> => {
+  console.log(`🔔 notifyUser called: type=${type}, customOptions=`, customOptions);
+  
   const settings = getNotificationSettings();
+  console.log(`📱 Notification settings for ${type}:`, {
+    sound: settings ? settings[`${type}Sound`] : true,
+    vibration: settings ? settings[`${type}Vibration`] : true,
+    systemNotification: settings ? settings[`${type}SystemNotification`] : true
+  });
 
   const defaults = {
     sound: settings ? settings[`${type}Sound`] : true,
@@ -311,14 +313,16 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
   }
 
   const finalOptions = { ...options, ...customOptions };
+  console.log(`🔔 Final notification options for ${type}:`, finalOptions);
 
   // Log notification for native Android
   if (isAndroid()) {
-    console.log(`Native Android notification: ${type}`, finalOptions);
+    console.log(`🤖 Native Android notification: ${type}`, finalOptions);
   }
 
   // Play sound optimized for native Android
   if (finalOptions.sound) {
+    console.log(`🔊 Playing notification sound for ${type}`);
     const playSound = async () => {
       try {
         if (type === 'ride') {
@@ -330,8 +334,9 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
         } else {
           await playNotificationSound(900, 0.4);
         }
+        console.log(`✅ Sound played successfully for ${type}`);
       } catch (error) {
-        console.error('Error playing notification sound:', error);
+        console.error(`❌ Error playing notification sound for ${type}:`, error);
       }
     };
 
@@ -340,17 +345,26 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
 
     // For native Android, add extra sound attempts for reliability
     if (isAndroid() && document.hidden) {
-      setTimeout(() => playSound(), 300);
+      setTimeout(() => {
+        console.log(`🔄 Playing additional sound for ${type} (app in background)`);
+        playSound();
+      }, 300);
     }
+  } else {
+    console.log(`🔇 Sound disabled for ${type}`);
   }
 
   // Vibrate with native Android patterns
   if (finalOptions.vibration) {
+    console.log(`📳 Vibrating for ${type} with pattern:`, finalOptions.vibrationPattern);
     vibrateDevice(finalOptions.vibrationPattern);
+  } else {
+    console.log(`📵 Vibration disabled for ${type}`);
   }
 
   // Show system notification optimized for native Android
   if (finalOptions.systemNotification && finalOptions.title) {
+    console.log(`📱 Showing system notification for ${type}:`, finalOptions.title);
     const notificationOptions = {
       body: finalOptions.body,
       icon: '/android-launchericon-192-192.png',
@@ -360,8 +374,17 @@ export const notifyUser = async (type: 'ride' | 'message' | 'general' = 'general
       tag: type === 'ride' ? 'new-ride' : `notification-${Date.now()}`, // Group ride notifications
     };
 
-    showSystemNotification(finalOptions.title, notificationOptions);
+    const notification = showSystemNotification(finalOptions.title, notificationOptions);
+    if (notification) {
+      console.log(`✅ System notification shown for ${type}`);
+    } else {
+      console.log(`❌ Failed to show system notification for ${type}`);
+    }
+  } else {
+    console.log(`🔕 System notification disabled for ${type}`);
   }
+  
+  console.log(`🔔 Notification processing completed for ${type}`);
 };
 
 // Register for push notifications
@@ -511,13 +534,25 @@ export const initializeNotifications = async (userId?: string, vapidPublicKey?: 
     console.log('Native Android detected - initializing with mobile optimizations');
   }
 
-  // Initialize audio context early for better mobile support
-  const audioInitialized = await initializeAudioContext();
-  if (audioInitialized) {
-    console.log('Audio context initialized for notifications');
-  } else {
-    console.warn('Audio context initialization failed - will retry on user interaction');
-  }
+  // Set up user interaction listener for audio context initialization
+  const setupAudioOnUserInteraction = () => {
+    const initializeAudioOnInteraction = async () => {
+      if (!audioContextInitialized) {
+        const audioInitialized = await initializeAudioContext();
+        if (audioInitialized) {
+          console.log('Audio context initialized on user interaction');
+        }
+      }
+    };
+
+    // Set up one-time listeners for user interaction
+    const events = ['click', 'touchstart', 'keydown'];
+    events.forEach(event => {
+      document.addEventListener(event, initializeAudioOnInteraction, { once: true });
+    });
+  };
+
+  setupAudioOnUserInteraction();
 
   // For native Android, request permissions directly
   const permissionGranted = await requestNotificationPermission();

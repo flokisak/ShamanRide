@@ -79,8 +79,8 @@ export const getAvailableVehicles = async () => {
 
   const { data, error } = await supabase!
     .from('vehicles')
-    .select('id, name, location, status, license_plate')
-    .in('status', ['available', 'busy']);
+    .select('id, name, location, vehicle_status, license_plate')
+    .in('vehicle_status', ['available', 'busy']);
 
   if (error) throw error;
   return data || [];

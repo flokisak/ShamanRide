@@ -11,68 +11,8 @@ import {
 } from 'stream-chat-react';
 import { supabase } from '../supabaseClient';
 import { streamClient, initializeStreamChat, getUserChannels, createDispatcherDriverChannel, createDriverDriverChannel } from '../services/streamChatService.ts';
+import { notifyUser } from '../utils/notifications';
 import 'stream-chat-react/dist/css/v2/index.css';
-
-// Simple notification function for driver app
-const notifyDriver = (title: string, body: string) => {
-  try {
-    // Try to show browser notification
-    if ('Notification' in window && Notification.permission === 'granted') {
-      const notification = new Notification(title, {
-        body,
-        icon: '/icon.png',
-        badge: '/icon.png',
-        requireInteraction: false,
-        silent: false,
-      });
-
-      // Auto-close after 3 seconds
-      setTimeout(() => {
-        notification.close();
-      }, 3000);
-    }
-
-    // Try to vibrate if supported
-    if ('vibrate' in navigator) {
-      navigator.vibrate([100, 50, 100]);
-    }
-
-    // Play a simple beep sound
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      if (audioContext.state === 'suspended') {
-        audioContext.resume();
-      }
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
-      oscillator.type = 'sine';
-
-      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.15);
-    } catch (audioError) {
-      // Ignore audio errors
-    }
-  } catch (error) {
-    console.warn('Notification failed:', error);
-  }
-};
-
-// Mobile detection hook
-const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-    };
 
     checkIsMobile();
     window.addEventListener('resize', checkIsMobile);
@@ -371,11 +311,11 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
         const senderName = event.message.user?.name || 'Neznámý uživatel';
         const channelName = getChannelDisplayName(channel);
 
-        // Show notification for new messages
-        notifyDriver(
-          `Nová zpráva od ${senderName}`,
-          `V chatu ${channelName}: ${event.message.text?.substring(0, 50)}${event.message.text?.length > 50 ? '...' : ''}`
-        );
+        // Show notification for new messages using main notification system
+        notifyUser('message', {
+          title: `Nová zpráva od ${senderName}`,
+          body: `V chatu ${channelName}: ${event.message.text?.substring(0, 50)}${event.message.text?.length > 50 ? '...' : ''}`
+        }).catch(error => console.error('Error notifying user:', error));
 
         console.log('New message notification shown for driver:', {
           sender: senderName,
