@@ -165,7 +165,7 @@ let _lastRefreshTime: number = 0;
 let _refreshAttempts: number = 0;
 const MAX_REFRESH_ATTEMPTS = 3;
 
-export function startAuthKeepAlive(intervalMs: number = 2 * 60 * 1000) {
+export function startAuthKeepAlive(intervalMs: number = 10 * 60 * 1000) {
   if (!SUPABASE_ENABLED || typeof window === 'undefined') return;
   try {
     // Use a window-global guard so multiple bundles or hot-reloads don't start
