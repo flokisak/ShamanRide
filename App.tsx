@@ -1904,27 +1904,30 @@ const AppContent: React.FC = () => {
           currentUser={user}
           shiftId="dispatcher_shift"
           isDispatcher={true}
-          onSocketReady={(socketInstance) => {
-            // Store socket instance for emitting events
-            window.dispatcherSocket = socketInstance;
+           onSocketReady={(socketInstance) => {
+             // Store socket instance for emitting events
+             window.dispatcherSocket = socketInstance;
 
-            // Listen for vehicle updates from other clients
-            socketInstance.on('vehicles_updated', (data) => {
-              console.log('Vehicles updated from socket:', data.vehicles);
-              if (data.vehicles && Array.isArray(data.vehicles)) {
-                setVehicles(prevVehicles => {
-                  const updatedVehicles = [...prevVehicles];
-                  data.vehicles.forEach(updatedVehicle => {
-                    const index = updatedVehicles.findIndex(v => v.id === updatedVehicle.id);
-                    if (index >= 0) {
-                      updatedVehicles[index] = { ...updatedVehicles[index], ...updatedVehicle };
-                    }
-                  });
-                  return updatedVehicles;
-                });
-              }
-            });
-          }}
+             // Reload vehicles to ensure we have the latest status
+             reloadVehicles();
+
+             // Listen for vehicle updates from other clients
+             socketInstance.on('vehicles_updated', (data) => {
+               console.log('Vehicles updated from socket:', data.vehicles);
+               if (data.vehicles && Array.isArray(data.vehicles)) {
+                 setVehicles(prevVehicles => {
+                   const updatedVehicles = [...prevVehicles];
+                   data.vehicles.forEach(updatedVehicle => {
+                     const index = updatedVehicles.findIndex(v => v.id === updatedVehicle.id);
+                     if (index >= 0) {
+                       updatedVehicles[index] = { ...updatedVehicles[index], ...updatedVehicle };
+                     }
+                   });
+                   return updatedVehicles;
+                 });
+               }
+             });
+           }}
           onRideUpdate={(rideData) => {
            // Handle ride updates from Socket.io
            const mappedRide = {
@@ -2016,6 +2019,13 @@ const AppContent: React.FC = () => {
             console.log('Vehicles after update:', updated.map(v => ({ id: v.id, status: v.status })));
             return updated;
           });
+
+          // Also update in database to ensure consistency
+          supabaseService.updateVehicles(vehicles.map(vehicle =>
+            vehicle.id === data.vehicleId
+              ? { ...vehicle, status: data.status }
+              : vehicle
+          )).catch(err => console.error('Error updating vehicle status in DB:', err));
         }}
         onPositionUpdate={(data) => {
           // Handle real-time position updates from Socket.io

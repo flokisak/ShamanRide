@@ -300,6 +300,7 @@ io.on('connection', (socket) => {
       }
 
       // Broadcast to all connected clients (dispatchers and other drivers)
+      console.log(`Broadcasting vehicle_status_updated for vehicle ${vehicleId} with status ${status}`);
       socket.broadcast.emit('vehicle_status_updated', {
         vehicleId: parseInt(vehicleId),
         status,
