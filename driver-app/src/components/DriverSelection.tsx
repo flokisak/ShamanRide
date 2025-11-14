@@ -6,6 +6,7 @@ const DriverSelection: React.FC = () => {
   const { t } = useTranslation();
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null);
+  const [selectedDriver, setSelectedDriver] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shiftStarted, setShiftStarted] = useState(false);
@@ -49,12 +50,12 @@ const DriverSelection: React.FC = () => {
   };
 
   const handleStartShift = () => {
-    if (selectedVehicle) {
+    if (selectedVehicle && selectedDriver.trim()) {
       const vehicle = vehicles.find(v => v.id === selectedVehicle);
       if (vehicle) {
         // Store selected driver info in localStorage for Dashboard to use
         localStorage.setItem('selectedDriverId', vehicle.id.toString());
-        localStorage.setItem('selectedDriverName', vehicle.name || `Vehicle ${vehicle.id}`);
+        localStorage.setItem('selectedDriverName', selectedDriver.trim());
         localStorage.setItem('selectedDriverEmail', vehicle.email);
         localStorage.setItem('selectedVehicleId', vehicle.id.toString());
         localStorage.setItem('licensePlate', vehicle.licensePlate || '');
@@ -64,8 +65,7 @@ const DriverSelection: React.FC = () => {
         localStorage.setItem('driverStatus', 'available');
         localStorage.setItem('isShiftActive', 'true');
         
-        // Navigate to dashboard
-        window.location.href = '/';
+        setShiftStarted(true);
       }
     }
   };
@@ -133,7 +133,14 @@ const DriverSelection: React.FC = () => {
               </label>
               <select
                 value={selectedVehicle || ''}
-                onChange={(e) => setSelectedVehicle(parseInt(e.target.value))}
+                onChange={(e) => {
+                  const vehicleId = parseInt(e.target.value);
+                  setSelectedVehicle(vehicleId);
+                  const vehicle = vehicles.find(v => v.id === vehicleId);
+                  if (vehicle) {
+                    setSelectedDriver(vehicle.name || `Řidič ${vehicleId}`);
+                  }
+                }}
                 className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white focus:ring-2 focus:ring-blue-400"
                 required
               >
@@ -144,6 +151,19 @@ const DriverSelection: React.FC = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2 text-slate-300">
+                Vaše jméno (pokud se liší od jména vozidla):
+              </label>
+              <input
+                type="text"
+                value={selectedDriver}
+                onChange={(e) => setSelectedDriver(e.target.value)}
+                placeholder="Např. Jan Novák"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white focus:ring-2 focus:ring-blue-400"
+              />
             </div>
 
             <button
@@ -167,11 +187,16 @@ const DriverSelection: React.FC = () => {
         <div className="glass card-hover p-8 rounded-2xl shadow-frost w-full max-w-md border border-slate-700/50">
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-white mb-2">
-              {vehicle?.name || `Vehicle ${vehicle?.id}`}
+              {selectedDriver || vehicle?.name || `Vehicle ${vehicle?.id}`}
             </h1>
-            <p className="text-slate-300">
+            <p className="text-slate-300 mb-1">
               {vehicle?.licensePlate || 'No Plate'}
             </p>
+            {selectedDriver && (
+              <p className="text-green-400 text-sm">
+                Řidič: {selectedDriver}
+              </p>
+            )}
           </div>
 
           <div className="space-y-4">
