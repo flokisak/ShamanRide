@@ -103,10 +103,10 @@ io.on('connection', (socket) => {
   });
 
   // Join shift room for ride updates
-  socket.on('join_shift', (shiftId) => {
-    socket.join(`shift:${shiftId}`);
-    console.log(`User ${socket.userEmail} joined shift:${shiftId}`);
-  });
+socket.on('join_shift', (shiftId) => {
+  socket.join(`shift:${shiftId}`);
+  console.log(`User joined shift: ${shiftId}`);
+});
 
   // Join dispatcher-driver chat room
   socket.on('join_chat_dispatcher_driver', ({ dispatcherId, driverId }) => {
@@ -200,83 +200,74 @@ io.on('connection', (socket) => {
 
   // Handle ride updates
   socket.on('ride_update', async (data) => {
-    try {
-      const { shiftId, rideData } = data;
+    const { shiftId, rideData } = data;
 
-      // Persist ride update to Supabase (server-authoritative) and broadcast canonical row
-      const dbRideData = {
-        id: rideData.id,
-        timestamp: rideData.timestamp || Date.now(),
-        vehicle_name: rideData.vehicleName,
-        vehicle_license_plate: rideData.vehicleLicensePlate,
-        driver_name: rideData.driverName,
-        vehicle_type: rideData.vehicleType,
-        customer_name: rideData.customerName,
-        ride_type: rideData.rideType?.toLowerCase() || 'business',
-        customer_phone: rideData.customerPhone,
-        stops: rideData.stops,
-        passengers: rideData.passengers,
-        pickup_time: rideData.pickupTime,
-        status: rideData.status?.toLowerCase() || 'pending',
-        vehicle_id: rideData.vehicleId,
-        notes: rideData.notes,
-        estimated_price: rideData.estimatedPrice,
-        estimated_pickup_timestamp: rideData.estimatedPickupTimestamp,
-        estimated_completion_timestamp: rideData.estimatedCompletionTimestamp,
-        fuel_cost: rideData.fuelCost,
-        distance: rideData.distance,
-        accepted_at: rideData.acceptedAt,
-        started_at: rideData.startedAt,
-        completed_at: rideData.completedAt
+    // Persist ride update to Supabase (server-authoritative) and broadcast canonical row
+    const dbRideData = {
+      id: rideData.id,
+      timestamp: rideData.timestamp || Date.now(),
+      vehicle_name: rideData.vehicleName,
+      vehicle_license_plate: rideData.vehicleLicensePlate,
+      driver_name: rideData.driverName,
+      vehicle_type: rideData.vehicleType,
+      customer_name: rideData.customerName,
+      ride_type: rideData.rideType?.toLowerCase() || 'business',
+      customer_phone: rideData.customerPhone,
+      stops: rideData.stops,
+      passengers: rideData.passengers,
+      pickup_time: rideData.pickupTime,
+      status: rideData.status?.toLowerCase() || 'pending',
+      vehicle_id: rideData.vehicleId,
+      notes: rideData.notes,
+      estimated_price: rideData.estimatedPrice,
+      estimated_pickup_timestamp: rideData.estimatedPickupTimestamp,
+      estimated_completion_timestamp: rideData.estimatedCompletionTimestamp,
+      fuel_cost: rideData.fuelCost,
+      distance: rideData.distance,
+      accepted_at: rideData.acceptedAt,
+      started_at: rideData.startedAt,
+      completed_at: rideData.completedAt
+    };
+
+    const { data: savedRows, error: upsertErr } = await supabase
+      .from('ride_logs')
+      .upsert(dbRideData, { onConflict: 'id' })
+      .select('*');
+
+    if (upsertErr) {
+      console.error('Failed to save ride update to Supabase:', upsertErr);
+    } else {
+      const saved = Array.isArray(savedRows) && savedRows[0] ? savedRows[0] : savedRows;
+
+      // Broadcast canonical ride row (include temp_id if provided so clients can reconcile)
+      const broadcastRide = {
+        ...saved,
+        // add camelCase aliases for clients that expect those properties
+        vehicleName: saved.vehicle_name,
+        vehicleLicensePlate: saved.vehicle_license_plate,
+        driverName: saved.driver_name,
+        vehicleType: saved.vehicle_type,
+        customerName: saved.customer_name,
+        rideType: saved.ride_type,
+        customerPhone: saved.customer_phone,
+        stops: saved.stops,
+        pickupTime: saved.pickup_time,
+        estimatedPickupTimestamp: saved.estimated_pickup_timestamp,
+        estimatedCompletionTimestamp: saved.estimated_completion_timestamp,
+        acceptedAt: saved.accepted_at,
+        startedAt: saved.started_at,
+        completedAt: saved.completed_at,
+        fuelCost: saved.fuel_cost,
+        distance: saved.distance,
+        temp_id: rideData.temp_id || null
       };
 
-      try {
-        const { data: savedRows, error: upsertErr } = await supabase
-          .from('ride_logs')
-          .upsert(dbRideData, { onConflict: 'id' })
-          .select('*');
+      socket.to(`shift:${shiftId}`).emit('ride_updated', broadcastRide);
 
-        if (upsertErr) {
-          console.error('Failed to save ride update to Supabase:', upsertErr);
-        } else {
-          const saved = Array.isArray(savedRows) && savedRows[0] ? savedRows[0] : savedRows;
+      // ACK to sender with canonical ride row
+      socket.emit('ride_saved', broadcastRide);
 
-          // Broadcast canonical ride row (include temp_id if provided so clients can reconcile)
-          const broadcastRide = {
-            ...saved,
-            // add camelCase aliases for clients that expect those properties
-            vehicleName: saved.vehicle_name,
-            vehicleLicensePlate: saved.vehicle_license_plate,
-            driverName: saved.driver_name,
-            vehicleType: saved.vehicle_type,
-            customerName: saved.customer_name,
-            rideType: saved.ride_type,
-            customerPhone: saved.customer_phone,
-            stops: saved.stops,
-            pickupTime: saved.pickup_time,
-            estimatedPickupTimestamp: saved.estimated_pickup_timestamp,
-            estimatedCompletionTimestamp: saved.estimated_completion_timestamp,
-            acceptedAt: saved.accepted_at,
-            startedAt: saved.started_at,
-            completedAt: saved.completed_at,
-            fuelCost: saved.fuel_cost,
-            distance: saved.distance,
-            temp_id: rideData.temp_id || null
-          };
-
-          socket.to(`shift:${shiftId}`).emit('ride_updated', broadcastRide);
-
-          // ACK to sender with canonical ride row
-          socket.emit('ride_saved', broadcastRide);
-
-          console.log('Ride update saved to Supabase and broadcasted:', saved.id);
-        }
-      } catch (err) {
-        console.error('Error upserting ride_log:', err);
-      }
-
-    } catch (err) {
-      console.error('Error handling ride update:', err);
+      console.log('Ride update saved to Supabase and broadcasted:', saved.id);
     }
   });
 
@@ -287,34 +278,30 @@ io.on('connection', (socket) => {
 
   console.log(`Vehicle ${vehicleId} status changed to ${status} by driver`);
 
-  try {
-    // Update vehicle status in Supabase
-    const { error } = await supabase
-      .from('vehicles')
-      .update({ vehicle_status: status, updated_at: new Date().toISOString() })
-      .eq('id', vehicleId);
+  // Update vehicle status in Supabase
+  const { error } = await supabase
+    .from('vehicles')
+    .update({ vehicle_status: status, updated_at: new Date().toISOString() })
+    .eq('id', vehicleId);
 
-    if (error) {
-      console.error('Error updating vehicle status in database:', error);
-      console.error('Supabase URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
-      console.error('Service Key:', process.env.SUPABASE_SERVICE_KEY ? 'SET (length: ' + process.env.SUPABASE_SERVICE_KEY.length + ')' : 'NOT SET');
-      socket.emit('vehicle_status_error', { vehicleId, error: error.message });
-      return;
-    }
-
-    console.log(`Vehicle ${vehicleId} status updated to ${status} in database`);
-
-    // Broadcast to all connected clients (dispatchers and other drivers)
-    console.log(`Broadcasting vehicle_status_updated for vehicle ${vehicleId} with status ${status}`);
-    socket.broadcast.emit('vehicle_status_updated', {
-      vehicleId: parseInt(vehicleId),
-      status,
-      driverStatus,
-      timestamp
-    });
-  } catch (err) {
-    console.error('Error handling vehicle status change:', err);
+  if (error) {
+    console.error('Error updating vehicle status in database:', error);
+    console.error('Supabase URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+    console.error('Service Key:', process.env.SUPABASE_SERVICE_KEY ? 'SET (length: ' + process.env.SUPABASE_SERVICE_KEY.length + ')' : 'NOT SET');
+    socket.emit('vehicle_status_error', { vehicleId, error: error.message });
+    return;
   }
+
+  console.log(`Vehicle ${vehicleId} status updated to ${status} in database`);
+
+  // Broadcast to all connected clients (dispatchers and other drivers)
+  console.log(`Broadcasting vehicle_status_updated for vehicle ${vehicleId} with status ${status}`);
+  socket.broadcast.emit('vehicle_status_updated', {
+    vehicleId: parseInt(vehicleId),
+    status,
+    driverStatus,
+    timestamp
+  });
   });
 
   // Handle bulk vehicle updates (from dispatcher UI)
