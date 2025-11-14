@@ -22,7 +22,7 @@ export const streamClient = StreamChat.getInstance(STREAM_API_KEY);
 export const createStreamUser = async (userId: string, userData: any) => {
   try {
     // Create or update user via server endpoint
-    const response = await fetch(`${API_BASE_URL}/api/stream-chat-user`, {
+    const response = await fetch(`${API_BASE_URL}/api/stream-chat?action=user`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -210,7 +210,7 @@ export const generateStreamToken = async (userId: string): Promise<string> => {
       throw new Error('API_BASE_URL is not configured. Set VITE_API_BASE_URL environment variable.');
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/stream-chat-token`, {
+    const response = await fetch(`${API_BASE_URL}/api/stream-chat?action=token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

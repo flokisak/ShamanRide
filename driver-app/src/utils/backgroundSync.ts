@@ -129,7 +129,7 @@ class BackgroundSyncManager {
         if (messages.length > 0) {
           console.log('Syncing pending messages:', messages.length);
           // Here you would send to your API
-          // await fetch('/api/sync-messages', { ... })
+          // await fetch('/api/sync?type=messages', { ... })
           localStorage.removeItem('pending-messages');
         }
       }
@@ -146,7 +146,7 @@ class BackgroundSyncManager {
         if (updates.length > 0) {
           console.log('Syncing pending ride updates:', updates.length);
           // Here you would send to your API
-          // await fetch('/api/sync-ride-updates', { ... })
+          // await fetch('/api/sync?type=ride-updates', { ... })
           localStorage.removeItem('pending-ride-updates');
         }
       }

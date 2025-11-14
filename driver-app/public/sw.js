@@ -404,7 +404,7 @@ async function syncLocationData() {
 
     if (cachedLocations && cachedLocations.length > 0) {
       // Send cached locations to server
-      const response = await fetch('/api/sync-locations', {
+      const response = await fetch('/api/sync?type=locations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -433,7 +433,7 @@ async function syncPendingMessages() {
     const pendingMessages = await getPendingMessages();
 
     if (pendingMessages && pendingMessages.length > 0) {
-      const response = await fetch('/api/sync-messages', {
+      const response = await fetch('/api/sync?type=messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -461,7 +461,7 @@ async function syncRideUpdates() {
     const pendingUpdates = await getPendingRideUpdates();
 
     if (pendingUpdates && pendingUpdates.length > 0) {
-      const response = await fetch('/api/sync-ride-updates', {
+      const response = await fetch('/api/sync?type=ride-updates', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

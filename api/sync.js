@@ -14,7 +14,26 @@ export default function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Determine sync type from query parameter or body
+  const syncType = req.query.type || req.body?.type || 'general';
+
   // Stub endpoint for service worker background sync
-  console.log('Background sync locations request received');
-  res.json({ success: true, message: 'Locations synced' });
+  console.log(`Background sync ${syncType} request received`);
+
+  let message = 'Synced';
+  switch (syncType) {
+    case 'locations':
+      message = 'Locations synced';
+      break;
+    case 'messages':
+      message = 'Messages synced';
+      break;
+    case 'ride-updates':
+      message = 'Ride updates synced';
+      break;
+    default:
+      message = 'General sync completed';
+  }
+
+  res.json({ success: true, message });
 }

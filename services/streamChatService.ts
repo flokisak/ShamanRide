@@ -22,7 +22,7 @@ const clearChannelCache = (userId: string) => {
 export const createStreamUser = async (userId: string, userData: any, retryCount = 0) => {
   try {
     // Create or update user via server endpoint
-    const response = await fetch('/api/stream-chat-user', {
+    const response = await fetch('/api/stream-chat?action=user', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -246,7 +246,7 @@ export const getUserChannels = async (userId: string, retryCount = 0) => {
 // Token generation (server-side only - this would typically be done on your backend)
 export const generateStreamToken = async (userId: string): Promise<string> => {
   try {
-    const response = await fetch('/api/stream-chat-token', {
+    const response = await fetch('/api/stream-chat?action=token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
