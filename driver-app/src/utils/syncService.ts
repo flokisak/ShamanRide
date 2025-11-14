@@ -21,7 +21,7 @@ export async function updateVehicles(updatedVehicles: any[], options?: any) {
       };
 
       // Add fields that are present in the vehicle object
-      if (vehicle.status !== undefined) updateData.status = vehicle.status;
+      if (vehicle.status !== undefined) updateData.vehicle_status = vehicle.status;
       if (vehicle.location !== undefined) updateData.location = vehicle.location;
       if (vehicle.mileage !== undefined) updateData.mileage = vehicle.mileage;
       if (vehicle.shiftStart !== undefined) updateData.shift_start = vehicle.shiftStart;

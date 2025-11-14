@@ -14,6 +14,14 @@ import { streamClient, initializeStreamChat, getUserChannels, createDispatcherDr
 import { notifyUser } from '../utils/notifications';
 import 'stream-chat-react/dist/css/v2/index.css';
 
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  const checkIsMobile = () => {
+    setIsMobile(window.innerWidth < 768);
+  };
+
+  useEffect(() => {
     checkIsMobile();
     window.addEventListener('resize', checkIsMobile);
     return () => window.removeEventListener('resize', checkIsMobile);
