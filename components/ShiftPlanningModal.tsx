@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShiftPlan, ShiftPlanStatus, RecurringPattern, Person } from '../types';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, getDay } from 'date-fns';
 import { cs } from 'date-fns/locale';
 import { ShiftPlanningService } from '../services/shiftPlanningService';
 
@@ -350,6 +350,8 @@ interface ShiftCreateEditModalProps {
   editingShift?: ShiftPlan;
   availableDrivers: Person[];
   isDispatcher: boolean;
+  selectedDriverId?: number;
+  onDriverChange?: (driverId: number) => void;
 }
 
 const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
@@ -360,10 +362,12 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
   onDelete,
   editingShift,
   availableDrivers,
-  isDispatcher
+  isDispatcher,
+  selectedDriverId,
+  onDriverChange
 }) => {
   const [formData, setFormData] = useState({
-    driverId: 0,
+    driverId: selectedDriverId || 0,
     plannedStart: '',
     plannedEnd: '',
     status: ShiftPlanStatus.Planned,
@@ -373,6 +377,8 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'month' | 'day'>('month');
 
   useEffect(() => {
     if (editingShift) {
@@ -469,14 +475,65 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">
-          {editingShift ? 'Upravit směnu' : 'Naplánovat směnu'}
-        </h2>
+      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-800">
+            {editingShift ? 'Upravit směnu' : 'Naplánovat směnu'}
+          </h2>
+          
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setViewMode('month')}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'month' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              📅 Měsíc
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('day')}
+              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                viewMode === 'day' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              📅 Den
+            </button>
+          </div>
+        </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-4 text-sm">
             {error}
+          </div>
+        )}
+
+        {/* Month Navigation */}
+        {viewMode === 'month' && (
+          <div className="flex items-center justify-between mb-4">
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(subMonths(currentMonth, -1))}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              ◀ Předchozí měsíc
+            </button>
+            <span className="text-lg font-semibold text-gray-800">
+              {format(currentMonth, 'MMMM yyyy', { locale: cs })}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              Následující měsíc ▶
+            </button>
           </div>
         )}
 
@@ -487,87 +544,105 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
               <label className="block text-gray-700 text-sm font-medium mb-1">
                 Řidič
               </label>
-              <select
-                name="driverId"
-                value={formData.driverId}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                required
-              >
-                <option value={0} disabled>Vyberte řidiče</option>
-                {availableDrivers.map(driver => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  name="driverId"
+                  value={formData.driverId}
+                  onChange={(e) => {
+                    const driverId = parseInt(e.target.value);
+                    setFormData(prev => ({ ...prev, driverId }));
+                    if (onDriverChange) onDriverChange(driverId);
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  required
+                >
+                  <option value={0} disabled>Vyberte řidiče...</option>
+                  {availableDrivers.map(driver => (
+                    <option key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedDriverId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, driverId: 0 }));
+                      if (onDriverChange) onDriverChange(0);
+                    }}
+                    className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm"
+                  >
+                    Zrušit výběr
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Start Date and Time */}
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-1">
-              Začátek směny
-            </label>
-            <input
-              type="datetime-local"
-              name="plannedStart"
-              value={formData.plannedStart}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-              required
-            />
+          {/* Date and Time Inputs */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-1">
+                Začátek
+              </label>
+              <input
+                type="datetime-local"
+                name="plannedStart"
+                value={formData.plannedStart}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-1">
+                Konec
+              </label>
+              <input
+                type="datetime-local"
+                name="plannedEnd"
+                value={formData.plannedEnd}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                required
+              />
+            </div>
           </div>
 
-          {/* End Date and Time */}
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-1">
-              Konec směny
-            </label>
-            <input
-              type="datetime-local"
-              name="plannedEnd"
-              value={formData.plannedEnd}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-              required
-            />
-          </div>
-
-          {/* Status */}
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-1">
-              Stav
-            </label>
-            <select
-              name="status"
-              value={formData.status}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value={ShiftPlanStatus.Planned}>Plánováno</option>
-              <option value={ShiftPlanStatus.Active}>Aktivní</option>
-              <option value={ShiftPlanStatus.Completed}>Dokončeno</option>
-              <option value={ShiftPlanStatus.Cancelled}>Zrušeno</option>
-            </select>
-          </div>
-
-          {/* Recurring Pattern */}
-          <div>
-            <label className="block text-gray-700 text-sm font-medium mb-1">
-              Opakování
-            </label>
-            <select
-              name="recurringPattern"
-              value={formData.recurringPattern}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-            >
-              <option value={RecurringPattern.None}>Bez opakování</option>
-              <option value={RecurringPattern.Daily}>Denně</option>
-              <option value={RecurringPattern.Weekly}>Týdně</option>
-              <option value={RecurringPattern.Monthly}>Měsíčně</option>
-            </select>
+          {/* Status and Recurring */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-1">
+                Stav
+              </label>
+              <select
+                name="status"
+                value={formData.status}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value={ShiftPlanStatus.Planned}>Plánováno</option>
+                <option value={ShiftPlanStatus.Active}>Aktivní</option>
+                <option value={ShiftPlanStatus.Completed}>Dokončeno</option>
+                <option value={ShiftPlanStatus.Cancelled}>Zrušeno</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium mb-1">
+                Opakování
+              </label>
+              <select
+                name="recurringPattern"
+                value={formData.recurringPattern}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value={RecurringPattern.None}>Bez opakování</option>
+                <option value={RecurringPattern.Daily}>Denně</option>
+                <option value={RecurringPattern.Weekly}>Týdně</option>
+                <option value={RecurringPattern.Monthly}>Měsíčně</option>
+              </select>
+            </div>
           </div>
 
           {/* Recurring End Date */}
@@ -601,13 +676,19 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
               placeholder="Volitelné poznámky..."
             />
           </div>
+          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
             {editingShift && onDelete && (
               <button
                 type="button"
-                onClick={() => onDelete(editingShift.id)}
+                onClick={() => {
+                  if (confirm('Opravdu chcete smazat tuto směnu?')) {
+                    onDelete(editingShift.id);
+                    onClose();
+                  }
+                }}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
               >
                 Smazat
@@ -631,6 +712,118 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
             </div>
           </div>
         </form>
+
+        {/* Calendar View */}
+        {viewMode === 'month' && (
+          <div className="mt-6 border-t pt-6">
+            <div className="grid grid-cols-7 gap-2 text-center">
+              {['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'].map((day, index) => (
+                <div key={index} className="text-xs font-medium text-gray-600 mb-2">
+                  {day}
+                </div>
+              ))}
+            </div>
+            
+            {/* Calendar Days Grid */}
+            <div className="grid grid-cols-7 gap-1">
+              {eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) }).map((day, index) => {
+                const dayShifts = shiftPlans.filter(shift => 
+                  isSameMonth(day, new Date(shift.plannedStart)) && 
+                  isSameDay(day, new Date(shift.plannedStart))
+                );
+                
+                return (
+                  <div
+                    key={index}
+                    className={`
+                      relative p-2 border rounded-lg cursor-pointer transition-all
+                      ${dayShifts.length > 0 ? 'bg-blue-50 border-blue-200' : 'border-gray-200'}
+                      ${!isSameMonth(day, currentMonth) ? 'text-gray-400' : 'hover:bg-gray-50'}
+                    `}
+                    onClick={() => {
+                      if (dayShifts.length === 1) {
+                        handleShiftClick(dayShifts[0]);
+                      } else if (dayShifts.length > 1) {
+                        // Show day details when multiple shifts
+                      }
+                    }}
+                  >
+                    <div className="text-center">
+                      <div className={`text-sm font-medium ${
+                        !isSameMonth(day, currentMonth) ? 'text-gray-500' : 'text-gray-900'
+                      }`}>
+                        {format(day, 'd')}
+                      </div>
+                      {dayShifts.length > 0 && (
+                        <div className="mt-1">
+                          {dayShifts.slice(0, 2).map((shift, shiftIndex) => (
+                            <div
+                              key={shiftIndex}
+                              className={`text-xs p-1 rounded mb-1 ${
+                                shift.status === ShiftPlanStatus.Active ? 'bg-green-100 text-green-800' :
+                                shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
+                                shift.status === ShiftPlanStatus.Cancelled ? 'bg-red-100 text-red-800' :
+                                'bg-blue-100 text-blue-800'
+                              }`}
+                            >
+                              {format(new Date(shift.plannedStart), 'HH:mm')}
+                            </div>
+                          ))}
+                          {dayShifts.length > 2 && (
+                            <div className="text-xs text-gray-600">
+                              +{dayShifts.length - 2} více
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Day View */}
+        {viewMode === 'day' && (
+          <div className="mt-6 border-t pt-6">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                Směny pro {format(currentMonth, 'MMMM yyyy', { locale: cs })}
+              </h3>
+              
+              {shiftPlans
+                .filter(shift => isSameMonth(new Date(shift.plannedStart), currentMonth))
+                .sort((a, b) => new Date(a.plannedStart).getTime() - new Date(b.plannedStart).getTime())
+                .map((shift, index) => (
+                  <div key={shift.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-semibold text-gray-800">
+                          {format(new Date(shift.plannedStart), 'd. MMMM')} - {format(new Date(shift.plannedEnd), 'HH:mm')}
+                        </h4>
+                        <p className="text-sm text-gray-600">
+                          Řidič: {shift.driverName}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
+                          shift.status === ShiftPlanStatus.Active ? 'bg-green-100 text-green-800' :
+                          shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
+                          shift.status === ShiftPlanStatus.Cancelled ? 'bg-red-100 text-red-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
+                           shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
+                           shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' : 'Zrušeno'}
+                        </span>
+                      </div>
+                    </div>
+                    </div>
+                  ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

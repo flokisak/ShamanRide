@@ -234,10 +234,15 @@ const Dashboard: React.FC = () => {
     }
   }, [vehicleNumber, loadRideData]);
 
-  // Initialize vehicle number when user changes
+  // Initialize vehicle number when driver is selected
   useEffect(() => {
     const initializeVehicle = async () => {
-      if (!user || !user.email) {
+      // Get selected driver info from localStorage
+      const selectedDriverId = localStorage.getItem('selectedDriverId');
+      const selectedDriverEmail = localStorage.getItem('selectedDriverEmail');
+      const selectedDriverName = localStorage.getItem('selectedDriverName');
+
+      if (!selectedDriverId || !selectedDriverEmail) {
         setVehicleNumber(null);
         setIsLoading(false);
         return;
@@ -253,11 +258,11 @@ const Dashboard: React.FC = () => {
         ]);
         setVehicles(vehiclesData);
 
-        console.log('Looking for vehicle with email:', user.email);
+        console.log('Looking for vehicle with driver ID:', selectedDriverId);
         console.log('Available vehicles:', vehiclesData.map(v => ({ id: v.id, email: v.email, name: v.name, licensePlate: v.licensePlate, mileage: v.mileage, driverId: v.driverId })));
 
-        // Find the vehicle that matches this authenticated user's email
-        const assignedVehicle = vehiclesData.find(v => v.email === user.email);
+        // Find the vehicle that matches the selected driver
+        const assignedVehicle = vehiclesData.find(v => v.id === parseInt(selectedDriverId));
 
       if (assignedVehicle) {
         console.log('Assigned vehicle found:', assignedVehicle.id, 'mileage:', assignedVehicle.mileage);
@@ -284,16 +289,9 @@ const Dashboard: React.FC = () => {
           console.warn('Failed to compute queued data counts:', e);
         }
 
-        // Get driver info from people table using authenticated user's email
-        const driver = peopleData.find(p => p.phone === user.email || p.email === user.email);
-        if (driver) {
-          setDriverInfo({ id: driver.id, name: driver.name });
-          console.log('Driver info from people table:', driver.id, driver.name);
-        } else {
-          console.warn('Driver not found for email:', user.email);
-          console.warn('Available people:', peopleData.map(p => ({ id: p.id, name: p.name, phone: p.phone, email: p.email })));
-          setDriverInfo(null);
-        }
+        // Set driver info from selected driver data
+        setDriverInfo({ id: parseInt(selectedDriverId), name: selectedDriverName || `Driver ${selectedDriverId}` });
+        console.log('Driver info from selection:', selectedDriverId, selectedDriverName);
 
         // Load shift start/end timestamps from database if available
         if (assignedVehicle.shiftStart) {
@@ -347,11 +345,16 @@ const Dashboard: React.FC = () => {
         }
 
         console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate, 'Loaded status:', vehicleStatus);
-      } else {
-          console.warn('No vehicle found with email:', user.email);
-          console.warn('Available vehicle emails:', vehicles.map(v => v.email).filter(Boolean));
-          setError('No vehicle assigned to this driver account. Please contact your dispatcher.');
+       } else {
+          console.warn('No vehicle found with ID:', selectedDriverId);
+          console.warn('Available vehicle IDs:', vehicles.map(v => v.id));
+          setError('Vehicle not found. Please select again.');
           setVehicleNumber(null);
+          // Clear selection and reload to show selection screen
+          localStorage.removeItem('selectedDriverId');
+          localStorage.removeItem('selectedDriverEmail');
+          localStorage.removeItem('selectedDriverName');
+          setTimeout(() => window.location.reload(), 2000);
         }
       } catch (error) {
         console.error('Error initializing vehicle:', error);
@@ -363,7 +366,7 @@ const Dashboard: React.FC = () => {
     };
 
     initializeVehicle();
-  }, [user]);
+  }, []);
 
 
 
@@ -405,12 +408,13 @@ const Dashboard: React.FC = () => {
   // Initialize notifications
   useEffect(() => {
     const init = async () => {
-      if (user?.id) {
-        console.log('Initializing notifications for user:', user.id);
+      const selectedDriverId = localStorage.getItem('selectedDriverId');
+      if (selectedDriverId) {
+        console.log('Initializing notifications for driver:', selectedDriverId);
 
         // Initialize comprehensive notifications (permissions, push, wake lock)
         const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY; // Add this to .env when available
-        await initializeNotifications(user.id, vapidKey);
+        await initializeNotifications(selectedDriverId, vapidKey);
 
         // Update permission status
         if ('Notification' in window) {
@@ -421,7 +425,7 @@ const Dashboard: React.FC = () => {
       }
     };
     init();
-  }, [user?.id]);
+  }, []);
 
   // Listen for messages from service worker
   useEffect(() => {
@@ -577,7 +581,8 @@ const Dashboard: React.FC = () => {
 
     // Socket.io connection for real-time messaging and ride updates
    useEffect(() => {
-      if (!user?.id || !vehicleNumber) return;
+      const selectedDriverId = localStorage.getItem('selectedDriverId');
+      if (!selectedDriverId || !vehicleNumber) return;
 
      const waitForToken = async (timeoutMs = 3000): Promise<string | null> => {
        // Prefer global cached token if available (shared by root client)
@@ -2455,13 +2460,13 @@ const Dashboard: React.FC = () => {
         {activeCard === 'chat' && (
           <div className="space-y-6">
             <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-              <StreamChatDriver
-                vehicleNumber={vehicleNumber || 0}
-                driverName={user?.user_metadata?.name || user?.email || `Driver ${vehicleNumber}`}
-                otherDrivers={otherDrivers}
-                resetToDispatcher={chatCardActivated}
-                key={`chat-${vehicleNumber}`} // Stable key to prevent unnecessary re-mounts
-              />
+          <StreamChatDriver
+            vehicleNumber={vehicleNumber || 0}
+            driverName={driverInfo?.name || `Driver ${vehicleNumber}`}
+            otherDrivers={otherDrivers}
+            resetToDispatcher={chatCardActivated}
+            key={`chat-${vehicleNumber}`} // Stable key to prevent unnecessary re-mounts
+          />
             </div>
           </div>
         )}
@@ -2840,12 +2845,12 @@ const Dashboard: React.FC = () => {
           )}
 
          {/* Gamification Modal */}
-         <GamificationModal
-           isOpen={showGamificationModal}
-           onClose={() => setShowGamificationModal(false)}
-           driverId={driverInfo?.id || vehicleNumber || 0}
-           driverName={user?.user_metadata?.name || user?.email || licensePlate || `Vehicle ${vehicleNumber}`}
-         />
+          <GamificationModal
+            isOpen={showGamificationModal}
+            onClose={() => setShowGamificationModal(false)}
+            driverId={driverInfo?.id || vehicleNumber || 0}
+            driverName={driverInfo?.name || licensePlate || `Vehicle ${vehicleNumber}`}
+          />
 
         {/* Cancel Ride Confirmation Modal */}
         {showCancelConfirmation && (
@@ -2907,25 +2912,25 @@ const Dashboard: React.FC = () => {
           isDispatcher={!selectedDriver && !driverInfo} // Act as dispatcher when no driver selected
         />
 
-        {/* Large Card Switch at Bottom */}
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50 p-4">
-          <div className="max-w-md mx-auto">
-            <div className="flex rounded-2xl bg-slate-800/50 p-1 border border-slate-700/50">
-               <button
-                 onClick={() => setActiveCard('settings')}
-                 className={`flex-1 py-3 px-4 rounded-xl text-xs font-medium transition-all duration-200 ${
-                   activeCard === 'settings'
-                     ? 'bg-blue-600 text-white shadow-lg'
-                     : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
-                 }`}
-               >
-                 <div className="flex flex-col items-center space-y-1">
-                   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 001.066 2.573c-.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-1.543-.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.573c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 001.066 2.573c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.572c-.94-1.543-.826-3.31-2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                   </svg>
-                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                 </div>
-               </button>
+         {/* Large Card Switch at Bottom */}
+         <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700/50 p-4">
+           <div className="max-w-md mx-auto">
+             <div className="flex rounded-2xl bg-slate-800/50 p-1 border border-slate-700/50">
+                <button
+                  onClick={() => setActiveCard('operations')}
+                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-medium transition-all duration-200 ${
+                    activeCard === 'operations'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                  }`}
+                >
+                  <div className="flex flex-col items-center space-y-1">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                    <span>Jízdy</span>
+                  </div>
+                </button>
                <button
                  onClick={() => setActiveCard('shifts')}
                  className={`flex-1 py-3 px-4 rounded-xl text-xs font-medium transition-all duration-200 ${
