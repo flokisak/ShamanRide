@@ -285,37 +285,36 @@ io.on('connection', (socket) => {
     try {
       const { vehicleId, status, driverStatus, timestamp } = data;
 
-      console.log(`Vehicle ${vehicleId} status changed to ${status} by driver`);
+  console.log(`Vehicle ${vehicleId} status changed to ${status} by driver`);
 
-      // Update vehicle status in Supabase
-      const { error } = await supabase
-        .from('vehicles')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', vehicleId);
+  try {
+    // Update vehicle status in Supabase
+    const { error } = await supabase
+      .from('vehicles')
+      .update({ vehicle_status: status, updated_at: new Date().toISOString() })
+      .eq('id', vehicleId);
 
-      if (error) {
-        console.error('Error updating vehicle status in database:', error);
-        console.error('Supabase URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
-        console.error('Service Key:', process.env.SUPABASE_SERVICE_KEY ? 'SET (length: ' + process.env.SUPABASE_SERVICE_KEY.length + ')' : 'NOT SET');
-        socket.emit('vehicle_status_error', { vehicleId, error: error.message });
-        return;
-      }
-
-      console.log(`Vehicle ${vehicleId} status updated to ${status} in database`);
-      }
-
-      // Broadcast to all connected clients (dispatchers and other drivers)
-      console.log(`Broadcasting vehicle_status_updated for vehicle ${vehicleId} with status ${status}`);
-      socket.broadcast.emit('vehicle_status_updated', {
-        vehicleId: parseInt(vehicleId),
-        status,
-        driverStatus,
-        timestamp
-      });
-
-    } catch (err) {
-      console.error('Error handling vehicle status change:', err);
+    if (error) {
+      console.error('Error updating vehicle status in database:', error);
+      console.error('Supabase URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+      console.error('Service Key:', process.env.SUPABASE_SERVICE_KEY ? 'SET (length: ' + process.env.SUPABASE_SERVICE_KEY.length + ')' : 'NOT SET');
+      socket.emit('vehicle_status_error', { vehicleId, error: error.message });
+      return;
     }
+
+    console.log(`Vehicle ${vehicleId} status updated to ${status} in database`);
+
+    // Broadcast to all connected clients (dispatchers and other drivers)
+    console.log(`Broadcasting vehicle_status_updated for vehicle ${vehicleId} with status ${status}`);
+    socket.broadcast.emit('vehicle_status_updated', {
+      vehicleId: parseInt(vehicleId),
+      status,
+      driverStatus,
+      timestamp
+    });
+  } catch (err) {
+    console.error('Error handling vehicle status change:', err);
+  }
   });
 
   // Handle bulk vehicle updates (from dispatcher UI)
