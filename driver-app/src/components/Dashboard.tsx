@@ -2003,6 +2003,7 @@ const Dashboard: React.FC = () => {
       throw error;
     }
   };
+  };
 
   const handleDeleteShift = async (id: string) => {
     if (!shiftPlanningService) return;
