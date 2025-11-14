@@ -39,6 +39,7 @@ import { DailyStats } from './components/DailyStats';
 import { GamificationModal } from './components/GamificationModal';
 import { GamificationService } from './services/gamificationService';
 import ShiftPlanningModal from './components/ShiftPlanningModal';
+import ShiftListModal from './components/ShiftListModal';
 
 // Extend window interface for socket storage
 declare global {
@@ -254,6 +255,7 @@ const AppContent: React.FC = () => {
   // Gamification modal
   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
   const [isShiftPlanningModalOpen, setIsShiftPlanningModalOpen] = useState(false);
+  const [isShiftListModalOpen, setIsShiftListModalOpen] = useState(false);
   const [socketRidesExpanded, setSocketRidesExpanded] = useState(false);
   const [rideHistoryExpanded, setRideHistoryExpanded] = useState(true);
 
@@ -2186,15 +2188,26 @@ const AppContent: React.FC = () => {
                     <TrophyIcon className="w-3 h-3" />
                     <span>Gamifikace</span>
                   </button>
-                  <button
-                    onClick={() => setIsShiftPlanningModalOpen(true)}
-                    className="flex items-center space-x-2 px-3 py-1 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span>Směny</span>
-                  </button>
+                   <div className="flex items-center space-x-1">
+                     <button
+                       onClick={() => setIsShiftPlanningModalOpen(true)}
+                       className="flex items-center space-x-2 px-3 py-1 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
+                     >
+                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                       </svg>
+                       <span>Plánování</span>
+                     </button>
+                     <button
+                       onClick={() => setIsShiftListModalOpen(true)}
+                       className="flex items-center space-x-2 px-3 py-1 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
+                     >
+                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                       </svg>
+                       <span>Seznam</span>
+                     </button>
+                   </div>
               </nav>
              </div>
 
@@ -2482,12 +2495,19 @@ const AppContent: React.FC = () => {
         people={people}
       />
 
-      {/* Shift Planning Modal */}
-      <ShiftPlanningModal
-        isOpen={isShiftPlanningModalOpen}
-        onClose={() => setIsShiftPlanningModalOpen(false)}
-        supabase={supabase}
-      />
+       {/* Shift Planning Modal */}
+       <ShiftPlanningModal
+         isOpen={isShiftPlanningModalOpen}
+         onClose={() => setIsShiftPlanningModalOpen(false)}
+         supabase={supabase}
+       />
+
+       {/* Shift List Modal */}
+       <ShiftListModal
+         isOpen={isShiftListModalOpen}
+         onClose={() => setIsShiftListModalOpen(false)}
+         supabase={supabase}
+       />
 
       {/* Authentication Modals */}
       <LoginModal
