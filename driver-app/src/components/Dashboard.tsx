@@ -1464,9 +1464,9 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        </div>
-      </div>
-      );
-   };
+         </div>
+       </div>
+       );
+  };
   
  export default Dashboard;
