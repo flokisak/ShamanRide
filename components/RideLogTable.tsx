@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { RideLog, VehicleType, RideStatus, MessagingApp, Person, Vehicle } from '../types';
-import { CarIcon, TrashIcon, EditIcon, MessageIcon, CalendarIcon } from './icons';
+import { CarIcon, TrashIcon, EditIcon, MessageIcon, CalendarIcon, CopyIcon } from './icons';
 import { useTranslation } from '../contexts/LanguageContext';
 
 interface RideLogTableProps {
@@ -11,6 +11,7 @@ interface RideLogTableProps {
      onStatusChange: (logId: string, newStatus: RideStatus) => void;
     onDelete: (logId: string) => void;
     onEdit: (logId: string) => void;
+    onDuplicate: (log: RideLog) => void;
     onSendSms: (logId: string) => void;
     onResendRide?: (logId: string) => void;
     onSendToDriver?: (logId: string) => void;
@@ -27,7 +28,7 @@ interface RideLogTableProps {
 
 
 
-export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onStatusChange, onDelete, onEdit, onSendSms, onResendRide, onSendToDriver, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange, hasNewRides, onMarkRidesViewed }) => {
+export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, people, messagingApp, onStatusChange, onDelete, onEdit, onDuplicate, onSendSms, onResendRide, onSendToDriver, showCompleted, onToggleShowCompleted, dateFilter, onDateFilterChange, timeFilter, onTimeFilterChange, hasNewRides, onMarkRidesViewed }) => {
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
@@ -427,16 +428,24 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                        </select>
                      </div>
 
-                       {/* Actions */}
-                       <div className="col-span-1 flex flex-row gap-1">
-                        <button
-                          onClick={() => onEdit(log.id)}
-                          className="px-1 py-1 text-gray-500 hover:text-blue-500 transition-colors rounded text-xs"
-                          aria-label={t('rideLog.table.editRideFor', { customerName: log.customerName })}
-                          title="Edit"
-                        >
-                          ✏️
-                        </button>
+                        {/* Actions */}
+                        <div className="col-span-1 flex flex-row gap-1">
+                         <button
+                           onClick={() => onEdit(log.id)}
+                           className="px-1 py-1 text-gray-500 hover:text-blue-500 transition-colors rounded text-xs"
+                           aria-label={t('rideLog.table.editRideFor', { customerName: log.customerName })}
+                           title="Edit"
+                         >
+                           ✏️
+                         </button>
+                         <button
+                           onClick={() => onDuplicate(log)}
+                           className="px-1 py-1 text-gray-500 hover:text-green-500 transition-colors rounded text-xs"
+                           aria-label={`Duplicate ride for ${log.customerName}`}
+                           title="Duplicate"
+                         >
+                           📋
+                         </button>
                        <button
                          onClick={() => onSendSms(log.id)}
                          className="px-1 py-1 text-gray-500 hover:text-green-500 transition-colors rounded text-xs"
