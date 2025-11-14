@@ -486,9 +486,8 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       console.error('Error updating shift plan:', error);
       throw error;
-    }
-  };
-  };
+     }
+   };
 
   const handleDeleteShift = async (id: string) => {
     if (!shiftPlanningService) return;
@@ -1463,8 +1462,8 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           </div>
-
           </div>
+
         </div>
          );
 };

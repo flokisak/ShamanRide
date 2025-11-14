@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShiftPlan, ShiftPlanStatus, RecurringPattern, Person } from '../types';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, getDay } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { cs } from 'date-fns/locale';
 import { ShiftPlanningService } from '../services/shiftPlanningService';
 
@@ -43,16 +43,16 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
   const loadData = async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       const monthStart = startOfMonth(currentMonth);
       const monthEnd = endOfMonth(currentMonth);
-      
+
       const [plans, drivers] = await Promise.all([
         shiftPlanningService!.getAllShiftPlans(monthStart, monthEnd),
         shiftPlanningService!.getAvailableDrivers()
       ]);
-      
+
       setShiftPlans(plans);
       setAvailableDrivers(drivers);
     } catch (err: any) {
@@ -62,14 +62,12 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
     }
   };
 
-  // Get shifts for a specific date
   const getShiftsForDate = (date: Date): ShiftPlan[] => {
-    return shiftPlans.filter(shift => 
+    return shiftPlans.filter(shift =>
       isSameDay(new Date(shift.plannedStart), date)
     );
   };
 
-  // Get status color
   const getStatusColor = (status: ShiftPlanStatus): string => {
     switch (status) {
       case ShiftPlanStatus.Planned:
@@ -85,39 +83,33 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
     }
   };
 
-  // Navigate months
   const previousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
 
-  // Handle shift click
   const handleShiftClick = (shift: ShiftPlan) => {
     setEditingShift(shift);
     setShowCreateModal(true);
   };
 
-  // Handle create new shift
   const handleCreateShift = () => {
     setEditingShift(undefined);
     setShowCreateModal(true);
   };
 
-  // Handle save shift
   const handleSaveShift = async (shiftPlan: Omit<ShiftPlan, 'id' | 'createdAt' | 'updatedAt'>) => {
     if (!shiftPlanningService) return;
-    
+
     try {
       if (shiftPlan.recurringPattern && shiftPlan.recurringPattern !== RecurringPattern.None && shiftPlan.recurringEndDate) {
-        // Create recurring shifts
         await shiftPlanningService.createRecurringShiftPlans(
           shiftPlan,
           shiftPlan.recurringPattern,
           shiftPlan.recurringEndDate
         );
       } else {
-        // Create single shift
         await shiftPlanningService.createShiftPlan(shiftPlan);
       }
-      
+
       setShowCreateModal(false);
       await loadData();
     } catch (error: any) {
@@ -126,10 +118,9 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
     }
   };
 
-  // Handle update shift
   const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
     if (!shiftPlanningService) return;
-    
+
     try {
       await shiftPlanningService.updateShiftPlan(id, updates);
       setShowCreateModal(false);
@@ -141,12 +132,11 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
     }
   };
 
-  // Handle delete shift
   const handleDeleteShift = async (id: string) => {
     if (!shiftPlanningService) return;
-    
+
     if (!confirm('Opravdu chcete smazat tuto směnu?')) return;
-    
+
     try {
       await shiftPlanningService.deleteShiftPlan(id);
       await loadData();
@@ -198,11 +188,11 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              
+
               <h3 className="text-lg font-semibold text-gray-800">
                 {format(currentMonth, 'MMMM yyyy', { locale: cs })}
               </h3>
-              
+
               <button
                 onClick={nextMonth}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -246,31 +236,26 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                 const isToday = isSameDay(day, new Date());
 
-                 return (
-                   <div
-                     key={index}
-                     onClick={() => {
-                       setSelectedDate(day);
-                       setViewMode('day');
-                     }}
-                     className={`
-                       relative p-2 h-24 border rounded-lg cursor-pointer transition-all
-                       ${isSelected ? 'bg-blue-50 border-blue-400' : 'border-gray-200'}
-                       ${isToday ? 'ring-2 ring-blue-400' : ''}
-                       ${shifts.length > 0 ? 'bg-blue-50' : ''}
-                       hover:bg-gray-50
-                     `}
-                   >
-                     <div className={`
-                       text-sm font-medium mb-1
-                       ${isToday ? 'text-blue-600' : 'text-gray-700'}
-                       ${!isSameMonth(day, currentMonth) ? 'text-gray-400' : ''}
-                     `}>
-                       {format(day, 'd')}
-                       {shifts.length > 0 && (
-                         <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mt-1"></div>
-                       )}
-                     </div>
+                return (
+                  <div
+                    key={index}
+                    onClick={() => {
+                      setSelectedDate(day);
+                    }}
+                    className={`relative p-2 h-24 border rounded-lg cursor-pointer transition-all ${
+                      isSelected ? 'bg-blue-50 border-blue-400' : 'border-gray-200'
+                    } ${isToday ? 'ring-2 ring-blue-400' : ''} ${
+                      shifts.length > 0 ? 'bg-blue-50' : ''
+                    } hover:bg-gray-50`}
+                  >
+                    <div className={`text-sm font-medium mb-1 ${
+                      isToday ? 'text-blue-600' : 'text-gray-700'
+                    } ${!isSameMonth(day, currentMonth) ? 'text-gray-400' : ''}`}>
+                      {format(day, 'd')}
+                      {shifts.length > 0 && (
+                        <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mt-1"></div>
+                      )}
+                    </div>
 
                     {/* Shift Indicators */}
                     <div className="space-y-1">
@@ -281,16 +266,12 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                             e.stopPropagation();
                             handleShiftClick(shift);
                           }}
-                          className={`
-                            ${getStatusColor(shift.status)}
-                            text-xs text-white px-1 py-0.5 rounded truncate
-                            hover:opacity-80 cursor-pointer
-                          `}
+                          className={`text-xs text-white px-1 py-0.5 rounded truncate hover:opacity-80 cursor-pointer ${getStatusColor(shift.status)}`}
                         >
                           {shift.driverName} ({format(new Date(shift.plannedStart), 'HH:mm')})
                         </div>
                       ))}
-                      
+
                       {shifts.length > 2 && (
                         <div className="text-xs text-gray-500 text-center">
                           +{shifts.length - 2} více
@@ -357,8 +338,6 @@ interface ShiftCreateEditModalProps {
   editingShift?: ShiftPlan;
   availableDrivers: Person[];
   isDispatcher: boolean;
-  selectedDriverId?: number;
-  onDriverChange?: (driverId: number) => void;
 }
 
 const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
@@ -369,12 +348,10 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
   onDelete,
   editingShift,
   availableDrivers,
-  isDispatcher,
-  selectedDriverId,
-  onDriverChange
+  isDispatcher
 }) => {
   const [formData, setFormData] = useState({
-    driverId: selectedDriverId || 0,
+    driverId: 0,
     plannedStart: '',
     plannedEnd: '',
     status: ShiftPlanStatus.Planned,
@@ -384,8 +361,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'day'>('month');
 
   useEffect(() => {
     if (editingShift) {
@@ -396,16 +371,15 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
         status: editingShift.status,
         notes: editingShift.notes || '',
         recurringPattern: editingShift.recurringPattern || RecurringPattern.None,
-        recurringEndDate: editingShift.recurringEndDate 
+        recurringEndDate: editingShift.recurringEndDate
           ? format(new Date(editingShift.recurringEndDate), 'yyyy-MM-dd')
           : ''
       });
     } else {
-      // Reset form for new shift
       const now = new Date();
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
+
       setFormData({
         driverId: 0,
         plannedStart: format(tomorrow, "yyyy-MM-dd'T'09:00"),
@@ -424,7 +398,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
     setError('');
 
     try {
-      // Validate dates
       const startDate = new Date(formData.plannedStart);
       const endDate = new Date(formData.plannedEnd);
 
@@ -433,7 +406,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
         return;
       }
 
-      // Validate recurring end date
       if (formData.recurringPattern !== RecurringPattern.None && formData.recurringEndDate) {
         const recurringEnd = new Date(formData.recurringEndDate);
         if (recurringEnd <= startDate) {
@@ -448,11 +420,11 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
         plannedEnd: endDate,
         status: formData.status,
         notes: formData.notes || undefined,
-        recurringPattern: formData.recurringPattern !== RecurringPattern.None 
-          ? formData.recurringPattern 
+        recurringPattern: formData.recurringPattern !== RecurringPattern.None
+          ? formData.recurringPattern
           : undefined,
-        recurringEndDate: formData.recurringEndDate 
-          ? new Date(formData.recurringEndDate) 
+        recurringEndDate: formData.recurringEndDate
+          ? new Date(formData.recurringEndDate)
           : undefined
       };
 
@@ -487,32 +459,15 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
           <h2 className="text-xl font-bold text-gray-800">
             {editingShift ? 'Upravit směnu' : 'Naplánovat směnu'}
           </h2>
-          
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setViewMode('month')}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'month' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              📅 Měsíc
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('day')}
-              className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                viewMode === 'day' 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-              }`}
-            >
-              📅 Den
-            </button>
-          </div>
+
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
         {error && (
@@ -521,72 +476,29 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
           </div>
         )}
 
-        {/* Month Navigation */}
-        {viewMode === 'month' && (
-          <div className="flex items-center justify-between mb-4">
-            <button
-              type="button"
-              onClick={() => setCurrentMonth(subMonths(currentMonth, -1))}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              ◀ Předchozí měsíc
-            </button>
-            <span className="text-lg font-semibold text-gray-800">
-              {format(currentMonth, 'MMMM yyyy', { locale: cs })}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              Následující měsíc ▶
-            </button>
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Driver Selection */}
           {isDispatcher && (
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-1">
                 Řidič
               </label>
-              <div className="flex gap-2">
-                <select
-                  name="driverId"
-                  value={formData.driverId}
-                  onChange={(e) => {
-                    const driverId = parseInt(e.target.value);
-                    setFormData(prev => ({ ...prev, driverId }));
-                    if (onDriverChange) onDriverChange(driverId);
-                  }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-                  required
-                >
-                  <option value={0} disabled>Vyberte řidiče...</option>
-                  {availableDrivers.map(driver => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedDriverId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData(prev => ({ ...prev, driverId: 0 }));
-                      if (onDriverChange) onDriverChange(0);
-                    }}
-                    className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm"
-                  >
-                    Zrušit výběr
-                  </button>
-                )}
-              </div>
+              <select
+                name="driverId"
+                value={formData.driverId}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                required
+              >
+                <option value={0} disabled>Vyberte řidiče...</option>
+                {availableDrivers.map(driver => (
+                  <option key={driver.id} value={driver.id}>
+                    {driver.name}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
-          {/* Date and Time Inputs */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-1">
@@ -616,7 +528,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
             </div>
           </div>
 
-          {/* Status and Recurring */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-1">
@@ -652,7 +563,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
             </div>
           </div>
 
-          {/* Recurring End Date */}
           {formData.recurringPattern !== RecurringPattern.None && (
             <div>
               <label className="block text-gray-700 text-sm font-medium mb-1">
@@ -669,7 +579,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
             </div>
           )}
 
-          {/* Notes */}
           <div>
             <label className="block text-gray-700 text-sm font-medium mb-1">
               Poznámky
@@ -684,7 +593,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
             />
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
             {editingShift && onDelete && (
               <button
@@ -718,141 +626,9 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
             </div>
           </div>
         </form>
-
-        {/* Calendar View */}
-        {viewMode === 'month' && (
-          <div className="mt-6 border-t pt-6">
-            <div className="grid grid-cols-7 gap-2 text-center">
-              {['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'].map((day, index) => (
-                <div key={index} className="text-xs font-medium text-gray-600 mb-2">
-                  {day}
-                </div>
-              ))}
-            </div>
-            
-            {/* Calendar Days Grid */}
-            <div className="grid grid-cols-7 gap-1">
-              {eachDayOfInterval({ start: startOfMonth(currentMonth), end: endOfMonth(currentMonth) }).map((day, index) => {
-                const dayShifts = shiftPlans.filter(shift => 
-                  isSameMonth(day, new Date(shift.plannedStart)) && 
-                  isSameDay(day, new Date(shift.plannedStart))
-                );
-                
-                return (
-                  <div
-                    key={index}
-                    className={`
-                      relative p-2 border rounded-lg cursor-pointer transition-all
-                      ${dayShifts.length > 0 ? 'bg-blue-50 border-blue-200' : 'border-gray-200'}
-                      ${!isSameMonth(day, currentMonth) ? 'text-gray-400' : 'hover:bg-gray-50'}
-                    `}
-                    onClick={() => {
-                      if (dayShifts.length === 1) {
-                        handleShiftClick(dayShifts[0]);
-                      } else if (dayShifts.length > 1) {
-                        // Show day details when multiple shifts
-                      }
-                    }}
-                  >
-                    <div className="text-center">
-                      <div className={`text-sm font-medium ${
-                        !isSameMonth(day, currentMonth) ? 'text-gray-500' : 'text-gray-900'
-                      }`}>
-                        {format(day, 'd')}
-                      </div>
-                      {dayShifts.length > 0 && (
-                        <div className="mt-1">
-                          {dayShifts.slice(0, 2).map((shift, shiftIndex) => (
-                            <div
-                              key={shiftIndex}
-                              className={`text-xs p-1 rounded mb-1 ${
-                                shift.status === ShiftPlanStatus.Active ? 'bg-green-100 text-green-800' :
-                                shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
-                                shift.status === ShiftPlanStatus.Cancelled ? 'bg-red-100 text-red-800' :
-                                'bg-blue-100 text-blue-800'
-                              }`}
-                            >
-                              {format(new Date(shift.plannedStart), 'HH:mm')}
-                            </div>
-                          ))}
-                          {dayShifts.length > 2 && (
-                            <div className="text-xs text-gray-600">
-                              +{dayShifts.length - 2} více
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-         {/* Day View */}
-         {viewMode === 'day' && (
-           <div className="mt-6 border-t pt-6">
-             {!selectedDate && (
-               <div className="text-center text-gray-500 mb-4">
-                 Vyberte den v měsíčním pohledu pro zobrazení směn
-               </div>
-             )}
-             {selectedDate && (
-           <div className="mt-6 border-t pt-6">
-             <div className="space-y-4">
-               <div className="flex items-center justify-between mb-4">
-                 <h3 className="text-lg font-semibold text-gray-800">
-                  Směny pro {format(selectedDate, 'd. MMMM yyyy', { locale: cs })}
-                 </h3>
-                 <button
-                   type="button"
-                   onClick={() => setViewMode('month')}
-                   className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm"
-                 >
-                   ← Zpět na měsíc
-                 </button>
-               </div>
-               
-               {shiftPlans
-                 .filter(shift => isSameDay(new Date(shift.plannedStart), selectedDate))
-                 .sort((a, b) => new Date(a.plannedStart).getTime() - new Date(b.plannedStart).getTime())
-                 .map((shift, index) => (
-                  <div key={shift.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h4 className="font-semibold text-gray-800">
-                          {format(new Date(shift.plannedStart), 'd. MMMM')} - {format(new Date(shift.plannedEnd), 'HH:mm')}
-                        </h4>
-                        <p className="text-sm text-gray-600">
-                          Řidič: {shift.driverName}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                          shift.status === ShiftPlanStatus.Active ? 'bg-green-100 text-green-800' :
-                          shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
-                          shift.status === ShiftPlanStatus.Cancelled ? 'bg-red-100 text-red-800' :
-                          'bg-blue-100 text-blue-800'
-                         }`}>
-                           {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
-                            shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
-                            shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' : 'Zrušeno'}
-                         </span>
-                      </div>
-                    </div>
-                    </div>
-                  ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
-     </div>
-     </div>
-     )}
-   );
-};
+  );
 };
 
 export default ShiftPlanningModal;
