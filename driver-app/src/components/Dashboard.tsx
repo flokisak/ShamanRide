@@ -1850,53 +1850,79 @@ const Dashboard: React.FC = () => {
 
   // Initialize shift planning service
   useEffect(() => {
-    if (supabase && driverInfo) {
+    if (supabase) {
       const service = new ShiftPlanningService(supabase);
       setShiftPlanningService(service);
       
-      // Load driver's shift plans
-      loadShiftPlans(service, driverInfo.id);
+      // Load shift plans for all drivers (dispatcher view) or current driver if assigned
+      if (driverInfo) {
+        loadShiftPlans(service, driverInfo.id);
+      } else {
+        // Load all shift plans so dispatcher can see/manage all
+        loadAllShiftPlans(service);
+      }
     }
   }, [supabase, driverInfo]);
 
   const loadShiftPlans = async (service: ShiftPlanningService, driverId: number) => {
-      try {
-        const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        
-        const plans = await service.getDriverShiftPlans(driverId, startOfMonth, endOfMonth);
-        setShiftPlans(plans);
-      } catch (error) {
-        console.error('Error loading shift plans:', error);
-      }
-    };
+    try {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      const plans = await service.getDriverShiftPlans(driverId, startOfMonth, endOfMonth);
+      setShiftPlans(plans);
+    } catch (error) {
+      console.error('Error loading shift plans:', error);
+    }
+  };
+
+  const loadAllShiftPlans = async (service: ShiftPlanningService) => {
+    try {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      const plans = await service.getAllShiftPlans(startOfMonth, endOfMonth);
+      setShiftPlans(plans);
+    } catch (error) {
+      console.error('Error loading all shift plans:', error);
+    }
+  };
 
   const handleCreateShift = async (shiftPlan: Omit<ShiftPlan, 'id' | 'createdAt' | 'updatedAt'>) => {
-    if (!shiftPlanningService || !driverInfo) return;
+    if (!shiftPlanningService) return;
     
     try {
-      // Auto-assign driver ID and name from logged-in driver
-      const shiftPlanWithDriver = {
-        ...shiftPlan,
-        driverId: driverInfo.id,
-        driverName: driverInfo.name
-      };
+      let finalShiftPlan = { ...shiftPlan };
       
-      if (shiftPlan.recurringPattern && shiftPlan.recurringPattern !== RecurringPattern.None && shiftPlan.recurringEndDate) {
+      // Auto-assign driver ID and name only when driver is logged in
+      if (driverInfo) {
+        finalShiftPlan = {
+          ...finalShiftPlan,
+          driverId: driverInfo.id,
+          driverName: driverInfo.name
+        };
+      }
+      
+      if (finalShiftPlan.recurringPattern && finalShiftPlan.recurringPattern !== RecurringPattern.None && finalShiftPlan.recurringEndDate) {
         // Create recurring shifts
         await shiftPlanningService.createRecurringShiftPlans(
-          shiftPlanWithDriver,
-          shiftPlan.recurringPattern,
-          shiftPlan.recurringEndDate
+          finalShiftPlan,
+          finalShiftPlan.recurringPattern,
+          finalShiftPlan.recurringEndDate
         );
       } else {
         // Create single shift
-        await shiftPlanningService.createShiftPlan(shiftPlanWithDriver);
+        await shiftPlanningService.createShiftPlan(finalShiftPlan);
       }
       
       // Reload shift plans
-      await loadShiftPlans(shiftPlanningService, driverInfo.id);
+      if (driverInfo) {
+        await loadShiftPlans(shiftPlanningService, driverInfo.id);
+      } else {
+        await loadAllShiftPlans(shiftPlanningService);
+      }
     } catch (error) {
       console.error('Error creating shift plan:', error);
       throw error;
@@ -2114,33 +2140,7 @@ const Dashboard: React.FC = () => {
                             </button>
                          </div>
                        )}
-            </div>
-
-            {/* Shift Planning Card */}
-            <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-white">Plánování směn</h2>
-                <button
-                  onClick={() => {
-                    setEditingShift(undefined);
-                    setShowShiftPlanningModal(true);
-                  }}
-                  className="p-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
-                  title="Přidat novou směnu"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-              </div>
-
-              <ShiftCalendar
-                shiftPlans={shiftPlans}
-                onDateSelect={handleDateSelect}
-                onShiftClick={handleShiftClick}
-                selectedDate={selectedDate}
-              />
-            </div>
+             </div>
            </div>
          )}
 
@@ -2353,6 +2353,15 @@ const Dashboard: React.FC = () => {
                   </svg>
                 </button>
               </div>
+
+              {/* Driver Selection for Dispatcher View */}
+              {!driverInfo && (
+                <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
+                  <p className="text-yellow-200 text-sm">
+                    ⚠️ Nejdříve se přihlastě jako řidič. Pro plánování směn vyberte svůj účet z nabídky.
+                  </p>
+                </div>
+              )}
 
               <ShiftCalendar
                 shiftPlans={shiftPlans}
@@ -2817,7 +2826,7 @@ const Dashboard: React.FC = () => {
           onUpdate={handleUpdateShift}
           editingShift={editingShift}
           driverId={driverInfo?.id}
-          isDispatcher={false}
+          isDispatcher={!driverInfo} // Act as dispatcher when no driver assigned
         />
 
         {/* Large Card Switch at Bottom */}
