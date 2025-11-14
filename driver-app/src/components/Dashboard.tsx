@@ -15,6 +15,10 @@ import { GamificationModal } from './GamificationModal';
 import { NotificationSettingsModal } from './NotificationSettingsModal';
 import { StreamChatDriver } from './StreamChatDriver';
 import { testNotifications } from '../utils/testNotifications';
+import ShiftPlanningModal from './ShiftPlanningModal';
+import ShiftCalendar from './ShiftCalendar';
+import { ShiftPlanningService } from '../../../services/shiftPlanningService';
+import { ShiftPlan, ShiftPlanStatus, RecurringPattern } from '../../../types';
 
 import io from 'socket.io-client';
 import { safeGetAccessToken, getCachedAccessToken } from '../supabaseClient';
@@ -94,10 +98,17 @@ const Dashboard: React.FC = () => {
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
     const [queuedDataCount, setQueuedDataCount] = useState(0);
   const [vehicles, setVehicles] = useState<any[]>([]);
-    const [driverInfo, setDriverInfo] = useState<{id: number, name: string} | null>(null);
+     const [driverInfo, setDriverInfo] = useState<{id: number, name: string} | null>(null);
     const [flashingRides, setFlashingRides] = useState<Set<string>>(new Set());
-    const [activeCard, setActiveCard] = useState<'operations' | 'chat' | 'settings'>('operations');
-    const [chatCardActivated, setChatCardActivated] = useState<number>(0);
+     const [activeCard, setActiveCard] = useState<'operations' | 'chat' | 'settings'>('operations');
+     const [chatCardActivated, setChatCardActivated] = useState<number>(0);
+     
+     // Shift planning state
+     const [showShiftPlanningModal, setShowShiftPlanningModal] = useState(false);
+     const [editingShift, setEditingShift] = useState<ShiftPlan | undefined>(undefined);
+     const [shiftPlans, setShiftPlans] = useState<ShiftPlan[]>([]);
+     const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+     const [shiftPlanningService, setShiftPlanningService] = useState<ShiftPlanningService | null>(null);
 
   // Driver-specific sync function using driver app's socket
   const syncUpdateVehicles = useCallback(async (updatedVehicles: any[], options?: any) => {
@@ -271,17 +282,14 @@ const Dashboard: React.FC = () => {
           console.warn('Failed to compute queued data counts:', e);
         }
 
-        // Get driver info from dispatcher assignment (vehicle's driverId)
-        if (assignedVehicle.driverId) {
-          const driver = peopleData.find(p => p.id === assignedVehicle.driverId);
-          if (driver) {
-            setDriverInfo({ id: driver.id, name: driver.name });
-            console.log('Driver info from dispatcher assignment:', driver.id, driver.name);
-          } else {
-            console.warn('Driver not found for driverId:', assignedVehicle.driverId);
-            setDriverInfo(null);
-          }
+        // Get driver info from people table using authenticated user's email
+        const driver = peopleData.find(p => p.phone === user.email || p.email === user.email);
+        if (driver) {
+          setDriverInfo({ id: driver.id, name: driver.name });
+          console.log('Driver info from people table:', driver.id, driver.name);
         } else {
+          console.warn('Driver not found for email:', user.email);
+          console.warn('Available people:', peopleData.map(p => ({ id: p.id, name: p.name, phone: p.phone, email: p.email })));
           setDriverInfo(null);
         }
 
@@ -589,7 +597,7 @@ const Dashboard: React.FC = () => {
       const initSocket = async () => {
         setRealtimeConnectionStatus('connecting');
         const token = await waitForToken(3000);
-        const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+        const socketUrl = import.meta.env.VITE_SOCKET_URL || import.meta.env.REACT_APP_SOCKET_URL || 'http://localhost:3000';
 
         if (!token) {
           console.error('Driver Dashboard: no access token available, aborting socket connection');
@@ -1840,6 +1848,97 @@ const Dashboard: React.FC = () => {
 
     const currentShiftRevenue = calculateCurrentShiftRevenue();
 
+  // Initialize shift planning service
+  useEffect(() => {
+    if (supabase && driverInfo) {
+      const service = new ShiftPlanningService(supabase);
+      setShiftPlanningService(service);
+      
+      // Load driver's shift plans
+      loadShiftPlans(service, driverInfo.id);
+    }
+  }, [supabase, driverInfo]);
+
+  const loadShiftPlans = async (service: ShiftPlanningService, driverId: number) => {
+      try {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        const plans = await service.getDriverShiftPlans(driverId, startOfMonth, endOfMonth);
+        setShiftPlans(plans);
+      } catch (error) {
+        console.error('Error loading shift plans:', error);
+      }
+    };
+
+    const handleCreateShift = async (shiftPlan: Omit<ShiftPlan, 'id' | 'createdAt' | 'updatedAt'>) => {
+      if (!shiftPlanningService) return;
+      
+      try {
+        if (shiftPlan.recurringPattern && shiftPlan.recurringPattern !== RecurringPattern.None && shiftPlan.recurringEndDate) {
+          // Create recurring shifts
+          await shiftPlanningService.createRecurringShiftPlans(
+            shiftPlan,
+            shiftPlan.recurringPattern,
+            shiftPlan.recurringEndDate
+          );
+        } else {
+          // Create single shift
+          await shiftPlanningService.createShiftPlan(shiftPlan);
+        }
+        
+        // Reload shift plans
+        if (driverInfo) {
+          await loadShiftPlans(shiftPlanningService, driverInfo.id);
+        }
+      } catch (error) {
+        console.error('Error creating shift plan:', error);
+        throw error;
+      }
+    };
+
+    const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
+      if (!shiftPlanningService) return;
+      
+      try {
+        await shiftPlanningService.updateShiftPlan(id, updates);
+        
+        // Reload shift plans
+        if (driverInfo) {
+          await loadShiftPlans(shiftPlanningService, driverInfo.id);
+        }
+      } catch (error) {
+        console.error('Error updating shift plan:', error);
+        throw error;
+      }
+    };
+
+    const handleDeleteShift = async (id: string) => {
+      if (!shiftPlanningService) return;
+      
+      try {
+        await shiftPlanningService.deleteShiftPlan(id);
+        
+        // Reload shift plans
+        if (driverInfo) {
+          await loadShiftPlans(shiftPlanningService, driverInfo.id);
+        }
+      } catch (error) {
+        console.error('Error deleting shift plan:', error);
+        throw error;
+      }
+    };
+
+    const handleDateSelect = (date: Date) => {
+      setSelectedDate(date);
+    };
+
+    const handleShiftClick = (shift: ShiftPlan) => {
+      setEditingShift(shift);
+      setShowShiftPlanningModal(true);
+    };
+
     // Calculate cash payments for the current active shift
     const calculateCurrentShiftCash = useCallback(() => {
       if (!isShiftActive || !shiftStartTimestamp || !rideHistory.length) {
@@ -2010,9 +2109,35 @@ const Dashboard: React.FC = () => {
                             </button>
                          </div>
                        )}
-                 </div>
+            </div>
+
+            {/* Shift Planning Card */}
+            <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-white">Plánování směn</h2>
+                <button
+                  onClick={() => {
+                    setEditingShift(undefined);
+                    setShowShiftPlanningModal(true);
+                  }}
+                  className="p-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
+                  title="Přidat novou směnu"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
               </div>
-            )}
+
+              <ShiftCalendar
+                shiftPlans={shiftPlans}
+                onDateSelect={handleDateSelect}
+                onShiftClick={handleShiftClick}
+                selectedDate={selectedDate}
+              />
+            </div>
+           </div>
+         )}
 
 
 
@@ -2643,6 +2768,20 @@ const Dashboard: React.FC = () => {
         <NotificationSettingsModal
           isOpen={showNotificationSettingsModal}
           onClose={() => setShowNotificationSettingsModal(false)}
+        />
+
+        {/* Shift Planning Modal */}
+        <ShiftPlanningModal
+          isOpen={showShiftPlanningModal}
+          onClose={() => {
+            setShowShiftPlanningModal(false);
+            setEditingShift(undefined);
+          }}
+          onSave={handleCreateShift}
+          onUpdate={handleUpdateShift}
+          editingShift={editingShift}
+          driverId={driverInfo?.id}
+          isDispatcher={false}
         />
 
         {/* Large Card Switch at Bottom */}
