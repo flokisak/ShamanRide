@@ -9,6 +9,7 @@ interface ManualEntryModalProps {
   onClose: () => void;
   people: Person[];
   onEntryAdded?: () => void;
+  onDuplicateRide?: () => void;
 }
 
 export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
@@ -25,6 +26,8 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
   const [description, setDescription] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [duplicateRide, setDuplicateRide] = useState<any>(null);
 
   const drivers = people.filter(person => person.role === 'Driver');
 
@@ -48,19 +51,71 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDriver) return;
+    if (!selectedDriver || !title.trim()) return;
 
-    setIsSubmitting(true);
     try {
-      const newEntry: Omit<ManualEntry, 'id'> = {
-        driver_id: selectedDriver,
+      const entryData: Omit<ManualEntry, 'id' | 'createdAt' | 'updatedAt'> = {
+        driverId: selectedDriver,
         type: entryType,
-        title,
-        description,
-        points,
-        created_at: new Date().toISOString(),
-        notes: notes || undefined
+        title: title.trim(),
+        description: description.trim(),
+        notes: notes.trim(),
+        points: points,
+        body: '', // Only for DEER_COLLISION
+        timestamp: new Date().toISOString()
       };
+
+      const { data, error } = await supabaseService.createManualEntry(entryData);
+      
+      if (error) {
+        console.error('Error creating manual entry:', error);
+        return;
+      }
+
+      onEntryAdded?.(data);
+      onClose();
+      
+      // Reset form
+      setTitle('');
+      setDescription('');
+      setNotes('');
+      setPoints(entryTypeOptions.find(opt => opt.value === entryType)?.defaultPoints || 10);
+    } catch (err: any) {
+      console.error('Error submitting manual entry:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDuplicateRide = async () => {
+    if (!duplicateRide?.driverId || !duplicateRide.body?.trim()) return;
+
+    try {
+      const entryData: Omit<ManualEntry, 'id' | 'createdAt' | 'updatedAt'> = {
+        driverId: duplicateRide.driverId,
+        type: ManualEntryType.CUSTOMER_RIDE,
+        title: `Duplikát: ${duplicateRide.title}`,
+        description: duplicateRide.body || '',
+        notes: `Duplikováno z jízdy: ${new Date().toLocaleString()}`,
+        points: duplicateRide.points || 0,
+        body: duplicateRide.body,
+        timestamp: new Date().toISOString()
+      };
+
+      const { data, error } = await supabaseService.createManualEntry(entryData);
+      
+      if (error) {
+        console.error('Error creating duplicate ride entry:', error);
+        return;
+      }
+
+      onEntryAdded?.(data);
+      setShowDuplicateModal(false);
+      setDuplicateRide(null);
+    } catch (err: any) {
+      console.error('Error creating duplicate ride entry:', err);
+    }
+  };
 
       await supabaseService.addManualEntry({
         ...newEntry,
@@ -223,14 +278,102 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
             >
               Zrušit
             </button>
+          <button
+            type="submit"
+            disabled={isSubmitting || !selectedDriver || !title.trim()}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-md font-medium text-white transition-colors"
+          >
+            {isSubmitting ? 'Ukládám...' : 'Přidat položku'}
+          </button>
+          
+          {/* Duplicate Ride Button */}
+          {selectedDriver && (
             <button
-              type="submit"
-              disabled={isSubmitting || !selectedDriver}
-              className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              type="button"
+              onClick={() => setShowDuplicateModal(true)}
+              className="w-full mt-2 bg-orange-600 hover:bg-orange-700 py-2 rounded-md font-medium text-white transition-colors"
             >
-              {isSubmitting ? 'Přidávám...' : 'Přidat záznam'}
+              📋 Duplikovat jízdu
+            </button>
+          )}
+        </form>
+      </div>
+    </div>
+  </div>
+
+    {/* Duplicate Ride Modal */}
+    {showDuplicateModal && duplicateRide && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Duplikovat jízdu
+          </h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Kopírovat jízdu pro:
+              </label>
+              <select
+                value={duplicateRide.driverId || ''}
+                onChange={(e) => setDuplicateRide({...duplicateRide, driverId: parseInt(e.target.value)})}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-400"
+              >
+                {people.filter(person => person.role === 'Driver').map(driver => (
+                  <option key={driver.id} value={driver.id}>
+                    {driver.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Body jízdy:
+              </label>
+              <textarea
+                value={duplicateRide.body || ''}
+                onChange={(e) => setDuplicateRide({...duplicateRide, body: e.target.value})}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-400"
+                placeholder="Zadejte body jízdy (pokud je potřeba)..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Počet pasažérů:
+              </label>
+              <input
+                type="number"
+                value={duplicateRide.passengers || 1}
+                onChange={(e) => setDuplicateRide({...duplicateRide, passengers: parseInt(e.target.value)})}
+                min="1"
+                max="8"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-400"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => setShowDuplicateModal(false)}
+              className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium text-gray-800"
+            >
+              Zrušit
+            </button>
+            <button
+              onClick={handleDuplicateRide}
+              disabled={!duplicateRide.driverId || !duplicateRide.body?.trim()}
+              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium text-white"
+            >
+              📋 Vytvořit duplikát
             </button>
           </div>
+        </div>
+      </div>
+    )}
+</div>
         </form>
       </div>
     </div>
