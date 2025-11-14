@@ -69,6 +69,7 @@ const Dashboard: React.FC = () => {
     }
     return null;
   });
+  const [driverInfo, setDriverInfo] = useState<any>(null);
   // Initialize shift state from localStorage synchronously
     const getInitialShiftValue = (key: string, defaultValue: any = null) => {
       const value = localStorage.getItem(key);
@@ -391,7 +392,7 @@ const Dashboard: React.FC = () => {
           loadShiftPlans(shiftPlanningService, selectedDriver.id);
         } else if (driverInfo) {
           // Fallback to authenticated driver if available
-          loadShiftPlans(shiftPlanningService, driverInfo.id);
+          loadShiftPlans(shiftPlanningService, driverInfo?.id);
         } else {
           // Load all shift plans for dispatcher view
           loadAllShiftPlans(shiftPlanningService);
@@ -439,11 +440,10 @@ const Dashboard: React.FC = () => {
           driverName: selectedDriver.name
         };
       } else if (driverInfo) {
-        // Fallback to authenticated driver if available
         finalShiftPlan = {
           ...finalShiftPlan,
-          driverId: driverInfo.id,
-          driverName: driverInfo.name
+          driverId: driverInfo?.id,
+          driverName: driverInfo?.name
         };
       }
       
@@ -459,18 +459,18 @@ const Dashboard: React.FC = () => {
         await shiftPlanningService.createShiftPlan(finalShiftPlan);
       }
       
-      // Reload shift plans
-      if (selectedDriver) {
-        await loadShiftPlans(shiftPlanningService, selectedDriver.id);
-      } else if (driverInfo) {
-        await loadShiftPlans(shiftPlanningService, driverInfo.id);
-      } else {
-        await loadAllShiftPlans(shiftPlanningService);
-      }
-    } catch (error) {
-      console.error('Error creating shift plan:', error);
-      throw error;
-    }
+       // Reload shift plans
+       if (selectedDriver) {
+         await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+       } else if (driverInfo) {
+         await loadShiftPlans(shiftPlanningService, driverInfo?.id);
+       } else {
+         await loadAllShiftPlans(shiftPlanningService);
+       }
+     } catch (error) {
+       console.error('Error creating shift plan:', error);
+       throw error;
+     }
    };
 
   const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
@@ -479,18 +479,18 @@ const Dashboard: React.FC = () => {
     try {
       await shiftPlanningService.updateShiftPlan(id, updates);
       
-      // Reload shift plans
-      if (selectedDriver) {
-        await loadShiftPlans(shiftPlanningService, selectedDriver.id);
-      } else if (driverInfo) {
-        await loadShiftPlans(shiftPlanningService, driverInfo.id);
-      } else {
-        await loadAllShiftPlans(shiftPlanningService);
+       // Reload shift plans
+       if (selectedDriver) {
+         await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+       } else if (driverInfo) {
+         await loadShiftPlans(shiftPlanningService, driverInfo?.id);
+       } else {
+         await loadAllShiftPlans(shiftPlanningService);
+       }
+     } catch (error) {
+       console.error('Error updating shift plan:', error);
+       throw error;
       }
-    } catch (error) {
-      console.error('Error updating shift plan:', error);
-      throw error;
-     }
    };
 
   const handleDeleteShift = async (id: string) => {
@@ -499,18 +499,18 @@ const Dashboard: React.FC = () => {
     try {
       await shiftPlanningService.deleteShiftPlan(id);
       
-      // Reload shift plans
-      if (selectedDriver) {
-        await loadShiftPlans(shiftPlanningService, selectedDriver.id);
-      } else if (driverInfo) {
-        await loadShiftPlans(shiftPlanningService, driverInfo.id);
-      } else {
-        await loadAllShiftPlans(shiftPlanningService);
-      }
-    } catch (error) {
-      console.error('Error deleting shift plan:', error);
-      throw error;
-    }
+       // Reload shift plans
+       if (selectedDriver) {
+         await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+       } else if (driverInfo) {
+         await loadShiftPlans(shiftPlanningService, driverInfo?.id);
+       } else {
+         await loadAllShiftPlans(shiftPlanningService);
+       }
+     } catch (error) {
+       console.error('Error deleting shift plan:', error);
+       throw error;
+     }
   };
 
     const handleDateSelect = (date: Date) => {
