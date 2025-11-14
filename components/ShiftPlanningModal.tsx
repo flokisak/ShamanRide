@@ -34,6 +34,14 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
     }
   }, [supabase]);
 
+  // Reset view when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setViewMode('month');
+      setSelectedDate(undefined);
+    }
+  }, [isOpen]);
+
   // Load data when modal opens
   useEffect(() => {
     if (isOpen && shiftPlanningService) {
