@@ -8,6 +8,8 @@ const DriverSelection: React.FC = () => {
   const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shiftStarted, setShiftStarted] = useState(false);
+  const [driverStatus, setDriverStatus] = useState<'offline' | 'available' | 'on_ride' | 'break' | 'refueling' | 'pause'>('offline');
 
   useEffect(() => {
     const loadVehicles = async () => {
@@ -33,11 +35,57 @@ const DriverSelection: React.FC = () => {
         localStorage.setItem('selectedDriverId', vehicle.id.toString());
         localStorage.setItem('selectedDriverName', vehicle.name || `Vehicle ${vehicle.id}`);
         localStorage.setItem('selectedDriverEmail', vehicle.email);
+        localStorage.setItem('selectedVehicleId', vehicle.id.toString());
+        localStorage.setItem('licensePlate', vehicle.licensePlate || '');
         
-        // Reload the app to pick up the selected driver
-        window.location.reload();
+        // Initialize shift data
+        localStorage.setItem('shiftStartTimestamp', Date.now().toString());
+        localStorage.setItem('driverStatus', 'available');
+        localStorage.setItem('isShiftActive', 'true');
+        
+        setShiftStarted(true);
       }
     }
+  };
+
+  const handleStartShift = () => {
+    if (selectedVehicle) {
+      const vehicle = vehicles.find(v => v.id === selectedVehicle);
+      if (vehicle) {
+        // Store selected driver info in localStorage for Dashboard to use
+        localStorage.setItem('selectedDriverId', vehicle.id.toString());
+        localStorage.setItem('selectedDriverName', vehicle.name || `Vehicle ${vehicle.id}`);
+        localStorage.setItem('selectedDriverEmail', vehicle.email);
+        localStorage.setItem('selectedVehicleId', vehicle.id.toString());
+        localStorage.setItem('licensePlate', vehicle.licensePlate || '');
+        
+        // Initialize shift data
+        localStorage.setItem('shiftStartTimestamp', Date.now().toString());
+        localStorage.setItem('driverStatus', 'available');
+        localStorage.setItem('isShiftActive', 'true');
+        
+        // Navigate to dashboard
+        window.location.href = '/';
+      }
+    }
+  };
+
+  const handleLogOff = () => {
+    // Clear all driver data
+    localStorage.removeItem('selectedDriverId');
+    localStorage.removeItem('selectedDriverName');
+    localStorage.removeItem('selectedDriverEmail');
+    localStorage.removeItem('selectedVehicleId');
+    localStorage.removeItem('licensePlate');
+    localStorage.removeItem('shiftStartTimestamp');
+    localStorage.removeItem('driverStatus');
+    localStorage.removeItem('isShiftActive');
+    localStorage.removeItem('shiftCash');
+    localStorage.removeItem('shiftStartTime');
+    localStorage.removeItem('shiftEndTimestamp');
+    
+    // Reload to selection screen
+    window.location.reload();
   };
 
   if (loading) {
@@ -69,44 +117,130 @@ const DriverSelection: React.FC = () => {
     );
   }
 
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-900">
-      <div className="glass card-hover p-8 rounded-2xl shadow-frost w-full max-w-md border border-slate-700/50">
-        <h1 className="text-2xl font-bold text-center mb-6 text-white">
-          Výběr řidiče
-        </h1>
+  // Show vehicle selection
+  if (!shiftStarted) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="glass card-hover p-8 rounded-2xl shadow-frost w-full max-w-md border border-slate-700/50">
+          <h1 className="text-2xl font-bold text-center mb-6 text-white">
+            Výběr vozidla
+          </h1>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2 text-slate-300">
-              Vyberte své vozidlo:
-            </label>
-            <select
-              value={selectedVehicle || ''}
-              onChange={(e) => setSelectedVehicle(parseInt(e.target.value))}
-              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white focus:ring-2 focus:ring-blue-400"
-              required
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2 text-slate-300">
+                Vyberte své vozidlo:
+              </label>
+              <select
+                value={selectedVehicle || ''}
+                onChange={(e) => setSelectedVehicle(parseInt(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-md text-white focus:ring-2 focus:ring-blue-400"
+                required
+              >
+                <option value="" disabled>Vyberte vozidlo...</option>
+                {vehicles.map((vehicle) => (
+                  <option key={vehicle.id} value={vehicle.id}>
+                    {vehicle.name || `Vehicle ${vehicle.id}`} - {vehicle.licensePlate || 'No Plate'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleStartShift}
+              disabled={!selectedVehicle}
+              className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-md font-medium text-white transition-colors"
             >
-              <option value="" disabled>Vyberte vozidlo...</option>
-              {vehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.name || `Vehicle ${vehicle.id}`} - {vehicle.licensePlate || 'No Plate'}
-                </option>
-              ))}
-            </select>
+              🚗 Začít směnu
+            </button>
           </div>
-
-          <button
-            onClick={handleSelectDriver}
-            disabled={!selectedVehicle}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-md font-medium text-white transition-colors"
-          >
-            Pokračovat
-          </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  // Show shift control panel
+  if (shiftStarted) {
+    const vehicle = vehicles.find(v => v.id === selectedVehicle);
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+        <div className="glass card-hover p-8 rounded-2xl shadow-frost w-full max-w-md border border-slate-700/50">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-white mb-2">
+              {vehicle?.name || `Vehicle ${vehicle?.id}`}
+            </h1>
+            <p className="text-slate-300">
+              {vehicle?.licensePlate || 'No Plate'}
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="text-center">
+              <div className="inline-flex items-center space-x-2 mb-4">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-green-400 font-medium">Směna aktivní</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setDriverStatus('available')}
+                className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+                  driverStatus === 'available' 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                🟢 Dostupný
+              </button>
+              
+              <button
+                onClick={() => setDriverStatus('break')}
+                className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+                  driverStatus === 'break' 
+                    ? 'bg-yellow-600 text-white' 
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                ☕ Přestávka
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setDriverStatus('refueling')}
+                className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+                  driverStatus === 'refueling' 
+                    ? 'bg-orange-600 text-white' 
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                ⛽ Tankování
+              </button>
+              
+              <button
+                onClick={() => setDriverStatus('pause')}
+                className={`py-3 px-4 rounded-lg font-medium transition-colors ${
+                  driverStatus === 'pause' 
+                    ? 'bg-purple-600 text-white' 
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                ⏸️ Dočasně nedostupný
+              </button>
+            </div>
+
+            <button
+              onClick={handleLogOff}
+              className="w-full bg-red-600 hover:bg-red-700 py-3 rounded-lg font-medium text-white transition-colors mt-6"
+            >
+              🏁 Ukončit směnu a odhlásit
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 };
 
 export default DriverSelection;

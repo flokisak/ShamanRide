@@ -28,7 +28,10 @@ const Dashboard: React.FC = () => {
 
   const watchIdRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [driverStatus, setDriverStatus] = useState('offline');
+  const [driverStatus, setDriverStatus] = useState<'offline' | 'available' | 'on_ride' | 'break' | 'refueling' | 'pause'>(() => {
+    const saved = localStorage.getItem('driverStatus');
+    return (saved as any) || 'offline';
+  });
   const [breakEndTime, setBreakEndTime] = useState<number | null>(null);
   const [currentRide, setCurrentRide] = useState<RideLog | null>(null);
   const [pendingRides, setPendingRides] = useState<RideLog[]>([]);
@@ -94,145 +97,38 @@ const Dashboard: React.FC = () => {
    const [isOnline, setIsOnline] = useState(navigator.onLine);
    const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
    const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
-   const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
-    const [refreshTrigger, setRefreshTrigger] = useState(0);
-    const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-    const [queuedDataCount, setQueuedDataCount] = useState(0);
-  const [vehicles, setVehicles] = useState<any[]>([]);
-     const [driverInfo, setDriverInfo] = useState<{id: number, name: string} | null>(null);
-     const [selectedDriver, setSelectedDriver] = useState<{id: number, name: string} | null>(null);
-    const [flashingRides, setFlashingRides] = useState<Set<string>>(new Set());
-      const [activeCard, setActiveCard] = useState<'operations' | 'chat' | 'settings' | 'shifts'>('operations');
-     const [chatCardActivated, setChatCardActivated] = useState<number>(0);
-     
-     // Shift planning state
-     const [showShiftPlanningModal, setShowShiftPlanningModal] = useState(false);
-     const [editingShift, setEditingShift] = useState<ShiftPlan | undefined>(undefined);
-     const [shiftPlans, setShiftPlans] = useState<ShiftPlan[]>([]);
-     const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-     const [shiftPlanningService, setShiftPlanningService] = useState<ShiftPlanningService | null>(null);
+  const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
 
-  // Driver-specific sync function using driver app's socket
-  const syncUpdateVehicles = useCallback(async (updatedVehicles: any[], options?: any) => {
-    console.log('syncUpdateVehicles called with vehicles:', updatedVehicles.map(v => ({ id: v.id, shiftStartOdo: v.shiftStartOdo, shiftEndOdo: v.shiftEndOdo, mileage: v.mileage })));
-    try {
-      if (socket && socketConnected) {
-        console.log('Sending vehicle update via socket, socket connected:', socketConnected);
-        socket.emit('vehicles_update', { shiftId: `driver_shift_${vehicleNumber}`, vehicles: updatedVehicles, options });
-        console.log('Vehicle update sent via driver socket');
-        return { via: 'socket' };
-      } else {
-        console.log('Socket not available, using Supabase fallback');
-        await supabaseService.updateVehicles(updatedVehicles, options);
-        console.log('Vehicle update sent via Supabase (socket not available)');
-        return { via: 'supabase' };
-      }
-    } catch (err) {
-      console.warn('Socket update failed, falling back to Supabase:', err);
-      try {
-        await supabaseService.updateVehicles(updatedVehicles, options);
-        return { via: 'supabase', error: err };
-      } catch (err2) {
-        console.error('Both socket and Supabase updates failed:', err2);
-        return { via: 'failed', error: err2 };
-      }
-    }
-  }, [socket, socketConnected, vehicleNumber]);
-
-  // Update sync status and queued data count
-  const updateSyncStatus = useCallback(() => {
-    try {
-      const cachedLocations = localStorage.getItem('cached-locations');
-      const pendingMessages = localStorage.getItem('pending-messages');
-      const pendingUpdates = localStorage.getItem('pending-ride-updates');
-
-      const locationsCount = cachedLocations ? JSON.parse(cachedLocations).length : 0;
-      const messagesCount = pendingMessages ? JSON.parse(pendingMessages).length : 0;
-      const updatesCount = pendingUpdates ? JSON.parse(pendingUpdates).length : 0;
-
-      const totalQueued = locationsCount + messagesCount + updatesCount;
-      setQueuedDataCount(totalQueued);
-
-      console.log('Sync status update:', {
-        locations: locationsCount,
-        messages: messagesCount,
-        updates: updatesCount,
-        total: totalQueued,
-        currentStatus: syncStatus
-      });
-
-      // Update sync status to idle if no queued data and not currently syncing
-      if (totalQueued === 0 && syncStatus !== 'syncing') {
-        setSyncStatus('idle');
-      }
-    } catch (error) {
-      console.error('Error updating sync status:', error);
-      setQueuedDataCount(0);
-    }
-  }, [syncStatus]);
-
-  // Set up background sync status callback
+  // Initialize shift data from localStorage
   useEffect(() => {
-    backgroundSyncManager.setStatusCallback({
-      onSyncStart: (tag) => {
-        console.log('Sync started:', tag);
-        setSyncStatus('syncing');
-      },
-      onSyncSuccess: (tag) => {
-        console.log('Sync completed:', tag);
-        setSyncStatus('success');
-        updateSyncStatus();
-        setTimeout(() => setSyncStatus('idle'), 3000);
-      },
-      onSyncError: (tag, error) => {
-        console.error('Sync failed:', tag, error);
-        setSyncStatus('error');
-        setTimeout(() => updateSyncStatus(), 3000);
-      }
-    });
-  }, [updateSyncStatus]);
+    const savedShiftStart = localStorage.getItem('shiftStartTimestamp');
+    const savedShiftEnd = localStorage.getItem('shiftEndTimestamp');
+    const savedDriverStatus = localStorage.getItem('driverStatus');
+    const savedShiftCash = localStorage.getItem('shiftCash');
+    
+    if (savedShiftStart) setShiftStartTime(parseInt(savedShiftStart));
+    if (savedShiftEnd) setShiftEndTimestamp(parseInt(savedShiftEnd));
+    if (savedDriverStatus) setDriverStatus(savedDriverStatus as any);
+    if (savedShiftCash) setShiftCash(parseFloat(savedShiftCash));
+  }, []);
 
-  // Load ride data for the current vehicle
-  const loadRideData = useCallback(async (vehicleId: number) => {
-    try {
-      console.log('Loading ride data for vehicle:', vehicleId);
-      const [currentRides, pendingRidesData, rideHistoryData] = await Promise.all([
-        supabaseService.getRideLogsByVehicle(vehicleId, 'in_progress', 1),
-        supabaseService.getRideLogsByVehicle(vehicleId, 'pending', 10),
-        supabaseService.getRideLogsByVehicle(vehicleId, undefined, 100)
-      ]);
+  const handleStartShift = async (startOdo: number) => {
+    setShiftStartTime(Date.now());
+    setShiftEndTimestamp(null);
+    setDriverStatus('available');
+    localStorage.setItem('shiftStartTimestamp', Date.now().toString());
+    localStorage.removeItem('shiftEndTimestamp');
+    localStorage.setItem('driverStatus', 'available');
+    localStorage.setItem('isShiftActive', 'true');
+  };
 
-      setCurrentRide(currentRides[0] || null);
-      setPendingRides(pendingRidesData);
-      setRideHistory(rideHistoryData);
-
-      // Note: Driver status is now only changed by manual driver actions
-      // Automatic status changes based on rides have been removed
-
-      console.log('Ride data loaded successfully');
-    } catch (error) {
-      console.error('Error loading ride data:', error);
-    }
-  }, [driverStatus]);
-
-  // Refresh vehicle data
-  const refreshVehicleData = useCallback(async () => {
-    if (!vehicleNumber) return;
-
-    try {
-      console.log('Refreshing vehicle data for vehicle:', vehicleNumber);
-      await loadRideData(vehicleNumber);
-
-      // Also refresh vehicle info
-      const vehicles = await supabaseService.getVehicles();
-      const vehicle = vehicles.find(v => v.id === vehicleNumber);
-      if (vehicle) {
-        setLicensePlate(vehicle.licensePlate || '');
-      }
-    } catch (error) {
-      console.error('Error refreshing vehicle data:', error);
-    }
-  }, [vehicleNumber, loadRideData]);
+  const handleEndShift = async (endOdo: number) => {
+    setShiftEndTimestamp(Date.now());
+    setDriverStatus('offline');
+    localStorage.setItem('shiftEndTimestamp', Date.now().toString());
+    localStorage.setItem('driverStatus', 'offline');
+    localStorage.setItem('isShiftActive', 'false');
+  };
 
   // Initialize vehicle number when driver is selected
   useEffect(() => {
