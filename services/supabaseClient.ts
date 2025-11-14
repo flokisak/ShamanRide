@@ -292,7 +292,7 @@ export const supabaseService = SUPABASE_ENABLED
            driver_id: v.driverId ?? null,
            license_plate: v.licensePlate ?? null,
            type: v.type,
-           status: v.status,
+            vehicle_status: v.status,
            location: v.location ?? null,
            capacity: v.capacity ?? null,
            mileage: v.mileage ?? null,
@@ -319,7 +319,7 @@ export const supabaseService = SUPABASE_ENABLED
            driverId: db.driver_id ?? null,
            licensePlate: db.license_plate ?? null,
            type: db.type,
-           status: db.status,
+            status: db.vehicle_status || db.status,
            location: db.location ?? null,
            capacity: db.capacity ?? null,
            mileage: db.mileage ?? null,
@@ -438,19 +438,22 @@ export const supabaseService = SUPABASE_ENABLED
 
       // Vehicles
       async getVehicles() {
-        const { data, error } = await supabase.from('vehicles').select('*');
+        const { data, error } = await supabase.from('vehicles').select('id, name, driver_id, license_plate, type, vehicle_status, location, capacity, mileage, free_at, service_interval, last_service_mileage, technical_inspection_expiry, vignette_expiry, fuel_type, fuel_consumption, phone, email, shift_start, shift_end, shift_start_odo, shift_end_odo, last_location_update, updated_at');
         if (error) throw error;
-        return (data || []).map((d: any) => this._fromDbVehicle(d));
+        console.log('Fetched vehicles from DB:', data);
+        const mapped = (data || []).map((d: any) => this._fromDbVehicle(d));
+        console.log('Mapped vehicles:', mapped);
+        return mapped;
       },
       async updateVehicles(vehicles: any[], options?: { excludeStatus?: boolean; excludeMileage?: boolean; excludeShiftTimes?: boolean; excludeLastLocationUpdate?: boolean }) {
         const dbRows = vehicles.map(v => {
           const dbVehicle = this._toDbVehicle(v);
           if (options?.excludeStatus || options?.excludeMileage || options?.excludeShiftTimes || options?.excludeLastLocationUpdate) {
             // Remove specified fields from the update to preserve changes from other sources
-            const { status, updated_at, mileage, shift_start, shift_end, last_location_update, ...vehicleWithoutExcluded } = dbVehicle;
+            const { vehicle_status, updated_at, mileage, shift_start, shift_end, last_location_update, ...vehicleWithoutExcluded } = dbVehicle;
             const result: any = { ...vehicleWithoutExcluded };
             if (!options?.excludeStatus) {
-              result.status = status;
+              result.vehicle_status = vehicle_status;
               result.updated_at = updated_at;
             }
             if (!options?.excludeMileage) {

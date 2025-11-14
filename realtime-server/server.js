@@ -290,13 +290,18 @@ io.on('connection', (socket) => {
       // Update vehicle status in Supabase
       const { error } = await supabase
         .from('vehicles')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update({ vehicle_status: status, updated_at: new Date().toISOString() })
         .eq('id', vehicleId);
 
       if (error) {
-        console.error('Failed to update vehicle status in Supabase:', error);
-      } else {
-        console.log(`Vehicle ${vehicleId} status updated to ${status} in database`);
+        console.error('Error updating vehicle status in database:', error);
+        console.error('Supabase URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+        console.error('Service Key:', process.env.SUPABASE_SERVICE_KEY ? 'SET (length: ' + process.env.SUPABASE_SERVICE_KEY.length + ')' : 'NOT SET');
+        socket.emit('vehicle_status_error', { vehicleId, error: error.message });
+        return;
+      }
+
+      console.log(`Vehicle ${vehicleId} status updated to ${status} in database`);
       }
 
       // Broadcast to all connected clients (dispatchers and other drivers)
