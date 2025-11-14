@@ -839,7 +839,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
                             shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
                             shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' : 'Zrušeno'}
                          </span>
-                         </span>
                       </div>
                     </div>
                     </div>
