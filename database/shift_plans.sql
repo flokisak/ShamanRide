@@ -67,16 +67,18 @@ CREATE POLICY "Users can insert own shifts" ON shift_plans
 CREATE POLICY "Users can update own shifts" ON shift_plans
   FOR UPDATE
   USING (
-    EXISTS (
-      SELECT 1 FROM auth.users 
-      WHERE auth.users.id = auth.uid() 
-      AND (auth.users.raw_user_meta_data->>'driverId')::text = shift_plans.driver_id::text
-    )
-    OR
+    -- Allow dispatchers and management to update ANY shift
     EXISTS (
       SELECT 1 FROM auth.users 
       WHERE auth.users.id = auth.uid() 
       AND (auth.users.raw_user_meta_data->>'role') IN ('Dispatcher', 'Management')
+    )
+    OR
+    -- Allow drivers to update only their own shifts
+    EXISTS (
+      SELECT 1 FROM auth.users 
+      WHERE auth.users.id = auth.uid() 
+      AND (auth.users.raw_user_meta_data->>'driverId')::text = shift_plans.driver_id::text
     )
   );
 
@@ -85,16 +87,18 @@ CREATE POLICY "Users can update own shifts" ON shift_plans
 CREATE POLICY "Users can delete own shifts" ON shift_plans
   FOR DELETE
   USING (
-    EXISTS (
-      SELECT 1 FROM auth.users 
-      WHERE auth.users.id = auth.uid() 
-      AND (auth.users.raw_user_meta_data->>'driverId')::text = shift_plans.driver_id::text
-    )
-    OR
+    -- Allow dispatchers and management to delete ANY shift
     EXISTS (
       SELECT 1 FROM auth.users 
       WHERE auth.users.id = auth.uid() 
       AND (auth.users.raw_user_meta_data->>'role') IN ('Dispatcher', 'Management')
+    )
+    OR
+    -- Allow drivers to delete only their own shifts
+    EXISTS (
+      SELECT 1 FROM auth.users 
+      WHERE auth.users.id = auth.uid() 
+      AND (auth.users.raw_user_meta_data->>'driverId')::text = shift_plans.driver_id::text
     )
   );
 

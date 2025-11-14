@@ -85,7 +85,8 @@ const Dashboard: React.FC = () => {
    );
   const [historyFilter, setHistoryFilter] = useState<'2days' | 'week' | 'month' | 'all'>('all');
   const [licensePlate, setLicensePlate] = useState<string>('');
-  const [otherDrivers, setOtherDrivers] = useState<any[]>([]);
+     const [otherDrivers, setOtherDrivers] = useState<any[]>([]);
+     const [availableDrivers, setAvailableDrivers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [wakeLockActive, setWakeLockActive] = useState(false);
@@ -99,6 +100,7 @@ const Dashboard: React.FC = () => {
     const [queuedDataCount, setQueuedDataCount] = useState(0);
   const [vehicles, setVehicles] = useState<any[]>([]);
      const [driverInfo, setDriverInfo] = useState<{id: number, name: string} | null>(null);
+     const [selectedDriver, setSelectedDriver] = useState<{id: number, name: string} | null>(null);
     const [flashingRides, setFlashingRides] = useState<Set<string>>(new Set());
       const [activeCard, setActiveCard] = useState<'operations' | 'chat' | 'settings' | 'shifts'>('operations');
      const [chatCardActivated, setChatCardActivated] = useState<number>(0);
@@ -365,6 +367,22 @@ const Dashboard: React.FC = () => {
 
 
 
+  // Load available drivers for shift planning
+  useEffect(() => {
+    const loadAvailableDrivers = async () => {
+      try {
+        if (shiftPlanningService) {
+          const drivers = await shiftPlanningService.getAvailableDrivers();
+          setAvailableDrivers(drivers);
+        }
+      } catch (error) {
+        console.error('Error loading available drivers:', error);
+      }
+    };
+
+    loadAvailableDrivers();
+  }, [shiftPlanningService]);
+
   // Load other drivers for chat functionality
   useEffect(() => {
     const loadOtherDrivers = async () => {
@@ -555,7 +573,7 @@ const Dashboard: React.FC = () => {
       if (vehicleNumber && realtimeConnectionStatus !== 'connected') {
         loadRideData(vehicleNumber);
       }
-    }, [vehicleNumber, refreshTrigger, loadRideData]); // Removed realtimeConnectionStatus to prevent excessive reloading
+    }, [vehicleNumber, refreshTrigger, realtimeConnectionStatus]); // Added realtimeConnectionStatus back
 
     // Socket.io connection for real-time messaging and ride updates
    useEffect(() => {
@@ -1854,15 +1872,18 @@ const Dashboard: React.FC = () => {
       const service = new ShiftPlanningService(supabase);
       setShiftPlanningService(service);
       
-      // Load shift plans for all drivers (dispatcher view) or current driver if assigned
-      if (driverInfo) {
+      // Load shift plans for selected driver or all if no driver selected
+      if (selectedDriver) {
+        loadShiftPlans(service, selectedDriver.id);
+      } else if (driverInfo) {
+        // Fallback to authenticated driver if available
         loadShiftPlans(service, driverInfo.id);
       } else {
-        // Load all shift plans so dispatcher can see/manage all
+        // Load all shift plans for dispatcher view
         loadAllShiftPlans(service);
       }
     }
-  }, [supabase, driverInfo]);
+  }, [supabase, driverInfo, selectedDriver]);
 
   const loadShiftPlans = async (service: ShiftPlanningService, driverId: number) => {
     try {
@@ -1896,13 +1917,47 @@ const Dashboard: React.FC = () => {
     try {
       let finalShiftPlan = { ...shiftPlan };
       
-      // Auto-assign driver ID and name only when driver is logged in
-      if (driverInfo) {
+      // Auto-assign driver ID and name based on selection
+      if (selectedDriver) {
+        finalShiftPlan = {
+          ...finalShiftPlan,
+          driverId: selectedDriver.id,
+          driverName: selectedDriver.name
+        };
+      } else if (driverInfo) {
+        // Fallback to authenticated driver if available
         finalShiftPlan = {
           ...finalShiftPlan,
           driverId: driverInfo.id,
           driverName: driverInfo.name
         };
+      }
+      
+      if (finalShiftPlan.recurringPattern && finalShiftPlan.recurringPattern !== RecurringPattern.None && finalShiftPlan.recurringEndDate) {
+        // Create recurring shifts
+        await shiftPlanningService.createRecurringShiftPlans(
+          finalShiftPlan,
+          finalShiftPlan.recurringPattern,
+          finalShiftPlan.recurringEndDate
+        );
+      } else {
+        // Create single shift
+        await shiftPlanningService.createShiftPlan(finalShiftPlan);
+      }
+      
+      // Reload shift plans
+      if (selectedDriver) {
+        await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+      } else if (driverInfo) {
+        await loadShiftPlans(shiftPlanningService, driverInfo.id);
+      } else {
+        await loadAllShiftPlans(shiftPlanningService);
+      }
+    } catch (error) {
+      console.error('Error creating shift plan:', error);
+      throw error;
+    }
+  };
       }
       
       if (finalShiftPlan.recurringPattern && finalShiftPlan.recurringPattern !== RecurringPattern.None && finalShiftPlan.recurringEndDate) {
@@ -1929,37 +1984,45 @@ const Dashboard: React.FC = () => {
     }
   };
 
-    const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
-      if (!shiftPlanningService) return;
+  const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
+    if (!shiftPlanningService) return;
+    
+    try {
+      await shiftPlanningService.updateShiftPlan(id, updates);
       
-      try {
-        await shiftPlanningService.updateShiftPlan(id, updates);
-        
-        // Reload shift plans
-        if (driverInfo) {
-          await loadShiftPlans(shiftPlanningService, driverInfo.id);
-        }
-      } catch (error) {
-        console.error('Error updating shift plan:', error);
-        throw error;
+      // Reload shift plans
+      if (selectedDriver) {
+        await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+      } else if (driverInfo) {
+        await loadShiftPlans(shiftPlanningService, driverInfo.id);
+      } else {
+        await loadAllShiftPlans(shiftPlanningService);
       }
-    };
+    } catch (error) {
+      console.error('Error updating shift plan:', error);
+      throw error;
+    }
+  };
 
-    const handleDeleteShift = async (id: string) => {
-      if (!shiftPlanningService) return;
+  const handleDeleteShift = async (id: string) => {
+    if (!shiftPlanningService) return;
+    
+    try {
+      await shiftPlanningService.deleteShiftPlan(id);
       
-      try {
-        await shiftPlanningService.deleteShiftPlan(id);
-        
-        // Reload shift plans
-        if (driverInfo) {
-          await loadShiftPlans(shiftPlanningService, driverInfo.id);
-        }
-      } catch (error) {
-        console.error('Error deleting shift plan:', error);
-        throw error;
+      // Reload shift plans
+      if (selectedDriver) {
+        await loadShiftPlans(shiftPlanningService, selectedDriver.id);
+      } else if (driverInfo) {
+        await loadShiftPlans(shiftPlanningService, driverInfo.id);
+      } else {
+        await loadAllShiftPlans(shiftPlanningService);
       }
-    };
+    } catch (error) {
+      console.error('Error deleting shift plan:', error);
+      throw error;
+    }
+  };
 
     const handleDateSelect = (date: Date) => {
       setSelectedDate(date);
@@ -2095,15 +2158,15 @@ const Dashboard: React.FC = () => {
                <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
                  <div className="flex justify-between items-center mb-3">
                    <h2 className="text-lg font-semibold text-white">{t('dashboard.currentRide')}</h2>
-                   {currentRide.status === RideStatus.InProgress && (
-                     <button
-                       onClick={() => setShowCancelConfirmation(true)}
-                       className="text-red-400 hover:text-red-300 text-sm font-normal px-2 py-1 rounded border border-red-800/30 hover:border-red-700/50 hover:bg-red-900/20 transition-colors"
-                       title="Zrušit jízdu"
-                     >
-                       ❌ Zrušit
-                     </button>
-                   )}
+                 {currentRide && currentRide.status === RideStatus.InProgress && (
+                      <button
+                        onClick={() => setShowCancelConfirmation(true)}
+                        className="text-red-400 hover:text-red-300 text-sm font-normal px-2 py-1 rounded border border-red-800/30 hover:border-red-700/50 hover:bg-red-900/20 transition-colors"
+                        title="Zrušit jízdu"
+                      >
+                        ❌ Zrušit
+                      </button>
+                    )}
                  </div>
                   <div className="space-y-2 text-slate-300">
                     <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
@@ -2115,31 +2178,31 @@ const Dashboard: React.FC = () => {
                   </div>
 
                  <div className="mt-4 space-y-2">
-                     {currentRide.status === RideStatus.Pending && (
-                       <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
-                         Začít jízdu
-                       </button>
-                     )}
-                     {currentRide.status === RideStatus.Accepted && (
-                       <div className="space-y-2">
-                         <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
-                           {t('dashboard.startRide')}
-                         </button>
-                         <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                           🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
-                         </button>
-                       </div>
-                     )}
-                        {currentRide.status === RideStatus.InProgress && (
-                         <div className="space-y-2">
-                           <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
-                             {t('dashboard.completeRide')}
-                           </button>
-                            <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
-                              🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
+                      {currentRide && currentRide.status === RideStatus.Pending && (
+                        <button onClick={acceptRide} className="w-full bg-green-600 hover:bg-green-700 py-2 rounded-lg btn-modern text-white font-medium">
+                          Začít jízdu
+                        </button>
+                      )}
+                      {currentRide && currentRide.status === RideStatus.Accepted && (
+                        <div className="space-y-2">
+                          <button onClick={startRide} className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg btn-modern text-white font-medium">
+                            {t('dashboard.startRide')}
+                          </button>
+                          <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                            🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : 'Mapy.cz'})
+                          </button>
+                        </div>
+                      )}
+                         {currentRide && currentRide.status === RideStatus.InProgress && (
+                          <div className="space-y-2">
+                            <button onClick={endRide} className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg btn-modern text-white font-medium">
+                              {t('dashboard.completeRide')}
                             </button>
-                         </div>
-                       )}
+                             <button onClick={() => navigateToDestination()} className="w-full bg-purple-600 hover:bg-purple-700 py-2 rounded-lg btn-modern text-white font-medium">
+                               🗺️ Navigovat ({preferredNavApp === 'google' ? 'Google Maps' : preferredNavApp === 'mapy' ? 'Mapy.cz' : 'Waze'})
+                             </button>
+                          </div>
+                        )}
              </div>
            </div>
          )}
@@ -2354,14 +2417,28 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Driver Selection for Dispatcher View */}
-              {!driverInfo && (
-                <div className="mb-4 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded-lg">
-                  <p className="text-yellow-200 text-sm">
-                    ⚠️ Nejdříve se přihlastě jako řidič. Pro plánování směn vyberte svůj účet z nabídky.
-                  </p>
-                </div>
-              )}
+              {/* Driver Selection */}
+              <div className="mb-4">
+                <label className="block text-white/80 text-sm font-medium mb-2">
+                  Vyberte řidiče:
+                </label>
+                <select
+                  value={selectedDriver?.id || ''}
+                  onChange={(e) => {
+                    const driverId = parseInt(e.target.value);
+                    const driver = availableDrivers.find(d => d.id === driverId);
+                    setSelectedDriver(driver || null);
+                  }}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="" disabled>Vyberte řidiče...</option>
+                  {availableDrivers.map(driver => (
+                    <option key={driver.id} value={driver.id}>
+                      {driver.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <ShiftCalendar
                 shiftPlans={shiftPlans}
@@ -2825,8 +2902,8 @@ const Dashboard: React.FC = () => {
           onSave={handleCreateShift}
           onUpdate={handleUpdateShift}
           editingShift={editingShift}
-          driverId={driverInfo?.id}
-          isDispatcher={!driverInfo} // Act as dispatcher when no driver assigned
+          driverId={selectedDriver?.id || driverInfo?.id}
+          isDispatcher={!selectedDriver && !driverInfo} // Act as dispatcher when no driver selected
         />
 
         {/* Large Card Switch at Bottom */}
