@@ -5,7 +5,7 @@ import { SUPABASE_ENABLED as SUPABASE_ENABLED_SERVICES } from '../supabaseClient
 import { persistRide } from '../utils/syncService';
 import { RideLog, RideStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
-import { useAuth } from '../AuthContext';
+
 import { notifyUser, initializeNotifications, requestNotificationPermission, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
 import { queueLocationData, queueMessage, queueRideUpdate, requestBackgroundSync, initializeBackgroundSync, backgroundSyncManager } from '../utils/backgroundSync';
 import { ManualRideModal } from './ManualRideModal';
@@ -25,7 +25,7 @@ import { safeGetAccessToken, getCachedAccessToken } from '../supabaseClient';
 
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
-  const { user } = useAuth();
+
   const watchIdRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [driverStatus, setDriverStatus] = useState('offline');
@@ -569,8 +569,8 @@ const Dashboard: React.FC = () => {
         new Date(ride.timestamp).getTime() <= now
       );
       return shiftCompleted.reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
-        }
-     };
+     }
+
 
     // Load ride data when vehicle number or refresh trigger changes - only when socket is disconnected
     useEffect(() => {
@@ -772,7 +772,7 @@ const Dashboard: React.FC = () => {
          socket.disconnect();
        }
      };
-    }, [user?.id, vehicleNumber]);
+     }, [vehicleNumber]);
 
 
 
@@ -1962,32 +1962,7 @@ const Dashboard: React.FC = () => {
       console.error('Error creating shift plan:', error);
       throw error;
     }
-  };
-      }
-      
-      if (finalShiftPlan.recurringPattern && finalShiftPlan.recurringPattern !== RecurringPattern.None && finalShiftPlan.recurringEndDate) {
-        // Create recurring shifts
-        await shiftPlanningService.createRecurringShiftPlans(
-          finalShiftPlan,
-          finalShiftPlan.recurringPattern,
-          finalShiftPlan.recurringEndDate
-        );
-      } else {
-        // Create single shift
-        await shiftPlanningService.createShiftPlan(finalShiftPlan);
-      }
-      
-      // Reload shift plans
-      if (driverInfo) {
-        await loadShiftPlans(shiftPlanningService, driverInfo.id);
-      } else {
-        await loadAllShiftPlans(shiftPlanningService);
-      }
-    } catch (error) {
-      console.error('Error creating shift plan:', error);
-      throw error;
-    }
-  };
+   };
 
   const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
     if (!shiftPlanningService) return;
@@ -2986,7 +2961,7 @@ const Dashboard: React.FC = () => {
 
         </div>
       </div>
-    );
-  };
-
-export default Dashboard;
+      );
+   };
+  
+ export default Dashboard;

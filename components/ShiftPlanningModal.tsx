@@ -676,7 +676,6 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
               placeholder="Volitelné poznámky..."
             />
           </div>
-          </div>
 
           {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
