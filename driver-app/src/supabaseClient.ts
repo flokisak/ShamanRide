@@ -785,8 +785,7 @@ function isInCzechAustriaRegion(lat: number, lon: number): boolean {
 
 const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number }> => {
   const tryGeocode = async (query: string): Promise<{ lat: number; lon: number } | null> => {
-    const proxyUrl = 'https://corsproxy.io/?';
-    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=CZ,AT`;
+    const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=CZ,AT`;
 
     try {
       const response = await fetch(nominatimUrl);
@@ -914,7 +913,7 @@ async function geocodeAddress(address: string, language: string): Promise<{ lat:
     if (googleMapsApiKey) {
       console.log('Photon failed, trying Google Maps for address:', cleanAddress);
       const proxyUrl = 'https://corsproxy.io/?';
-      const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${CZECH_AUSTRIA_BOUNDS.latMin},${CZECH_AUSTRIA_BOUNDS.lonMin}|${CZECH_AUSTRIA_BOUNDS.latMax},${CZECH_AUSTRIA_BOUNDS.lonMax}`;
+      const geocodingUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${CZECH_AUSTRIA_BOUNDS.latMin},${CZECH_AUSTRIA_BOUNDS.lonMin}|${CZECH_AUSTRIA_BOUNDS.latMax},${CZECH_AUSTRIA_BOUNDS.lonMax}`;
 
       const response = await fetch(geocodingUrl);
       if (response.ok) {

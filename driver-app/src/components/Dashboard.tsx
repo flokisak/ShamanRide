@@ -738,7 +738,9 @@ const Dashboard: React.FC = () => {
       console.log('🎯 Accepting current ride:', currentRide.id);
 
       const updatedRide = { ...currentRide, status: RideStatus.Accepted };
-      await supabaseService.updateRideLog(currentRide.id, updatedRide);
+      // Ensure supabaseService is available globally
+      const { updateRideLog } = supabaseService;
+      await updateRideLog(currentRide.id, updatedRide);
 
       // Socket disabled
       // if (socket && socketConnected) {

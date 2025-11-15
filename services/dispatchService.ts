@@ -310,8 +310,7 @@ function isInSouthMoravia(lat: number, lon: number): boolean {
  */
 const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number } | null> => {
   const tryGeocode = async (query: string): Promise<{ lat: number; lon: number } | null> => {
-    const proxyUrl = 'https://corsproxy.io/?';
-    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10`;
+    const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10`;
 
     try {
       const response = await fetch(nominatimUrl);
@@ -417,9 +416,8 @@ export async function geocodeAddress(address: string, language: string): Promise
         // If we have a Google Places API place ID, use Places Details API first
         if (placeId && import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
             console.log('Trying Google Places Details API for place ID:', placeId);
-            const proxyUrl = 'https://corsproxy.io/?';
             const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-            const detailsUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${googleMapsApiKey}&language=${language}&fields=geometry`;
+            const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(placeId)}&key=${googleMapsApiKey}&language=${language}&fields=geometry`;
 
             const response = await fetch(detailsUrl);
             if (response.ok) {
@@ -446,8 +444,7 @@ export async function geocodeAddress(address: string, language: string): Promise
         const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
         if (googleMapsApiKey) {
             console.log('Nominatim failed, trying Google Maps Geocoding API for address:', cleanAddress);
-            const proxyUrl = 'https://corsproxy.io/?';
-            const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+            const geocodingUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
 
             const response = await fetch(geocodingUrl);
             if (response.ok) {
@@ -531,7 +528,7 @@ async function getNominatimSuggestions(query: string, isPOISearch: boolean = fal
 
         // Use CORS proxy to bypass browser restrictions
         const proxyUrl = 'https://corsproxy.io/?';
-        const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
+        const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=8&countrycodes=cz&bounded=1&viewbox=${EXPANDED_SEARCH_BOUNDS.lonMin},${EXPANDED_SEARCH_BOUNDS.latMin},${EXPANDED_SEARCH_BOUNDS.lonMax},${EXPANDED_SEARCH_BOUNDS.latMax}`;
         const response = await fetch(nominatimUrl);
         if (response.ok) {
             const data = await response.json();
@@ -571,8 +568,7 @@ export async function getAddressSuggestions(query: string, language: string): Pr
     }
 
     try {
-        const proxyUrl = 'https://corsproxy.io/?';
-        const autocompleteUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+        const autocompleteUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
 
         const response = await fetch(autocompleteUrl);
         if (!response.ok) {

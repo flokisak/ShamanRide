@@ -40,9 +40,8 @@ export const AutocompleteInputField: React.FC<{
     }
 
     try {
-      // Use Nominatim via a simple CORS proxy to avoid browser CORS issues
-      const proxy = 'https://corsproxy.io/?';
-      const url = `${proxy}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=0&limit=6`;
+      // Use Nominatim directly (no CORS issues with OSM)
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=0&limit=6`;
       const res = await fetch(url);
       if (!res.ok) {
         setSuggestions([]);

@@ -80,7 +80,6 @@ export async function searchPOIs(options: POISearchOptions): Promise<POIResult[]
   }
 
   try {
-    const proxyUrl = 'https://corsproxy.io/?';
     let url: string;
 
     if (options.query) {
@@ -194,7 +193,6 @@ export async function getPOIDetails(placeId: string, language?: string): Promise
   }
 
   try {
-    const proxyUrl = 'https://corsproxy.io/?';
     const params = new URLSearchParams({
       place_id: placeId,
       key: googleMapsApiKey
@@ -266,7 +264,6 @@ export async function getPOIAutocomplete(
   }
 
   try {
-    const proxyUrl = 'https://corsproxy.io/?';
     const params = new URLSearchParams({
       input: query,
       key: googleMapsApiKey
