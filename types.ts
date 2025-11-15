@@ -14,6 +14,7 @@ export enum VehicleStatus {
 export enum RideStatus {
   Scheduled = 'SCHEDULED',
   Pending = 'PENDING',
+  Queued = 'QUEUED',
   Accepted = 'ACCEPTED',
   InProgress = 'IN_PROGRESS',
   Completed = 'COMPLETED',

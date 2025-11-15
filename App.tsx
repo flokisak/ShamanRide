@@ -3,7 +3,7 @@ import { DispatchFormComponent } from './components/DispatchForm';
 import { VehicleStatusTable } from './components/VehicleStatusTable';
 import { AssignmentResult } from './components/AssignmentResult';
 import { Vehicle, RideRequest, AssignmentResultData, VehicleStatus, VehicleType, ErrorResult, RideLog, RideStatus, LayoutConfig, LayoutItem, Notification, Person, PersonRole, WidgetId, Tariff, FlatRateRule, AssignmentAlternative, MessagingApp, FuelType, FuelPrices, RideType, CompanyInfo, DEFAULT_COMPANY_INFO } from './types';
-import { findBestVehicle, generateSms, generateCustomerSms, generateNavigationUrl, geocodeAddress, updateFrequentAddress } from './services/dispatchService';
+import { findBestVehicle, generateSms, generateCustomerSms, generateNavigationUrl, geocodeAddress, updateFrequentAddress, findNearestAvailableDriver } from './services/dispatchService';
 import { SUPABASE_ENABLED, supabase, supabaseService } from './services/supabaseClient';
 import type { SmsMessageRecord } from './services/smsService';
 import { sendSms, isSmsGateConfigured } from './services/messagingService';
@@ -39,7 +39,7 @@ import { DailyStats } from './components/DailyStats';
 import { GamificationModal } from './components/GamificationModal';
 import { GamificationService } from './services/gamificationService';
 import ShiftPlanningModal from './components/ShiftPlanningModal';
-import ShiftListModal from './components/ShiftListModal';
+
 
 // Extend window interface for socket storage
 declare global {
@@ -241,7 +241,7 @@ const AppContent: React.FC = () => {
   const [routeToPreview, setRouteToPreview] = useState<string[] | null>(null);
   const [showCompletedRides, setShowCompletedRides] = useState(true); // Show completed rides by default for debugging
   const [hasNewRides, setHasNewRides] = useState(false); // Track new rides from drivers
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('today');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | string>('all');
   const [timeFilter, setTimeFilter] = useState<'all' | 'morning' | 'afternoon' | 'evening' | 'night'>('all');
   const [isPeopleModalOpen, setIsPeopleModalOpen] = useState(false);
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
@@ -255,7 +255,7 @@ const AppContent: React.FC = () => {
   // Gamification modal
   const [isGamificationModalOpen, setIsGamificationModalOpen] = useState(false);
   const [isShiftPlanningModalOpen, setIsShiftPlanningModalOpen] = useState(false);
-  const [isShiftListModalOpen, setIsShiftListModalOpen] = useState(false);
+
   const [socketRidesExpanded, setSocketRidesExpanded] = useState(false);
   const [rideHistoryExpanded, setRideHistoryExpanded] = useState(true);
 
@@ -415,8 +415,61 @@ const AppContent: React.FC = () => {
             dateTo: new Date(customDate.getFullYear(), customDate.getMonth(), customDate.getDate() + 1).toISOString()
           };
         }
-        const rl = await supabaseService.getRideLogs(options);
-        setRideLog(Array.isArray(rl) ? rl : []);
+
+        // Load from Supabase
+        let supabaseRides: any[] = [];
+        try {
+          supabaseRides = await supabaseService.getRideLogs(options);
+          supabaseRides = Array.isArray(supabaseRides) ? supabaseRides : [];
+        } catch (err) {
+          console.warn('Could not load ride logs from Supabase', err);
+          supabaseRides = [];
+        }
+
+        // Always load from localStorage as well
+        let localRides: any[] = [];
+        try {
+          // Access local storage directly since supabaseService uses cloud implementation
+          const stored = localStorage.getItem('ride-log');
+          if (stored) {
+            localRides = JSON.parse(stored);
+            localRides = Array.isArray(localRides) ? localRides : [];
+
+            // Apply date filtering if options provided
+            if (options) {
+              if (options.dateFrom) {
+                localRides = localRides.filter((r: any) => new Date(r.timestamp) >= new Date(options.dateFrom));
+              }
+              if (options.dateTo) {
+                localRides = localRides.filter((r: any) => new Date(r.timestamp) <= new Date(options.dateTo));
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Could not load ride logs from localStorage', err);
+          localRides = [];
+        }
+
+        // Merge rides from both sources, preferring Supabase data for duplicates
+        const allRides = [...localRides];
+
+        // Add Supabase rides that aren't already in local
+        for (const ride of supabaseRides) {
+          const existingIndex = allRides.findIndex(r => r.id === ride.id);
+          if (existingIndex >= 0) {
+            // Replace local version with Supabase version
+            allRides[existingIndex] = ride;
+          } else {
+            // Add new Supabase ride
+            allRides.push(ride);
+          }
+        }
+
+        // Sort by timestamp (newest first)
+        allRides.sort((a, b) => b.timestamp - a.timestamp);
+
+        console.log(`📊 Loaded ${supabaseRides.length} rides from Supabase, ${localRides.length} rides from localStorage, total: ${allRides.length}`);
+        setRideLog(allRides);
       } catch (err) {
         console.warn('Could not load ride logs', err);
         setRideLog([]);
@@ -598,11 +651,11 @@ const AppContent: React.FC = () => {
 
                      const reminder15Id = `reminder-15-${log.id}`;
                      if (minutesToPickup <= 15 && minutesToPickup > 14 && !notifications.some(n => n.id === reminder15Id)) {
-                         newNotifications.push({ id: reminder15Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message15', messageParams: { customerName: log.customerName, pickupAddress: log.stops[0] || '' }, timestamp: now, rideLogId: log.id });
+                         newNotifications.push({ id: reminder15Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message15', messageParams: { customerName: log.customerName, pickupAddress: (log.stops[0] || '').split('|')[0].trim() }, timestamp: now, rideLogId: log.id });
                      }
                      const reminder5Id = `reminder-5-${log.id}`;
                      if (minutesToPickup <= 5 && minutesToPickup > 4 && !notifications.some(n => n.id === reminder5Id)) {
-                          newNotifications.push({ id: reminder5Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message5', messageParams: { customerName: log.customerName, pickupAddress: log.stops[0] || '' }, timestamp: now, rideLogId: log.id });
+                          newNotifications.push({ id: reminder5Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message5', messageParams: { customerName: log.customerName, pickupAddress: (log.stops[0] || '').split('|')[0].trim() }, timestamp: now, rideLogId: log.id });
                      }
                  } catch(e) {
                    console.error("Could not parse schedule time for notification", e)
@@ -639,6 +692,171 @@ const AppContent: React.FC = () => {
    }, [rideLog, notifications]);
 
   // --- Handlers ---
+  const handleQueueRide = useCallback(async (rideRequest: RideRequest) => {
+    // Geocode stops for AI assignment
+    let stopCoords: { lat: number; lon: number }[] = [];
+    try {
+      stopCoords = await Promise.all(rideRequest.stops.map(s => geocodeAddress(s, language)));
+    } catch (err) {
+      console.error('Error geocoding stops for queue assignment:', err);
+      // Fallback to empty coordinates if geocoding fails
+      stopCoords = rideRequest.stops.map(() => ({ lat: 0, lon: 0 }));
+    }
+
+    // Try AI matching - find nearest available driver
+    const aiAssignment = await findNearestAvailableDriver(rideRequest, stopCoords, vehicles);
+
+    let finalStatus = RideStatus.Pending;
+    let finalVehicleId = null;
+    let finalVehicleName = null;
+    let finalVehicleLicensePlate = null;
+    let finalDriverName = null;
+    let finalVehicleType = null;
+    let estimatedPrice = undefined;
+    let estimatedPickupTimestamp = undefined;
+    let estimatedCompletionTimestamp = undefined;
+    let fuelCost = undefined;
+
+    if (aiAssignment) {
+      // AI found a driver - assign immediately
+      finalStatus = RideStatus.Accepted;
+      finalVehicleId = aiAssignment.vehicle.id;
+      finalVehicleName = aiAssignment.vehicle.name;
+      finalVehicleLicensePlate = aiAssignment.vehicle.licensePlate;
+      finalDriverName = getDriverName(aiAssignment.vehicle.driverId);
+      finalVehicleType = aiAssignment.vehicle.type;
+
+      // Calculate estimates for the assigned ride
+      try {
+        const vehicleCoords = await geocodeAddress(aiAssignment.vehicle.location, language);
+        const stopCoords = await Promise.all(rideRequest.stops.map(s => geocodeAddress(s, language)));
+        const totalDistance = stopCoords.reduce((dist, coord, i) => {
+          if (i === 0) return 0;
+          const prev = stopCoords[i-1];
+          return dist + haversineDistance(prev.lat, prev.lon, coord.lat, coord.lon);
+        }, 0);
+        const duration = Math.max(30, Math.round(totalDistance * 2 + (stopCoords.length - 1) * 10)) + 5; // 2 min per km + 10 min per stop + 5 min buffer
+
+        const pricePerKm = aiAssignment.vehicle.type === VehicleType.Van ? tariff.pricePerKmVan : tariff.pricePerKmCar;
+        estimatedPrice = tariff.startingFee + Math.round(totalDistance * pricePerKm);
+
+        estimatedPickupTimestamp = Date.now() + (aiAssignment.distance * 60 * 1000); // ETA in milliseconds
+        estimatedCompletionTimestamp = Date.now() + duration * 60 * 1000;
+
+        // Fuel cost
+        if (aiAssignment.vehicle.fuelType && aiAssignment.vehicle.fuelConsumption) {
+          const fuelPrice = fuelPrices[aiAssignment.vehicle.fuelType];
+          fuelCost = Math.round((totalDistance / 100) * aiAssignment.vehicle.fuelConsumption * fuelPrice);
+        }
+
+        // Update vehicle status to busy
+        const totalBusyTime = aiAssignment.distance + duration + 5; // ETA + duration + buffer
+        const freeAt = Date.now() + totalBusyTime * 60 * 1000;
+        const updatedVehicles = vehicles.map(v => v.id === aiAssignment.vehicle.id ? { ...v, status: VehicleStatus.Busy, freeAt } : v);
+        setVehicles(updatedVehicles);
+
+        // Emit vehicle status change
+        if ((window as any).dispatcherSocket) {
+          (window as any).dispatcherSocket.emit('vehicle_status_changed', {
+            shiftId: 'dispatcher_shift',
+            vehicleId: aiAssignment.vehicle.id,
+            status: VehicleStatus.Busy,
+            freeAt,
+          });
+          console.log('➡️ Emitted vehicle_status_changed via socket for AI-assigned vehicle', aiAssignment.vehicle.id);
+        } else {
+          supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error updating vehicle status:', err));
+        }
+
+        console.log('🎯 AI automatically assigned ride to nearest driver:', finalDriverName);
+      } catch (err) {
+        console.error('Error calculating estimates for AI assignment:', err);
+      }
+    } else {
+      // No driver available - queue the ride
+      console.log('📋 No available driver found, queuing ride for manual assignment');
+    }
+
+    const newLog: RideLog = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+      vehicleName: finalVehicleName,
+      vehicleLicensePlate: finalVehicleLicensePlate,
+      driverName: finalDriverName,
+      vehicleType: finalVehicleType,
+      customerName: rideRequest.customerName,
+      rideType: RideType.BUSINESS, // Default to business ride
+      customerPhone: rideRequest.customerPhone,
+      stops: rideRequest.stops,
+      passengers: rideRequest.passengers,
+      pickupTime: rideRequest.pickupTime,
+      status: finalStatus,
+      vehicleId: finalVehicleId,
+      notes: rideRequest.notes,
+      estimatedPrice: estimatedPrice,
+      estimatedPickupTimestamp: estimatedPickupTimestamp,
+      estimatedCompletionTimestamp: estimatedCompletionTimestamp,
+      fuelCost: fuelCost,
+    };
+
+    try {
+      // Prefer server-authoritative emit when dispatcher socket is connected
+      if ((window as any).dispatcherSocket) {
+        const rideData = {
+          id: newLog.id,
+          timestamp: newLog.timestamp,
+          vehicleName: newLog.vehicleName,
+          vehicleLicensePlate: newLog.vehicleLicensePlate,
+          driverName: newLog.driverName,
+          vehicleType: newLog.vehicleType,
+          customerName: newLog.customerName,
+          rideType: (newLog.rideType ?? 'business').toLowerCase(),
+          customerPhone: newLog.customerPhone,
+          stops: newLog.stops,
+          passengers: newLog.passengers,
+          pickupTime: newLog.pickupTime,
+          status: (newLog.status || '').toLowerCase(),
+          vehicleId: newLog.vehicleId,
+          notes: newLog.notes,
+          estimatedPrice: newLog.estimatedPrice,
+          estimatedPickupTimestamp: newLog.estimatedPickupTimestamp,
+          estimatedCompletionTimestamp: newLog.estimatedCompletionTimestamp,
+          fuelCost: newLog.fuelCost,
+        };
+
+        (window as any).dispatcherSocket.emit('ride_update', { shiftId: 'dispatcher_shift', rideData });
+        console.log('➡️ Emitted ride_update via socket for queued/AI-assigned ride:', newLog.id);
+        // Optimistically add to local state; server will reconcile when it persists
+        setRideLog(prev => [newLog, ...prev]);
+
+        if (finalStatus === RideStatus.Accepted) {
+          alert(t('notifications.rideAssigned', { driverName: finalDriverName || 'Unknown' }));
+        } else {
+          alert(t('notifications.rideQueued'));
+        }
+      } else {
+        // Fallback to central sync helper when socket not available
+        try {
+          await import('./services/syncService').then(m => m.persistRide(newLog));
+          console.log('Persisted queued/AI-assigned ride via syncService fallback:', newLog.id);
+          setRideLog(prev => [newLog, ...prev]);
+
+          if (finalStatus === RideStatus.Accepted) {
+            alert(t('notifications.rideAssigned', { driverName: finalDriverName || 'Unknown' }));
+          } else {
+            alert(t('notifications.rideQueued'));
+          }
+        } catch (err) {
+          console.error('Failed to persist queued/AI-assigned ride via syncService fallback:', err);
+          alert('Failed to process ride. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Failed to save queued/AI-assigned ride (socket or supabase):', error);
+      alert('Failed to process ride. Please try again.');
+    }
+  }, [t, language, vehicles, tariff, fuelPrices]);
+
   const handleScheduleRide = useCallback(async (rideRequest: RideRequest) => {
         const newLog: RideLog = {
           id: crypto.randomUUID(),
@@ -844,28 +1062,66 @@ const AppContent: React.FC = () => {
         supabaseService.updateVehicles(updatedVehicles).catch(err => console.error('Error saving vehicle update', err));
       }
 
-       const newLog: RideLog = {
-           id: crypto.randomUUID(),
-         timestamp: Date.now(),
-         vehicleName: vehicle.name,
-         vehicleLicensePlate: vehicle.licensePlate,
-         driverName: getDriverName(vehicle.driverId),
-         vehicleType: vehicle.type,
-         rideType: RideType.BUSINESS, // Default to business ride
-         customerName: rideRequest.customerName,
-         customerPhone: rideRequest.customerPhone,
-         stops: finalStops,
-         passengers: rideRequest.passengers,
-         pickupTime: rideRequest.pickupTime,
-          status: RideStatus.Pending, // Start as pending, driver will accept
-          vehicleId: vehicle.id,
-          notes: rideRequest.notes,
-         estimatedPrice: estimatedPrice,
-           estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
-           estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
-          fuelCost: fuelCost,
-          distance: paidDistance,
-       };
+        // Geocode stops for AI assignment
+        let stopCoords: { lat: number; lon: number }[] = [];
+        try {
+          stopCoords = await Promise.all(finalStops.map(s => geocodeAddress(s, language)));
+        } catch (err) {
+          console.error('Error geocoding stops for AI assignment:', err);
+          // Fallback to empty coordinates if geocoding fails
+          stopCoords = finalStops.map(() => ({ lat: 0, lon: 0 }));
+        }
+
+        // Check if dispatcher is busy (has unassigned rides) or if AI should handle assignment
+        const hasUnassignedRides = rideLog.some(ride => ride.status === RideStatus.Pending && !ride.vehicleId);
+        const shouldQueue = hasUnassignedRides || !vehicle.email; // Queue if dispatcher busy or no driver assigned
+
+    let finalStatus = RideStatus.Queued;
+        let finalVehicle = vehicle;
+        let finalDriverName = getDriverName(vehicle.driverId);
+
+        if (shouldQueue) {
+          console.log('📋 Dispatcher busy or no driver assigned, queuing ride...');
+
+          // Try AI matching - find nearest available driver
+          const aiAssignment = await findNearestAvailableDriver(rideRequest, stopCoords, vehicles);
+          if (aiAssignment) {
+            finalVehicle = aiAssignment.vehicle;
+            finalDriverName = getDriverName(aiAssignment.vehicle.driverId);
+            finalStatus = RideStatus.Accepted;
+            console.log('🎯 AI assigned ride to nearest driver:', finalDriverName);
+          } else {
+            finalStatus = RideStatus.Queued;
+            finalVehicle = { ...vehicle, id: undefined }; // No vehicle assigned yet
+            finalDriverName = null;
+            console.log('📋 Ride queued - waiting for dispatcher assignment');
+          }
+        } else {
+          finalStatus = RideStatus.Accepted;
+        }
+
+        const newLog: RideLog = {
+            id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          vehicleName: finalVehicle.name,
+          vehicleLicensePlate: finalVehicle.licensePlate,
+          driverName: finalDriverName,
+          vehicleType: finalVehicle.type,
+          rideType: RideType.BUSINESS, // Default to business ride
+          customerName: rideRequest.customerName,
+          customerPhone: rideRequest.customerPhone,
+          stops: finalStops,
+          passengers: rideRequest.passengers,
+          pickupTime: rideRequest.pickupTime,
+           status: finalStatus,
+           vehicleId: finalVehicle.id,
+           notes: rideRequest.notes,
+          estimatedPrice: estimatedPrice,
+            estimatedPickupTimestamp: Date.now() + (eta * 60 * 1000),
+            estimatedCompletionTimestamp: Date.now() + totalBusyTime * 60 * 1000,
+           fuelCost: fuelCost,
+           distance: paidDistance,
+        };
 
        console.log('🚗 Creating new ride for driver:', {
          vehicleId: newLog.vehicleId,
@@ -875,11 +1131,18 @@ const AppContent: React.FC = () => {
          id: newLog.id
        });
 
-       setRideLog(prev => [newLog, ...prev]);
-       setAssignmentResult(null);
-       setManualAssignmentDetails(null);
+        setRideLog(prev => [newLog, ...prev]);
+        setAssignmentResult(null);
+        setManualAssignmentDetails(null);
 
-      // Automatically open SMS modal for the new ride
+       // Handle SMS modal based on ride status
+       if (finalStatus === RideStatus.Accepted) {
+         // Automatically open SMS modal for accepted rides
+         handleSendSms(newLog.id);
+       } else if (finalStatus === RideStatus.Queued) {
+         // Show notification for queued rides
+         alert(`Ride queued for dispatcher assignment. Customer: ${rideRequest.customerName}`);
+       }
       // Persist the created ride via socket (preferred) or Supabase fallback
       try {
         if ((window as any).dispatcherSocket) {
@@ -1597,8 +1860,8 @@ const AppContent: React.FC = () => {
         log.driverName,
         log.customerName,
         log.customerPhone,
-        log.stops[0] || '', // Pickup
-        log.stops.slice(1).join('; ') || '', // Destinations
+        (log.stops[0] || '').split('|')[0].trim(), // Pickup
+        log.stops.slice(1).map(s => s.split('|')[0].trim()).join('; ') || '', // Destinations
         log.pickupTime,
         log.status === RideStatus.Scheduled ? t('rideStatus.SCHEDULED') :
         log.status === RideStatus.InProgress ? t('rideStatus.IN_PROGRESS') :
@@ -1679,9 +1942,46 @@ const AppContent: React.FC = () => {
   const reloadRideLogs = useCallback(async () => {
     try {
       console.log('🔄 Reloading ride logs...');
-      const rl = await supabaseService.getRideLogs().catch(() => []);
-      console.log(`📊 Reloaded ${Array.isArray(rl) ? rl.length : 0} ride logs from Supabase`);
-      setRideLog(Array.isArray(rl) ? rl : []);
+
+      // Load from Supabase
+      let supabaseRides: any[] = [];
+      try {
+        supabaseRides = await supabaseService.getRideLogs();
+        supabaseRides = Array.isArray(supabaseRides) ? supabaseRides : [];
+        console.log(`📊 Reloaded ${supabaseRides.length} ride logs from Supabase`);
+      } catch (err) {
+        console.warn('Could not load ride logs from Supabase', err);
+        supabaseRides = [];
+      }
+
+      // Always load from localStorage as well
+      let localRides: any[] = [];
+      try {
+        const stored = localStorage.getItem('ride-log');
+        if (stored) {
+          localRides = JSON.parse(stored);
+          localRides = Array.isArray(localRides) ? localRides : [];
+          console.log(`📊 Reloaded ${localRides.length} ride logs from localStorage`);
+        }
+      } catch (err) {
+        console.warn('Could not load ride logs from localStorage', err);
+        localRides = [];
+      }
+
+      // Merge rides from both sources
+      const allRides = [...localRides];
+      for (const ride of supabaseRides) {
+        const existingIndex = allRides.findIndex(r => r.id === ride.id);
+        if (existingIndex >= 0) {
+          allRides[existingIndex] = ride;
+        } else {
+          allRides.push(ride);
+        }
+      }
+
+      allRides.sort((a, b) => b.timestamp - a.timestamp);
+      setRideLog(allRides);
+      console.log(`📊 Total ride logs loaded: ${allRides.length}`);
     } catch (err) {
       console.error('❌ Error reloading ride logs:', err);
     }
@@ -1887,10 +2187,10 @@ const AppContent: React.FC = () => {
   const recentRideLog = sortedRideLog.filter(log => log.timestamp > Date.now() - 12 * 60 * 60 * 1000);
 
   const widgetMap: Record<WidgetId, React.ReactNode> = {
-    dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
+    dispatch: <DispatchFormComponent onSubmit={handleSubmitDispatch} onSchedule={handleScheduleRide} onQueue={handleQueueRide} isLoading={isLoading} rideHistory={rideLog} cooldownTime={cooldown} onRoutePreview={handleRoutePreview} assignmentResult={assignmentResult} people={people} customerSms={customerSms} />,
     vehicles: <VehicleStatusTable vehicles={vehicles} people={people} onEdit={setEditingVehicle} rideLog={rideLog} onAddVehicleClick={() => setIsAddingVehicle(true)} locations={locations} />,
     map: <OpenStreetMap vehicles={vehicles} people={people} locations={locations} routeToPreview={routeToPreview} confirmedAssignment={assignmentResult} />,
-      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onDuplicate={(log) => { setEditingRideLog({...log, id: '', timestamp: new Date().toISOString()}); }} onSendSms={handleSendSms} onResendRide={handleResendRide} onSendToDriver={handleSendToDriver} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} hasNewRides={hasNewRides} onMarkRidesViewed={() => setHasNewRides(false)} />,
+      rideLog: <RideLogTable logs={sortedRideLog} vehicles={vehicles} people={people} messagingApp={messagingApp} onStatusChange={handleRideStatusChange} onDelete={handleDeleteRideLog} onEdit={(logId) => { setEditingRideLog(rideLog.find(log => log.id === logId) || null); }} onDuplicate={(log) => { setEditingRideLog({...log, id: '', timestamp: Date.now()}); }} onSendSms={handleSendSms} onResendRide={handleResendRide} onSendToDriver={handleSendToDriver} showCompleted={showCompletedRides} onToggleShowCompleted={() => setShowCompletedRides(prev => !prev)} dateFilter={dateFilter} onDateFilterChange={setDateFilter} timeFilter={timeFilter} onTimeFilterChange={setTimeFilter} hasNewRides={hasNewRides} onMarkRidesViewed={() => setHasNewRides(false)} />,
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
@@ -1944,7 +2244,7 @@ const AppContent: React.FC = () => {
              customerName: rideData.customerName,
              rideType: (rideData.rideType ?? 'business').toUpperCase(),
              customerPhone: rideData.customerPhone,
-             stops: rideData.stops,
+              stops: rideData.stops.map(stop => stop.split('|')[0].trim()),
              passengers: rideData.passengers,
              pickupTime: rideData.pickupTime,
              status: rideData.status?.toLowerCase() === 'in_progress' ? RideStatus.InProgress :
@@ -1984,8 +2284,8 @@ const AppContent: React.FC = () => {
               setHasNewRides(true); // Mark that there are new rides
               notifyUser('ride', {
                 title: 'Nová jízda od řidiče!',
-                body: `${rideData.customerName} - ${rideData.stops?.[0]} → ${rideData.stops?.[rideData.stops.length - 1]}`
-             });
+                body: `${rideData.customerName} - ${(rideData.stops?.[0] || '').split('|')[0].trim()} → ${(rideData.stops?.[rideData.stops.length - 1] || '').split('|')[0].trim()}`
+              });
            }
          }}
         onStatusChange={(rideId, newStatus) => {
@@ -2188,26 +2488,15 @@ const AppContent: React.FC = () => {
                     <TrophyIcon className="w-3 h-3" />
                     <span>Gamifikace</span>
                   </button>
-                   <div className="flex items-center space-x-1">
-                     <button
-                       onClick={() => setIsShiftPlanningModalOpen(true)}
-                       className="flex items-center space-x-2 px-3 py-1 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
-                     >
-                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                       </svg>
-                       <span>Plánování</span>
-                     </button>
-                     <button
-                       onClick={() => setIsShiftListModalOpen(true)}
-                       className="flex items-center space-x-2 px-3 py-1 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
-                     >
-                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                       </svg>
-                       <span>Seznam</span>
-                     </button>
-                   </div>
+                    <button
+                      onClick={() => setIsShiftPlanningModalOpen(true)}
+                      className="flex items-center space-x-2 px-3 py-1 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-600 rounded-lg transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <span>Plánování směn</span>
+                    </button>
               </nav>
              </div>
 
@@ -2442,7 +2731,7 @@ const AppContent: React.FC = () => {
       {isAddingVehicle && (<AddVehicleModal onSave={handleAddVehicle} onClose={() => setIsAddingVehicle(false)}/>)}
       {editingRideLog && (<EditRideLogModal log={editingRideLog} vehicles={vehicles} people={people} onSave={handleUpdateRideLog} onSendSms={handleSendSms} onSendToDriver={handleSendToDriver} onClose={() => { setEditingRideLog(null); setIsRideBookOpen(true); }}/>)}
       {isCreatingRide && (<EditRideLogModal log={createDefaultRideLog()} vehicles={vehicles} people={people} onSave={handleCreateRideLog} onSendSms={handleSendSms} onSendToDriver={handleSendToDriver} onClose={() => { setIsCreatingRide(false); setIsRideBookOpen(true); }}/>)}
-      {isRideBookOpen && (<RideBookModal rideLogs={rideLog} vehicles={vehicles} people={people} companyInfo={companyInfo} onEdit={(log) => { setEditingRideLog(log); setIsRideBookOpen(false); }} onDelete={handleDeleteRideLog} onDuplicate={(log) => { setEditingRideLog({...log, id: '', timestamp: new Date().toISOString()}); setIsRideBookOpen(false); }} onAdd={() => { setIsCreatingRide(true); setIsRideBookOpen(false); }} onClose={() => setIsRideBookOpen(false)} />)}
+      {isRideBookOpen && (<RideBookModal rideLogs={rideLog} vehicles={vehicles} people={people} companyInfo={companyInfo} onEdit={(log) => { setEditingRideLog(log); setIsRideBookOpen(false); }} onDelete={handleDeleteRideLog} onDuplicate={(log) => { setEditingRideLog({...log, id: '', timestamp: Date.now()}); setIsRideBookOpen(false); }} onAdd={() => { setIsCreatingRide(true); setIsRideBookOpen(false); }} onClose={() => setIsRideBookOpen(false)} />)}
       {manualAssignmentDetails && (<ManualAssignmentModal details={manualAssignmentDetails} people={people} onConfirm={handleManualAssignmentConfirm} onClose={() => setManualAssignmentDetails(null)} messagingApp={messagingApp} />)}
       {isPeopleModalOpen && (<ManagePeopleModal people={people} onAdd={handleAddPerson} onUpdate={handleUpdatePerson} onDelete={handleDeletePerson} onClose={() => setIsPeopleModalOpen(false)}/>)}
       {isTariffModalOpen && (<TariffSettingsModal initialTariff={tariff} onSave={setTariff} onClose={() => setIsTariffModalOpen(false)} />)}
@@ -2502,12 +2791,7 @@ const AppContent: React.FC = () => {
          supabase={supabase}
        />
 
-       {/* Shift List Modal */}
-       <ShiftListModal
-         isOpen={isShiftListModalOpen}
-         onClose={() => setIsShiftListModalOpen(false)}
-         supabase={supabase}
-       />
+
 
       {/* Authentication Modals */}
       <LoginModal

@@ -6,6 +6,8 @@
   "background_color": "#2e3440",
   "display": "standalone",
   "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
   "scope": "/",
   "start_url": "/",
   "categories": ["business", "productivity", "transportation", "navigation"],
@@ -13,7 +15,6 @@
   "dir": "ltr",
   "prefer_related_applications": false,
   "iarc_rating_id": "",
-  "related_applications": [],
   "shortcuts": [
     {
       "name": "Active Rides",

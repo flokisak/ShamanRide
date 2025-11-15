@@ -30,14 +30,7 @@ if ('serviceWorker' in navigator) {
           Notification.requestPermission().then((permission) => {
             if (permission === 'granted') {
               console.log('Notification permission granted');
-              // Initialize audio context after permission granted
-              if (window.AudioContext || (window as any).webkitAudioContext) {
-                const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-                const audioContext = new AudioContextClass();
-                if (audioContext.state === 'suspended') {
-                  audioContext.resume();
-                }
-              }
+              // Audio context will be initialized on first user interaction
             }
           });
         }

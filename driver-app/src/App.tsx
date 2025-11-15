@@ -11,9 +11,22 @@ function App() {
     // Initialize background sync
     initializeBackgroundSync();
 
-    // Check if driver is already selected
-    const driverId = localStorage.getItem('selectedDriverId');
-    setSelectedDriver(!!driverId);
+    // Check if driver shift is active
+    const checkShiftStatus = () => {
+      const driverId = localStorage.getItem('selectedDriverId');
+      const isShiftActive = localStorage.getItem('isShiftActive') === 'true';
+      setSelectedDriver(!!driverId && isShiftActive);
+    };
+
+    checkShiftStatus();
+
+    // Listen for storage changes to detect when shift starts
+    const handleStorageChange = () => {
+      checkShiftStatus();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   return (

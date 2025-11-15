@@ -28,6 +28,7 @@ const CustomerAutocompleteField: React.FC<{ label: string, id: string, value: st
 interface DispatchFormProps {
    onSubmit: (rideRequest: RideRequest, optimize: boolean) => void;
    onSchedule: (rideRequest: RideRequest) => void;
+   onQueue?: (rideRequest: RideRequest) => void;
    isLoading: boolean;
    rideHistory: RideLog[];
    cooldownTime: number;
@@ -37,11 +38,11 @@ interface DispatchFormProps {
    customerSms?: string;
 }
 
-export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, onSchedule, isLoading, rideHistory, cooldownTime, onRoutePreview, assignmentResult, people, customerSms }) => {
+export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading, rideHistory, cooldownTime, onRoutePreview, assignmentResult, people, customerSms }: DispatchFormProps) => {
   const { t } = useTranslation();
   const [stops, setStops] = useState<string[]>(['Náměstí, Mikulov', 'Dukelské náměstí, Hustopeče']);
   // parallel array to keep selected placeIds for each stop (keeps UI address clean)
-  const [stopPlaceIds, setStopPlaceIds] = useState<string[]>(() => ['Náměstí, Mikulov', 'Dukelské náměstí, Hustopeče'].map(() => ''));
+  const [stopPlaceIds, setStopPlaceIds] = useState<string[]>(['', '']);
   const [customerName, setCustomerName] = useState('Jan Novák');
   const [customerPhone, setCustomerPhone] = useState('777 123 456');
   const [passengers, setPassengers] = useState(1);
@@ -61,202 +62,202 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
       return Array.from(names);
   }, [rideHistory]);
   
-   // compute combined stops (address|placeId) for geocoding/preview while keeping UI clean
-   const combinedStops = stops.map((s, i) => stopPlaceIds[i] ? `${s}|${stopPlaceIds[i]}` : s);
+    // compute combined stops (address|placeId) for geocoding/preview while keeping UI clean
+    const combinedStops = stops.map((s, i) => stopPlaceIds[i] ? `${s}|${stopPlaceIds[i]}` : s);
 
-   // Debounced route preview - only trigger when user stops typing for 2 seconds
-   // and only if we have at least 2 valid stops
-   useEffect(() => {
-     // Only trigger route preview if we have at least 2 stops and they're not empty
-     const hasValidStops = combinedStops.length >= 2 && combinedStops.every(stop => stop.trim().length > 0);
-
-     if (!hasValidStops) {
-       onRoutePreview([]);
-       return;
-     }
-
-     const handler = setTimeout(() => {
-       // Double-check stops are still valid before triggering
-       const currentCombinedStops = stops.map((s, i) => stopPlaceIds[i] ? `${s}|${stopPlaceIds[i]}` : s);
-       const stillValid = currentCombinedStops.length >= 2 && currentCombinedStops.every(stop => stop.trim().length > 0);
-
-       if (stillValid) {
-         onRoutePreview(currentCombinedStops);
-       }
-     }, 2000); // Increased to 2 seconds to reduce API calls
-
-     return () => clearTimeout(handler);
-   }, [combinedStops, onRoutePreview, stops, stopPlaceIds]);
-
+    // Debounced route preview - only trigger when user stops typing for 2 seconds
+    // and only if we have at least 2 valid stops
     useEffect(() => {
-      const loadChatRecords = async () => {
-        if (customerPhone.trim()) {
-          const allMessages = await smsService.getMessages();
-          const customerMessages = allMessages.filter(msg =>
-            msg.to === customerPhone || msg.from === customerPhone
-          ).sort((a, b) => b.timestamp - a.timestamp);
-          setChatRecords(customerMessages);
-        } else {
-          setChatRecords([]);
+      // Only trigger route preview if we have at least 2 stops and they're not empty
+      const hasValidStops = combinedStops.length >= 2 && combinedStops.every(stop => stop.trim().length > 0);
+
+      if (!hasValidStops) {
+        onRoutePreview([]);
+        return;
+      }
+
+      const handler = setTimeout(() => {
+        // Double-check stops are still valid before triggering
+        const currentCombinedStops = stops.map((s, i) => stopPlaceIds[i] ? `${s}|${stopPlaceIds[i]}` : s);
+        const stillValid = currentCombinedStops.length >= 2 && currentCombinedStops.every(stop => stop.trim().length > 0);
+
+        if (stillValid) {
+          onRoutePreview(currentCombinedStops);
         }
-      };
-      loadChatRecords();
+      }, 2000); // Increased to 2 seconds to reduce API calls
 
-      // Clear SMS message when customer phone changes
-      setSmsMessage('');
-    }, [customerPhone]);
+      return () => clearTimeout(handler);
+    }, [combinedStops, onRoutePreview, stops, stopPlaceIds]);
 
-    // Set SMS message when customerSms prop changes (for manual assignments only)
-    useEffect(() => {
-      if (customerSms && customerSms.trim()) {
-        setSmsMessage(customerSms);
-      } else {
-        // Clear SMS when no manual assignment is made
-        setSmsMessage('');
-      }
-    }, [customerSms]);
-  
-  const handleStopChange = (index: number, value: string) => {
-    const newStops = [...stops];
-    newStops[index] = value;
-    setStops(newStops);
-    // Clear any previously selected placeId for this index when user types manually
-    setStopPlaceIds(prev => {
-      const p = [...prev];
-      p[index] = '';
-      return p;
-    });
-  };
-  
-  const addStop = () => {
-    setStops([...stops, '']);
-    setStopPlaceIds(prev => [...prev, '']);
-  };
-  
-  const removeStop = (index: number) => {
-    if (stops.length > 2) {
-      setStops(stops.filter((_, i) => i !== index));
-      setStopPlaceIds(prev => prev.filter((_, i) => i !== index));
-    }
-  };
+     useEffect(() => {
+       const loadChatRecords = async () => {
+         if (customerPhone.trim()) {
+           const allMessages = await smsService.getMessages();
+           const customerMessages = allMessages.filter(msg =>
+             msg.to === customerPhone || msg.from === customerPhone
+           ).sort((a, b) => b.timestamp - a.timestamp);
+           setChatRecords(customerMessages);
+         } else {
+           setChatRecords([]);
+         }
+       };
+       loadChatRecords();
 
-  const formatDateForPicker = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
-  };
-  
-  const handleScheduleToggle = (checked: boolean) => {
-    setIsScheduled(checked);
-    if (checked) {
-      if (pickupTime === 'ihned') {
-        const defaultScheduleTime = new Date(Date.now() + 60 * 60 * 1000);
-        setPickupTime(formatDateForPicker(defaultScheduleTime));
-      }
-    } else {
-      setPickupTime('ihned');
-    }
-  };
+       // Clear SMS message when customer phone changes
+       setSmsMessage('');
+     }, [customerPhone]);
 
-  const handleQuickTimeSelect = (minutes?: number) => {
-    if (typeof minutes === 'undefined') {
-      setIsScheduled(false);
-      setPickupTime('ihned');
-    } else {
-      const newTime = new Date(Date.now() + minutes * 60 * 1000);
-      setPickupTime(formatDateForPicker(newTime));
-      if (!isScheduled) setIsScheduled(true);
-    }
-  };
-
-  const handleSendSms = async () => {
-    if (!smsMessage.trim() || !customerPhone.trim()) return;
-    try {
-      // Normalize phone number (basic)
-      const normalizedPhone = customerPhone.replace(/\s/g, '');
-      const result = await sendSms([normalizedPhone], smsMessage);
-      if (result.success) {
-        const record: SmsMessageRecord = {
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          direction: 'outgoing',
-          to: normalizedPhone,
-          text: smsMessage,
-          status: 'sent'
-        };
-        await smsService.saveOutgoing(record);
-        setChatRecords(prev => [record, ...prev]);
-        setSmsMessage('');
+     // Set SMS message when customerSms prop changes (for manual assignments only)
+     useEffect(() => {
+       if (customerSms && customerSms.trim()) {
+         setSmsMessage(customerSms);
        } else {
-         console.error('Failed to send SMS:', result.error);
-         // Show user-friendly error notification
-         alert(`Failed to send SMS: ${typeof result.error === 'string' ? result.error : 'Unknown error'}`);
+         // Clear SMS when no manual assignment is made
+         setSmsMessage('');
        }
-     } catch (error) {
-       console.error('Error sending SMS:', error);
-       alert(`Error sending SMS: ${error instanceof Error ? error.message : 'Unknown error'}`);
-     }
-  };
+     }, [customerSms]);
 
-  const handlePOISearch = (stopIndex: number) => {
-    setSelectedStopIndex(stopIndex);
-    setShowPOIModal(true);
-  };
+   const handleStopChange = (index: number, value: string) => {
+     const newStops = [...stops];
+     newStops[index] = value;
+     setStops(newStops);
+     // Clear any previously selected placeId for this index when user types manually
+     setStopPlaceIds(prev => {
+       const p = [...prev];
+       p[index] = '';
+       return p;
+     });
+   };
 
-  const handlePOISelect = (poi: POIResult) => {
-    if (selectedStopIndex !== null) {
-      // Keep visible address clean, store placeId separately
-      handleStopChange(selectedStopIndex, poi.name);
-      setStopPlaceIds(prev => {
-        const p = [...prev];
-        p[selectedStopIndex] = poi.placeId || '';
-        return p;
-      });
-    }
-  };
+   const addStop = () => {
+     setStops([...stops, '']);
+     setStopPlaceIds(prev => [...prev, '']);
+   };
 
-
-  const validateForm = (): boolean => {
-      const newErrors: Partial<Record<keyof RideRequest | 'stops', string>> = {};
-      if (stops.some(s => !s.trim())) newErrors.stops = t('dispatch.validation.allStopsRequired');
-      if (stops.length < 2) newErrors.stops = t('dispatch.validation.atLeastTwoStops');
-      if (!customerName.trim()) newErrors.customerName = t('dispatch.validation.nameRequired');
-      if (!customerPhone.trim()) newErrors.customerPhone = t('dispatch.validation.phoneRequired');
-      if (!pickupTime.trim()) newErrors.pickupTime = t('dispatch.validation.pickupTimeRequired');
-      if (isScheduled && new Date(pickupTime).getTime() <= Date.now()) newErrors.pickupTime = t('dispatch.validation.futureTimeRequired');
-      if (passengers <= 0) newErrors.passengers = t('dispatch.validation.positivePassengers');
-
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-  }
-
-   const handleSubmit = (e: React.FormEvent) => {
-     e.preventDefault();
-     if (validateForm()) {
-        const rideRequest: RideRequest = {
-          stops: combinedStops,
-          customerName,
-          customerPhone,
-          passengers,
-          pickupTime,
-          notes,
-        };
-        if (isScheduled) {
-            onSchedule(rideRequest);
-        } else {
-            onSubmit(rideRequest, combinedStops.length > 2 && optimizeStops);
-        }
-        // Clear SMS message after successful submission
-        setSmsMessage('');
+   const removeStop = (index: number) => {
+     if (stops.length > 2) {
+       setStops(stops.filter((_, i) => i !== index));
+       setStopPlaceIds(prev => prev.filter((_, i) => i !== index));
      }
    };
-  
 
+   const handlePOISearch = (stopIndex: number) => {
+     setSelectedStopIndex(stopIndex);
+     setShowPOIModal(true);
+   };
 
-  const isOnCooldown = cooldownTime > 0;
+   const handlePOISelect = (poi: POIResult) => {
+     if (selectedStopIndex !== null) {
+       const newStops = [...stops];
+       newStops[selectedStopIndex] = poi.displayName;
+       setStops(newStops);
+       setStopPlaceIds(prev => {
+         const p = [...prev];
+         p[selectedStopIndex] = poi.placeId || '';
+         return p;
+       });
+     }
+     setShowPOIModal(false);
+     setSelectedStopIndex(null);
+   };
+
+   const handleSendSms = async () => {
+     if (!customerPhone.trim() || !smsMessage.trim()) return;
+
+     try {
+       const cleanPhone = customerPhone.replace(/\s/g, '');
+       const res = await sendSms([cleanPhone], smsMessage);
+       if (res.success) {
+         alert(t('smsPreview.sentSuccess'));
+         // Add to chat records
+         const newRecord: SmsMessageRecord = {
+           id: `sms-${Date.now()}`,
+           timestamp: Date.now(),
+           direction: 'outgoing',
+           rideLogId: null,
+           to: cleanPhone,
+           text: smsMessage,
+           status: 'sent',
+         };
+         setChatRecords(prev => [newRecord, ...prev]);
+         setSmsMessage('');
+       } else {
+         alert(t('smsPreview.sentFailed'));
+       }
+     } catch (err) {
+       console.error('Error sending SMS:', err);
+       alert(t('smsPreview.sentFailed'));
+     }
+   };
+
+   const handleQueueRide = (e: React.FormEvent) => {
+      e.preventDefault();
+
+      // Validate required fields
+      const newErrors: Partial<Record<keyof RideRequest | 'stops', string>> = {};
+      if (!customerName.trim()) newErrors.customerName = t('dispatch.errors.customerNameRequired');
+      if (!customerPhone.trim()) newErrors.customerPhone = t('dispatch.errors.customerPhoneRequired');
+      if (stops.some(stop => !stop.trim())) newErrors.stops = t('dispatch.errors.stopsRequired');
+      if (passengers < 1) newErrors.passengers = t('dispatch.errors.passengersRequired');
+
+      setErrors(newErrors);
+      if (Object.keys(newErrors).length > 0) return;
+
+      const rideRequest: RideRequest = {
+         stops: combinedStops,
+         customerName,
+         customerPhone,
+         passengers,
+         pickupTime,
+         notes,
+      };
+
+      if (onQueue) {
+         onQueue(rideRequest);
+         // Clear form after queuing
+         setStops(['Náměstí, Mikulov', 'Dukelské náměstí, Hustopeče']);
+         setStopPlaceIds(['', '']);
+         setCustomerName('Jan Novák');
+         setCustomerPhone('777 123 456');
+         setPassengers(1);
+         setPickupTime('ihned');
+         setNotes('');
+         setSmsMessage('');
+         setErrors({});
+       }
+    };
+
+   const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+
+      // Validate required fields
+      const newErrors: Partial<Record<keyof RideRequest | 'stops', string>> = {};
+      if (!customerName.trim()) newErrors.customerName = t('dispatch.errors.customerNameRequired');
+      if (!customerPhone.trim()) newErrors.customerPhone = t('dispatch.errors.customerPhoneRequired');
+      if (stops.some(stop => !stop.trim())) newErrors.stops = t('dispatch.errors.stopsRequired');
+      if (passengers < 1) newErrors.passengers = t('dispatch.errors.passengersRequired');
+
+      setErrors(newErrors);
+      if (Object.keys(newErrors).length > 0) return;
+
+      const rideRequest: RideRequest = {
+         stops: combinedStops,
+         customerName,
+         customerPhone,
+         passengers,
+         pickupTime,
+         notes,
+      };
+      if (isScheduled) {
+         onSchedule(rideRequest);
+      } else {
+         onSubmit(rideRequest, combinedStops.length > 2 && optimizeStops);
+      }
+      // Clear SMS message after successful submission
+      setSmsMessage('');
+   };
+
+    const isOnCooldown = cooldownTime > 0;
 
   return (
     <div className="bg-slate-800 p-2 rounded-lg shadow-2xl flex flex-col h-full">
@@ -290,74 +291,104 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
                     </button>
-                    {stops.length > 2 && <button type="button" onClick={() => removeStop(index)} className="p-1 text-red-500 hover:text-red-400 rounded-full"><TrashIcon size={18}/></button>}
+                    {stops.length > 2 && (
+                      <button
+                        type="button"
+                        onClick={() => removeStop(index)}
+                        className="p-2 text-red-400 hover:text-red-300 hover:bg-slate-700 rounded-full transition-colors"
+                        title="Odstranit zastávku"
+                      >
+                        <TrashIcon size={16} />
+                      </button>
+                    )}
                   </div>
                 ))}
+                <button
+                  type="button"
+                  onClick={addStop}
+                  className="flex items-center space-x-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-cyan-400 hover:text-cyan-300 rounded-md transition-colors text-sm"
+                >
+                  <PlusIcon size={16} />
+                  <span>{t('dispatch.stops.addStop')}</span>
+                </button>
               </div>
-              {errors.stops && <p className="mt-1 text-xs text-red-400">{errors.stops}</p>}
-              <button type="button" onClick={addStop} className="mt-2 flex items-center space-x-2 text-sm text-cyan-400 hover:text-cyan-300">
-                <PlusIcon size={16}/>
-                <span>{t('dispatch.stops.addStop')}</span>
-              </button>
             </div>
-            
-            <CustomerAutocompleteField label={t('dispatch.customerName')} id="customerName" value={customerName} onChange={setCustomerName} suggestions={uniqueCustomerNames} error={errors.customerName} />
-            <InputField label={t('dispatch.customerPhone')} id="customerPhone" value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} type="tel" error={errors.customerPhone} />
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <InputField label={t('dispatch.passengers')} id="passengers" value={passengers} onChange={e => setPassengers(Math.max(1, parseInt(e.target.value, 10) || 1))} type="number" error={errors.passengers} />
-                <div>
-                    <div className="flex justify-between items-center mb-1">
-                        <label className="block text-xs font-medium text-gray-300">{t('dispatch.pickupTime')}</label>
-                        <div className="flex items-center">
-                            <input type="checkbox" id="isScheduled" checked={isScheduled} onChange={(e) => handleScheduleToggle(e.target.checked)} className="h-4 w-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-600 focus:ring-offset-slate-800 cursor-pointer"/>
-                            <label htmlFor="isScheduled" className="ml-2 text-sm text-gray-300 cursor-pointer">{t('dispatch.schedule')}</label>
-                        </div>
-                    </div>
 
-                    {isScheduled ? (
-                        <input type="datetime-local" id="pickupTime" name="pickupTime" value={pickupTime === 'ihned' ? formatDateForPicker(new Date()) : pickupTime} onChange={(e) => setPickupTime(e.target.value)} min={formatDateForPicker(new Date())} className={`w-full bg-slate-700 border ${errors.pickupTime ? 'border-red-500' : 'border-slate-600'} rounded-md shadow-sm py-1 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500`}/>
-                    ) : (
-                        <input type="text" value={t('dispatch.asap')} readOnly className="w-full bg-slate-600 border border-slate-500 rounded-md shadow-sm py-1 px-3 text-gray-300 cursor-default"/>
-                    )}
-                    
-                    {errors.pickupTime && <p className="mt-1 text-xs text-red-400">{errors.pickupTime}</p>}
-                    
-                    <div className="flex items-center space-x-1 mt-1">
-                        <button type="button" onClick={() => handleQuickTimeSelect()} className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-600 hover:bg-slate-500 transition-colors">{t('dispatch.asap')}</button>
-                        <button type="button" onClick={() => handleQuickTimeSelect(10)} className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-600 hover:bg-slate-500 transition-colors">+10 min</button>
-                        <button type="button" onClick={() => handleQuickTimeSelect(20)} className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-600 hover:bg-slate-500 transition-colors">+20 min</button>
-                        <button type="button" onClick={() => handleQuickTimeSelect(30)} className="px-2 py-0.5 text-xs font-medium rounded-full bg-slate-600 hover:bg-slate-500 transition-colors">+30 min</button>
-                    </div>
-                </div>
-            </div>
-            
+            <CustomerAutocompleteField
+              label={t('dispatch.customerName')}
+              id="customerName"
+              value={customerName}
+              onChange={setCustomerName}
+              suggestions={uniqueCustomerNames}
+              error={errors.customerName}
+            />
+
+            <InputField
+              label={t('dispatch.customerPhone')}
+              id="customerPhone"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+              error={errors.customerPhone}
+            />
+
             <div>
-                <label htmlFor="notes" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.notesOptional')}</label>
-                <textarea id="notes" name="notes" value={notes} onChange={(e) => setNotes(e.target.value)} rows={1} className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-1 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500" placeholder={t('dispatch.notesPlaceholder')}></textarea>
+              <label htmlFor="passengers" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.passengers')}</label>
+              <input
+                type="number"
+                id="passengers"
+                name="passengers"
+                value={passengers}
+                onChange={(e) => setPassengers(parseInt(e.target.value) || 1)}
+                min="1"
+                max="20"
+                className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+              />
+              {errors.passengers && <p className="mt-1 text-xs text-red-400">{errors.passengers}</p>}
             </div>
 
             <div>
-                <label htmlFor="sms" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.sendSms')}</label>
-                <div className="flex space-x-2">
-                    <input
-                        type="text"
-                        id="sms"
-                        value={smsMessage}
-                        onChange={(e) => setSmsMessage(e.target.value)}
-                        placeholder={t('dispatch.smsPlaceholder')}
-                        className="flex-grow bg-slate-700 border border-slate-600 rounded-md shadow-sm py-1 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                    />
-                    <button
-                        type="button"
-                        onClick={handleSendSms}
-                        disabled={!smsMessage.trim() || !customerPhone.trim()}
-                        className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-600 text-white text-sm rounded-md transition-colors"
-                    >
-                        {t('dispatch.send')}
-                    </button>
-                </div>
+              <label htmlFor="pickupTime" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.pickupTime')}</label>
+              <select
+                id="pickupTime"
+                name="pickupTime"
+                value={pickupTime}
+                onChange={(e) => setPickupTime(e.target.value)}
+                className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+              >
+                <option value="ihned">{t('dispatch.immediate')}</option>
+                <option value="15min">Za 15 minut</option>
+                <option value="30min">Za 30 minut</option>
+                <option value="1hod">Za 1 hodinu</option>
+                <option value="2hod">Za 2 hodiny</option>
+                <option value="custom">Vlastní čas</option>
+              </select>
             </div>
+
+            <div>
+              <label htmlFor="notes" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.notesOptional')}</label>
+              <textarea
+                id="notes"
+                name="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={t('dispatch.notesPlaceholder')}
+                rows={2}
+                className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 resize-none"
+              />
+            </div>
+
+            {customerPhone.trim() && (
+              <div>
+                <button
+                  type="button"
+                  onClick={handleSendSms}
+                  disabled={!smsMessage.trim() || !customerPhone.trim()}
+                  className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-600 text-white text-sm rounded-md transition-colors"
+                >
+                  {t('dispatch.sendSms')}
+                </button>
+              </div>
+            )}
 
             {chatRecords.length > 0 && (
                 <div>
@@ -398,35 +429,36 @@ export const DispatchFormComponent: React.FC<DispatchFormProps> = ({ onSubmit, o
                 onChange={(e) => setOptimizeStops(e.target.checked)}
                 className="h-4 w-4 rounded bg-slate-700 border-slate-600 text-cyan-500 focus:ring-cyan-600 focus:ring-offset-slate-800 cursor-pointer"
               />
+
             </div>
         )}
 
-        <button
-            type="submit"
-            disabled={isLoading || (isOnCooldown && !isScheduled)}
-            className="w-full flex justify-center py-1 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-slate-900 bg-cyan-400 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-slate-800 disabled:bg-cyan-800 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors mt-auto"
-        >
-            {isScheduled 
-                ? t('dispatch.scheduleRide') 
-                : isLoading
-                ? t('dispatch.findingVehicle')
-                : isOnCooldown 
-                ? t('dispatch.cooldown', { cooldownTime })
-                : t('dispatch.findVehicle')}
-        </button>
+        <div className="flex space-x-2 mt-auto">
+            {onQueue && (
+                <button
+                    type="button"
+                    onClick={handleQueueRide}
+                    disabled={isLoading}
+                    className="flex-1 flex justify-center py-1 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 focus:ring-offset-slate-800 disabled:bg-purple-800 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                    📋 {t('dispatch.queueRide')}
+                </button>
+            )}
+            <button
+                type="submit"
+                disabled={isLoading || (isOnCooldown && !isScheduled)}
+                className="flex-1 flex justify-center py-1 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-slate-900 bg-cyan-400 hover:bg-cyan-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 focus:ring-offset-slate-800 disabled:bg-cyan-800 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+                {isScheduled
+                    ? t('dispatch.scheduleRide')
+                    : isLoading
+                    ? t('dispatch.findingVehicle')
+                    : isOnCooldown
+                    ? t('dispatch.cooldown', { cooldownTime })
+                    : t('dispatch.findVehicle')}
+            </button>
+        </div>
         </form>
-
-        {/* POI Search Modal */}
-        <POISearchModal
-          isOpen={showPOIModal}
-          onClose={() => {
-            setShowPOIModal(false);
-            setSelectedStopIndex(null);
-          }}
-          onSelectPOI={handlePOISelect}
-          userLocation={undefined} // TODO: Add user location if available
-          searchRadius={10000}
-        />
     </div>
   );
 };

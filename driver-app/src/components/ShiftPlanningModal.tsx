@@ -35,6 +35,7 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [viewMode, setViewMode] = useState<'month' | 'day' | 'list'>('month');
 
   useEffect(() => {
     if (editingShift) {
@@ -143,8 +144,8 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Driver Selection (only for dispatcher) */}
-          {isDispatcher && (
+          {/* Driver Selection (only for dispatcher) - Disabled in driver app */}
+          {false && isDispatcher && (
             <div>
               <label className="block text-white/80 text-sm font-medium mb-1">
                 Řidič

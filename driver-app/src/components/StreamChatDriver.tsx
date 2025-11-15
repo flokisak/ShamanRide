@@ -194,19 +194,12 @@ export const StreamChatDriver: React.FC<StreamChatDriverProps> = ({
          const driverUserId = `driver_${vehicleNumber}`;
          setDriverId(driverUserId);
 
-         // Check if Supabase user is authenticated
-         console.log('Stream Chat: Checking Supabase authentication...');
-         const { data: { user }, error } = await supabase.auth.getUser();
-         if (error) {
-           console.error('Stream Chat: Authentication error:', error);
-           return;
-         }
-         if (!user) {
-           console.warn('Stream Chat: User not authenticated, skipping initialization');
-           return;
-         }
-         const userName = user?.user_metadata?.name || user?.email || `Driver ${vehicleNumber}`;
-         console.log('Stream Chat: User authenticated:', userName);
+          // Use driver info from selection instead of Supabase auth
+          console.log('Stream Chat: Using driver selection info...');
+          // Get driver name from localStorage (set during driver selection)
+          const driverName = localStorage.getItem('selectedDriverName') || `Driver ${vehicleNumber}`;
+          const userName = driverName;
+          console.log('Stream Chat: Using driver name:', userName);
 
          // Initialize with driver user
          console.log('Stream Chat: Calling initializeStreamChat...');

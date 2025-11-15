@@ -372,7 +372,7 @@ export const supabaseService = SUPABASE_ENABLED
          _toDbRideLog(r: any) {
             const result: any = {
               id: r.id,
-              timestamp: r.timestamp,
+              timestamp: typeof r.timestamp === 'string' ? new Date(r.timestamp).getTime() : r.timestamp,
               vehicle_name: r.vehicleName ?? null,
               vehicle_license_plate: r.vehicleLicensePlate ?? null,
               driver_name: r.driverName ?? null,
@@ -383,12 +383,12 @@ export const supabaseService = SUPABASE_ENABLED
               stops: r.stops,
               passengers: r.passengers,
               pickup_time: r.pickupTime,
-                 status: r.status.toLowerCase(),
+                  status: r.status.toLowerCase() === 'queued' ? 'pending' : r.status.toLowerCase(),
               vehicle_id: r.vehicleId ?? null,
               notes: r.notes ?? null,
-              estimated_price: r.estimatedPrice ?? null,
-              estimated_pickup_timestamp: r.estimatedPickupTimestamp || null,
-              estimated_completion_timestamp: r.estimatedCompletionTimestamp || null,
+               estimated_price: r.estimatedPrice ?? null,
+               estimated_pickup_timestamp: r.estimatedPickupTimestamp ? (typeof r.estimatedPickupTimestamp === 'string' ? new Date(r.estimatedPickupTimestamp).getTime() : r.estimatedPickupTimestamp) : null,
+               estimated_completion_timestamp: r.estimatedCompletionTimestamp ? (typeof r.estimatedCompletionTimestamp === 'string' ? new Date(r.estimatedCompletionTimestamp).getTime() : r.estimatedCompletionTimestamp) : null,
                 fuel_cost: r.fuelCost ?? null,
                distance: r.distance ?? null,
                payment: r.payment ?? null,
@@ -416,11 +416,11 @@ export const supabaseService = SUPABASE_ENABLED
             vehicleType: db.vehicle_type ?? null,
             customerName: db.customer_name,
             rideType: (db.ride_type ?? 'business').toUpperCase(),
-            customerPhone: db.customer_phone,
-            stops: db.stops,
+             customerPhone: db.customer_phone,
+             stops: Array.isArray(db.stops) ? db.stops.map(stop => stop.split('|')[0].trim()) : db.stops,
             passengers: db.passengers,
             pickupTime: db.pickup_time,
-              status: (db.status || '').toUpperCase().replace(/ /g, '_') as RideStatus,
+               status: (db.status === 'pending' && !db.vehicle_id) ? 'QUEUED' : (db.status || '').toUpperCase().replace(/ /g, '_') as RideStatus,
             vehicleId: db.vehicle_id ?? null,
             notes: db.notes ?? null,
             estimatedPrice: db.estimated_price ?? null,
@@ -719,9 +719,21 @@ export const supabaseService = SUPABASE_ENABLED
 
       // Gamification
       async getDriverScores() {
-        const { data, error } = await supabase.from('driver_scores').select('*').order('total_score', { ascending: false });
-        if (error) throw error;
-        return data || [];
+        try {
+          const { data, error } = await supabase.from('driver_scores').select('*').order('total_score', { ascending: false });
+          if (error) {
+            // Check if it's a "relation does not exist" error (table doesn't exist)
+            if (error.message?.includes('relation') && error.message?.includes('does not exist')) {
+              console.warn('driver_scores table does not exist, returning empty array');
+              return [];
+            }
+            throw error;
+          }
+          return data || [];
+        } catch (error) {
+          console.error('Error fetching driver scores:', error);
+          return [];
+        }
       },
       async updateDriverScore(driverId: number, scoreData: any) {
         return runWithFallback(
@@ -733,6 +745,16 @@ export const supabaseService = SUPABASE_ENABLED
               ...filteredScoreData,
               updated_at: new Date().toISOString()
             }, { onConflict: 'driver_id' });
+            if (error) {
+              // Check if it's a schema/cache error (table/columns don't exist)
+              if (error.message?.includes('relation') && error.message?.includes('does not exist') ||
+                  error.message?.includes('Could not find the') && error.message?.includes('column')) {
+                console.warn('driver_scores table or columns do not exist, skipping gamification update');
+                return; // Don't throw, just skip
+              }
+              console.error('Supabase driver_scores upsert error:', error);
+              throw error;
+            }
             if (error) throw error;
           },
           async () => {
@@ -757,8 +779,21 @@ export const supabaseService = SUPABASE_ENABLED
         return data;
       },
       async updateDriverStats(driverId: number, stats: any) {
-        const { error } = await supabase.from('driver_stats').upsert({ driver_id: driverId, ...stats, updated_at: new Date().toISOString() }, { onConflict: 'driver_id' });
-        if (error) throw error;
+        try {
+          const { error } = await supabase.from('driver_stats').upsert({ driver_id: driverId, ...stats, updated_at: new Date().toISOString() }, { onConflict: 'driver_id' });
+          if (error) {
+            // Check if it's a schema/cache error (table/columns don't exist)
+            if (error.message?.includes('relation') && error.message?.includes('does not exist') ||
+                error.message?.includes('Could not find the') && error.message?.includes('column')) {
+              console.warn('driver_stats table or columns do not exist, skipping stats update');
+              return; // Don't throw, just skip
+            }
+            throw error;
+          }
+        } catch (error) {
+          console.error('Error updating driver stats:', error);
+          // Don't re-throw, just log the error
+        }
       },
 
       // Manual Entries

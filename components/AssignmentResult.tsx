@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { AssignmentResultData, ErrorResult, Person, AssignmentAlternative, MessagingApp, FuelPrices } from '../types';
 import { CarIcon, AlertTriangleIcon, CheckCircleIcon, ClipboardIcon, ShareIcon, NavigationIcon, FuelIcon } from './icons';
-import { VehicleType } from '../types';
+import { VehicleType, VehicleStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
 import { generateSms, generateShareLink } from '../services/dispatchService';
 
@@ -43,12 +43,19 @@ const VehicleOption: React.FC<{
               <div className={vehicle.type === VehicleType.Car ? "text-cyan-400" : "text-gray-200"}>
                 <CarIcon size={40} />
               </div>
-              <div>
-                <p className="font-bold text-lg text-white">{vehicle.name}</p>
-                <p className="text-gray-300 text-sm">{driver?.name || <span className="italic text-gray-500">{t('general.unassigned')}</span>}</p>
-                {driver?.phone && <p className="text-teal-400 text-xs font-mono">{driver.phone}</p>}
+               <div>
+                 <div className="flex items-center gap-2">
+                   <p className="font-bold text-lg text-white">{vehicle.name}</p>
+                   {vehicle.status === VehicleStatus.Busy && (
+                     <span className="px-2 py-1 text-xs font-medium bg-yellow-600 text-yellow-100 rounded-full">
+                       {t('vehicleStatus.Busy')}
+                     </span>
+                   )}
+                 </div>
+                 <p className="text-gray-300 text-sm">{driver?.name || <span className="italic text-gray-500">{t('general.unassigned')}</span>}</p>
+                 {driver?.phone && <p className="text-teal-400 text-xs font-mono">{driver.phone}</p>}
 
-              </div>
+               </div>
             </div>
             <div className="flex items-center justify-between sm:justify-end sm:space-x-6">
                 {estimatedFuelCost !== null && (
@@ -57,27 +64,32 @@ const VehicleOption: React.FC<{
                         <p className="text-xl font-bold text-red-400">{estimatedFuelCost} Kč</p>
                     </div>
                 )}
-                <div className="text-center">
-                    <p className="text-sm text-gray-400">{t('assignment.price')}</p>
-                    <p className="text-xl font-bold text-white">{estimatedPrice > 0 ? `${estimatedPrice} Kč` : t('general.notApplicable')}</p>
-                </div>
                  <div className="text-center">
-                    <p className="text-sm text-gray-400">{t('assignment.route')}</p>
-                    <p className="text-xl font-bold text-white">{rideDistance ? `${rideDistance.toFixed(1)} km` : '...'}</p>
-                </div>
-                <div className="text-center sm:text-right">
-                    <p className="text-sm text-gray-400">{t('assignment.eta')}</p>
-                    <p className="text-xl font-bold text-white">{eta > 0 ? `${eta} min` : '?'}</p>
-                    {waitTime && waitTime > 0 && (
-                        <p className="text-xs text-yellow-400">({t('assignment.wait')} {waitTime} min)</p>
-                    )}
-                </div>
+                   <p className="text-sm text-gray-400">{t('assignment.eta')}</p>
+                   <p className="text-xl font-bold text-cyan-400">{eta} min</p>
+                 </div>
+                 <div className="text-center">
+                   <p className="text-sm text-gray-400">{t('assignment.price')}</p>
+                   <p className="text-xl font-bold text-green-400">{estimatedPrice} Kč</p>
+                 </div>
                  <button
-                    onClick={() => onConfirm(option)}
-                    className="px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 focus:ring-offset-slate-800 transition-colors"
-                >
-                    {t('assignment.assign')}
-                </button>
+                   onClick={() => {
+                     if (vehicle.status === VehicleStatus.Busy) {
+                       const confirmAssign = window.confirm(
+                         t('assignment.confirmBusyAssignment', { vehicleName: vehicle.name })
+                       );
+                       if (!confirmAssign) return;
+                     }
+                     onConfirm(option);
+                   }}
+                   className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                     isRecommended
+                       ? 'bg-green-600 hover:bg-green-700 text-white'
+                       : 'bg-cyan-600 hover:bg-cyan-700 text-white'
+                   }`}
+                 >
+                   {t('assignment.assign')}
+                 </button>
             </div>
         </div>
     )

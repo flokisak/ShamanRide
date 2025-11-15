@@ -442,7 +442,11 @@
   },
   "rideStatus": {
     "SCHEDULED": "Geplant",
+    "PENDING": "Ausstehend",
+    "QUEUED": "In Warteschlange",
+    "ACCEPTED": "Akzeptiert",
     "ON_THE_WAY": "Unterwegs",
+    "IN_PROGRESS": "In Bearbeitung",
     "COMPLETED": "Abgeschlossen",
     "CANCELLED": "Storniert"
   },

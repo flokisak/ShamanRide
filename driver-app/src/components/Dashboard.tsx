@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase, authService, geocodeAddress, SUPABASE_ENABLED } from '../supabaseClient';
 import { supabaseService, startAuthKeepAlive, stopAuthKeepAlive } from '../supabaseClient';
 import { SUPABASE_ENABLED as SUPABASE_ENABLED_SERVICES } from '../supabaseClient';
 import { persistRide } from '../utils/syncService';
-import { RideLog, RideStatus } from '../types';
+import { RideLog, RideStatus, VehicleStatus } from '../types';
 import { useTranslation } from '../contexts/LanguageContext';
+import { format } from 'date-fns';
+import { cs } from 'date-fns/locale';
+import { initDriverSocket } from '../services/socketClient';
 
 import { notifyUser, initializeNotifications, requestNotificationPermission, requestWakeLock, releaseWakeLock, isWakeLockSupported } from '../utils/notifications';
 import { queueLocationData, queueMessage, queueRideUpdate, requestBackgroundSync, initializeBackgroundSync, backgroundSyncManager } from '../utils/backgroundSync';
@@ -69,8 +72,20 @@ const Dashboard: React.FC = () => {
     }
     return null;
   });
-  const [driverInfo, setDriverInfo] = useState<any>(null);
-  const [selectedDriver, setSelectedDriver] = useState<any>(null);
+   const [driverInfo, setDriverInfo] = useState<any>(null);
+   const [selectedDriver, setSelectedDriver] = useState<any>(null);
+   const [vehicles, setVehicles] = useState<any[]>([]);
+   const [shiftPlans, setShiftPlans] = useState<any[]>([]);
+   const [queuedDataCount, setQueuedDataCount] = useState<number>(0);
+   const [activeCard, setActiveCard] = useState<string>('operations');
+   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+
+   const [showShiftPlanningModal, setShowShiftPlanningModal] = useState<boolean>(false);
+   const [editingShift, setEditingShift] = useState<any>(null);
+   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+   const [chatCardActivated, setChatCardActivated] = useState<number | null>(null);
+   const [shiftViewMode, setShiftViewMode] = useState<'calendar' | 'list'>('calendar');
+   const [flashingRides, setFlashingRides] = useState<Set<number>>(new Set());
   // Initialize shift state from localStorage synchronously
     const getInitialShiftValue = (key: string, defaultValue: any = null) => {
       const value = localStorage.getItem(key);
@@ -92,10 +107,13 @@ const Dashboard: React.FC = () => {
    const [shiftStartTimestamp, setShiftStartTimestamp] = useState<number | null>(
      getInitialShiftValue('shiftStartTime')
    );
-   const [shiftEndTimestamp, setShiftEndTimestamp] = useState<number | null>(
-     getInitialShiftValue('shiftEndTime')
-   );
-  const [historyFilter, setHistoryFilter] = useState<'2days' | 'week' | 'month' | 'all'>('all');
+    const [shiftEndTimestamp, setShiftEndTimestamp] = useState<number | null>(
+      getInitialShiftValue('shiftEndTime')
+    );
+    const [isShiftActive, setIsShiftActive] = useState<boolean>(
+      localStorage.getItem('isShiftActive') === 'true'
+    );
+   const [historyFilter, setHistoryFilter] = useState<'2days' | 'week' | 'month' | 'all'>('all');
   const [licensePlate, setLicensePlate] = useState<string>('');
      const [otherDrivers, setOtherDrivers] = useState<any[]>([]);
      const [availableDrivers, setAvailableDrivers] = useState<any[]>([]);
@@ -108,46 +126,278 @@ const Dashboard: React.FC = () => {
    const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
   const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
 
+  // Filter ride history based on selected filter
+  const filteredRideHistory = useMemo(() => {
+    const now = Date.now();
+    return rideHistory.filter(ride => {
+      switch (historyFilter) {
+        case '2days':
+          return now - ride.timestamp < 2 * 24 * 60 * 60 * 1000; // 2 days
+        case 'week':
+          return now - ride.timestamp < 7 * 24 * 60 * 60 * 1000; // 1 week
+        case 'month':
+          return now - ride.timestamp < 30 * 24 * 60 * 60 * 1000; // 30 days
+        case 'all':
+        default:
+          return true;
+      }
+    });
+  }, [rideHistory, historyFilter]);
+
   // Initialize shift data from localStorage
   useEffect(() => {
-    const savedShiftStart = localStorage.getItem('shiftStartTimestamp');
-    const savedShiftEnd = localStorage.getItem('shiftEndTimestamp');
+    const savedShiftStart = localStorage.getItem('shiftStartTime');
+    const savedShiftEnd = localStorage.getItem('shiftEndTime');
     const savedDriverStatus = localStorage.getItem('driverStatus');
     const savedShiftCash = localStorage.getItem('shiftCash');
-    
+
     if (savedShiftStart) setShiftStartTime(parseInt(savedShiftStart));
     if (savedShiftEnd) setShiftEndTimestamp(parseInt(savedShiftEnd));
     if (savedDriverStatus) setDriverStatus(savedDriverStatus as any);
     if (savedShiftCash) setShiftCash(parseFloat(savedShiftCash));
   }, []);
 
+  // Check for old shifts after vehicles are loaded
+  useEffect(() => {
+    if (vehicles.length === 0) return;
+
+    const savedIsShiftActive = localStorage.getItem('isShiftActive');
+    const savedShiftStart = localStorage.getItem('shiftStartTime');
+
+    if (savedIsShiftActive === 'true' && savedShiftStart) {
+      const shiftStartTime = parseInt(savedShiftStart);
+      const hoursSinceShiftStart = (Date.now() - shiftStartTime) / (1000 * 60 * 60);
+
+      if (hoursSinceShiftStart > 24) {
+        console.log('⚠️ Old shift detected (', hoursSinceShiftStart.toFixed(1), 'hours ago), resetting shift state');
+
+        // Reset localStorage
+        localStorage.removeItem('shiftStartTime');
+        localStorage.removeItem('shiftEndTime');
+        localStorage.setItem('isShiftActive', 'false');
+        localStorage.setItem('driverStatus', 'offline');
+
+        // Reset state
+        setIsShiftActive(false);
+        setDriverStatus('offline');
+        setShiftStartTime(null);
+        setShiftEndTimestamp(null);
+
+        // Also reset vehicle status in database
+        if (vehicleNumber) {
+          const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
+          if (currentVehicle) {
+            const updatedVehicle = {
+              ...currentVehicle,
+              status: VehicleStatus.Available,
+              shiftStart: null,
+              shiftEnd: null,
+              shiftStartOdo: null,
+              shiftEndOdo: null
+            };
+            supabaseService.updateVehicles([updatedVehicle]).then(() => {
+              // Update local state
+              setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
+            }).catch(err => {
+              console.error('Failed to reset vehicle status:', err);
+            });
+          }
+        }
+      }
+    }
+  }, [vehicles, vehicleNumber]);
+
   const handleStartShift = async (startOdo: number) => {
-    setShiftStartTime(Date.now());
+    console.log('🚀 handleStartShift called with odometer:', startOdo);
+    const startTime = Date.now();
+    console.log('🚀 Setting shift start time:', new Date(startTime).toLocaleString());
+
+    setShiftStartTime(startTime);
     setShiftEndTimestamp(null);
     setDriverStatus('available');
-    localStorage.setItem('shiftStartTimestamp', Date.now().toString());
-    localStorage.removeItem('shiftEndTimestamp');
+    setIsShiftActive(true);
+    localStorage.setItem('shiftStartTime', startTime.toString());
+    localStorage.removeItem('shiftEndTime');
     localStorage.setItem('driverStatus', 'available');
     localStorage.setItem('isShiftActive', 'true');
+
+    // Save start odometer to vehicle data
+    setShiftStartOdo(startOdo);
+    localStorage.setItem('shiftStartOdo', startOdo.toString());
+    console.log('🚀 Saved start odometer to localStorage:', startOdo);
+
+    // Update vehicle with start odometer
+    if (vehicleNumber) {
+      try {
+        const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
+        console.log('🚀 Current vehicle before update:', currentVehicle);
+        const updatedVehicle = {
+          ...currentVehicle,
+          shiftStart: new Date(startTime),
+          shiftStartOdo: startOdo,
+          mileage: startOdo  // Update current mileage to start odometer
+        };
+        console.log('🚀 Updated vehicle object:', updatedVehicle);
+        if (updatedVehicle) {
+          await supabaseService.updateVehicles([updatedVehicle]);
+          console.log('✅ Vehicle start odometer and mileage updated in database:', startOdo);
+
+          // Update local vehicles state
+          setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
+          console.log('✅ Local vehicles state updated');
+        }
+      } catch (error) {
+        console.error('❌ Failed to update vehicle start odometer and mileage:', error);
+      }
+    } else {
+      console.log('❌ No vehicle number available for update');
+    }
+
+    // Update shift planning status to Active
+    if (shiftPlanningService && selectedDriver?.id) {
+      try {
+        const today = new Date();
+        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+
+        // Find today's planned shift for this driver
+        const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id, startOfDay, endOfDay);
+        const currentShift = driverShifts.find(shift =>
+          shift.status === ShiftPlanStatus.Planned &&
+          new Date(shift.plannedStart) <= new Date() &&
+          new Date(shift.plannedEnd) >= new Date()
+        );
+
+        if (currentShift) {
+          await shiftPlanningService.updateShiftPlan(currentShift.id, {
+            status: ShiftPlanStatus.Active,
+            actualStart: new Date()
+          });
+          console.log('Shift status updated to Active:', currentShift.id);
+        }
+      } catch (error) {
+        console.error('Failed to update shift status to Active:', error);
+      }
+    }
   };
 
-  const handleEndShift = async (endOdo: number) => {
-    setShiftEndTimestamp(Date.now());
+  const handleEndShift = async (endOdo: number): Promise<boolean> => {
+    const endTime = Date.now();
+
+    // Validate shift duration - prevent ending shifts too early
+    if (shiftStartTimestamp) {
+      const shiftDurationHours = (endTime - shiftStartTimestamp) / (1000 * 60 * 60);
+
+      // Minimum shift duration: 1 hour
+      if (shiftDurationHours < 1) {
+        alert(`Směna je příliš krátká (${shiftDurationHours.toFixed(1)} hodin). Minimální délka směny je 1 hodina.`);
+        return false;
+      }
+
+      // Check against planned shift end time if available
+      if (shiftPlanningService && selectedDriver?.id) {
+        try {
+          const today = new Date();
+          const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+
+          const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id, startOfDay, endOfDay);
+          const currentShift = driverShifts.find(shift => shift.status === ShiftPlanStatus.Active);
+
+          if (currentShift && currentShift.plannedEnd) {
+            const plannedEndTime = new Date(currentShift.plannedEnd).getTime();
+            const timeBeforePlannedEnd = (plannedEndTime - endTime) / (1000 * 60 * 60); // hours
+
+            // Allow ending up to 2 hours early, but warn if more than 30 minutes early
+            if (timeBeforePlannedEnd > 2) {
+              alert(`Směna končí příliš brzy. Plánovaný konec je ${new Date(currentShift.plannedEnd).toLocaleTimeString('cs-CZ')}.`);
+              return false;
+            } else if (timeBeforePlannedEnd > 0.5) { // More than 30 minutes early
+              const confirmEarly = confirm(`Směna končí ${timeBeforePlannedEnd.toFixed(1)} hodin před plánovaným koncem (${new Date(currentShift.plannedEnd).toLocaleTimeString('cs-CZ')}). Opravdu chcete směnu ukončit?`);
+              if (!confirmEarly) return false;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to validate against planned shift:', error);
+          // Continue with shift end even if validation fails
+        }
+      }
+    }
+
+    // Proceed with shift end
+    setShiftEndTimestamp(endTime);
     setDriverStatus('offline');
-    localStorage.setItem('shiftEndTimestamp', Date.now().toString());
+    setIsShiftActive(false);
+    localStorage.setItem('shiftEndTime', endTime.toString());
     localStorage.setItem('driverStatus', 'offline');
     localStorage.setItem('isShiftActive', 'false');
+
+    // Save end odometer to vehicle data
+    setShiftEndOdo(endOdo);
+    localStorage.setItem('shiftEndOdo', endOdo.toString());
+
+    // Update vehicle with end odometer and current mileage
+    if (vehicleNumber) {
+      try {
+        const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
+        const updatedVehicle = {
+          ...currentVehicle,
+          shiftEnd: new Date(endTime),
+          shiftEndOdo: endOdo,
+          mileage: endOdo  // Update current mileage to end odometer
+        };
+        if (updatedVehicle) {
+          await supabaseService.updateVehicles([updatedVehicle]);
+          console.log('Vehicle end odometer and mileage updated:', endOdo);
+
+          // Update local vehicles state
+          setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
+        }
+      } catch (error) {
+        console.error('Failed to update vehicle end odometer and mileage:', error);
+      }
+    }
+
+    // Update shift planning status to Completed
+    if (shiftPlanningService && selectedDriver?.id) {
+      try {
+        const today = new Date();
+        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+
+        // Find today's active shift for this driver
+        const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id, startOfDay, endOfDay);
+        const currentShift = driverShifts.find(shift =>
+          shift.status === ShiftPlanStatus.Active
+        );
+
+        if (currentShift) {
+          await shiftPlanningService.updateShiftPlan(currentShift.id, {
+            status: ShiftPlanStatus.Completed,
+            actualEnd: new Date()
+          });
+          console.log('Shift status updated to Completed:', currentShift.id);
+        }
+      } catch (error) {
+        console.error('Failed to update shift status to Completed:', error);
+      }
+    }
+
+    return true;
   };
 
   // Initialize vehicle number when driver is selected
   useEffect(() => {
     const initializeVehicle = async () => {
-      // Get selected driver info from localStorage
+      // Get selected driver and vehicle info from localStorage
       const selectedDriverId = localStorage.getItem('selectedDriverId');
       const selectedDriverEmail = localStorage.getItem('selectedDriverEmail');
       const selectedDriverName = localStorage.getItem('selectedDriverName');
+      const selectedVehicleId = localStorage.getItem('selectedVehicleId');
 
-      if (!selectedDriverId || !selectedDriverEmail) {
+      console.log('Loading from localStorage:', { selectedDriverId, selectedDriverName, selectedVehicleId });
+
+      if (!selectedDriverId || !selectedDriverEmail || !selectedVehicleId) {
         setVehicleNumber(null);
         setIsLoading(false);
         return;
@@ -162,12 +412,19 @@ const Dashboard: React.FC = () => {
           supabaseService.getPeople()
         ]);
         setVehicles(vehiclesData);
+        setAvailableDrivers(peopleData.filter(p => p.role === 'Driver'));
 
-        console.log('Looking for vehicle with driver ID:', selectedDriverId);
+        console.log('Looking for vehicle with ID:', selectedVehicleId);
         console.log('Available vehicles:', vehiclesData.map(v => ({ id: v.id, email: v.email, name: v.name, licensePlate: v.licensePlate, mileage: v.mileage, driverId: v.driverId })));
 
-        // Find the vehicle that matches the selected driver
-        const assignedVehicle = vehiclesData.find(v => v.id === parseInt(selectedDriverId));
+        // Find the vehicle by vehicle ID
+        const assignedVehicle = vehiclesData.find(v => v.id === parseInt(selectedVehicleId));
+
+        // Find the driver by driver ID
+        const assignedDriver = peopleData.find(p => p.id === parseInt(selectedDriverId));
+        console.log('Looking for driver with ID:', selectedDriverId);
+        console.log('Found driver:', assignedDriver);
+        console.log('All people:', peopleData.map(p => ({ id: p.id, name: p.name, role: p.role })));
 
       if (assignedVehicle) {
         console.log('Assigned vehicle found:', assignedVehicle.id, 'mileage:', assignedVehicle.mileage);
@@ -194,13 +451,22 @@ const Dashboard: React.FC = () => {
           console.warn('Failed to compute queued data counts:', e);
         }
 
-        // Set driver info from selected driver data
-        setDriverInfo({ id: parseInt(selectedDriverId), name: selectedDriverName || `Driver ${selectedDriverId}` });
-        setSelectedDriver({ id: parseInt(selectedDriverId), name: selectedDriverName || `Driver ${selectedDriverId}` });
-        console.log('Driver info from selection:', selectedDriverId, selectedDriverName);
+        // Set driver info from database
+        if (assignedDriver) {
+          setDriverInfo(assignedDriver);
+          setSelectedDriver(assignedDriver);
+          console.log('Driver info from database:', assignedDriver);
+        } else {
+          console.warn('Driver not found in database! selectedDriverId:', selectedDriverId, 'available drivers:', peopleData.map(p => ({ id: p.id, name: p.name })));
+          // Fallback to localStorage data if driver not found in database
+          setDriverInfo({ id: parseInt(selectedDriverId), name: selectedDriverName || `Driver ${selectedDriverId}` });
+          setSelectedDriver({ id: parseInt(selectedDriverId), name: selectedDriverName || `Driver ${selectedDriverId}` });
+          console.log('Driver info from localStorage (fallback):', selectedDriverId, selectedDriverName);
+        }
 
         // Load shift start/end timestamps from database if available
-        if (assignedVehicle.shiftStart) {
+        // Only load shift start from database if not already set (to avoid overriding resets)
+        if (assignedVehicle.shiftStart && !shiftStartTimestamp) {
           const shiftStartDate = new Date(assignedVehicle.shiftStart);
           if (!isNaN(shiftStartDate.getTime())) {
             const shiftStartTimeVal = shiftStartDate.getTime();
@@ -274,6 +540,244 @@ const Dashboard: React.FC = () => {
     initializeVehicle();
   }, []);
 
+  // Load rides when vehicle is ready
+  useEffect(() => {
+    if (vehicleNumber) {
+      loadRides();
+    }
+  }, [vehicleNumber]);
+
+  // Helper function to clean addresses (remove place IDs)
+  const cleanAddress = (address: string): string => {
+    if (!address) return address;
+    // Split on | and take the first part (the human-readable address)
+    return address.split('|')[0]?.trim() || address;
+  };
+
+  // Ride action functions
+  const acceptRideSpecific = async (ride: RideLog) => {
+    if (!socket || !socketConnected) {
+      alert('No socket connection. Please check your internet connection.');
+      return;
+    }
+
+    try {
+      console.log('🎯 Accepting specific ride:', ride.id);
+
+      // Update ride status to accepted
+      const updatedRide = { ...ride, status: RideStatus.Accepted };
+      await supabaseService.updateRideLog(ride.id, updatedRide);
+
+      // Emit to socket for real-time updates
+      socket.emit('ride_update', {
+        rideId: ride.id,
+        status: RideStatus.Accepted,
+        vehicleId: vehicleNumber
+      });
+
+      // Refresh rides
+      loadRides();
+
+      // Set as current ride
+      setCurrentRide(updatedRide);
+
+      // Add to flashing rides for visual feedback
+      setFlashingRides(prev => new Set([...prev, ride.id]));
+
+      // Remove flashing after animation
+      setTimeout(() => {
+        setFlashingRides(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(ride.id);
+          return newSet;
+        });
+      }, 3000);
+
+    } catch (error) {
+      console.error('❌ Failed to accept ride:', error);
+      alert('Failed to accept ride. Please try again.');
+    }
+  };
+
+  const acceptRide = async () => {
+    if (!currentRide) return;
+
+    try {
+      console.log('🎯 Accepting current ride:', currentRide.id);
+
+      const updatedRide = { ...currentRide, status: RideStatus.Accepted };
+      await supabaseService.updateRideLog(currentRide.id, updatedRide);
+
+      if (socket && socketConnected) {
+        socket.emit('ride_update', {
+          rideId: currentRide.id,
+          status: RideStatus.Accepted,
+          vehicleId: vehicleNumber
+        });
+      }
+
+      setCurrentRide(updatedRide);
+      loadRides();
+
+    } catch (error) {
+      console.error('❌ Failed to accept ride:', error);
+      alert('Failed to accept ride. Please try again.');
+    }
+  };
+
+  const startRide = async () => {
+    if (!currentRide) return;
+
+    try {
+      console.log('🚀 Starting ride:', currentRide.id);
+
+      const updatedRide = { ...currentRide, status: RideStatus.InProgress };
+      await supabaseService.updateRideLog(currentRide.id, updatedRide);
+
+      if (socket && socketConnected) {
+        socket.emit('ride_update', {
+          rideId: currentRide.id,
+          status: RideStatus.InProgress,
+          vehicleId: vehicleNumber
+        });
+      }
+
+      setCurrentRide(updatedRide);
+      loadRides();
+
+    } catch (error) {
+      console.error('❌ Failed to start ride:', error);
+      alert('Failed to start ride. Please try again.');
+    }
+  };
+
+  const endRide = () => {
+    if (currentRide) {
+      setRideToComplete(currentRide);
+      setShowCompletionModal(true);
+    }
+  };
+
+  const handleRideCompleted = () => {
+    // Close the completion modal
+    setShowCompletionModal(false);
+    setRideToComplete(null);
+
+    // Reload rides to get updated status
+    loadRides();
+
+    // Clear current ride since it's completed
+    setCurrentRide(null);
+  };
+
+  const formatPickupTime = (pickupTime: string) => {
+    if (!pickupTime || pickupTime === 'ihned') {
+      return 'ihned';
+    }
+
+    // Try to parse as date/time
+    try {
+      const date = new Date(pickupTime);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleString('cs-CZ', {
+          hour: '2-digit',
+          minute: '2-digit',
+          day: '2-digit',
+          month: '2-digit'
+        });
+      }
+    } catch (e) {
+      // If parsing fails, return as-is
+    }
+
+    return pickupTime;
+  };
+
+  const navigateToDestination = async (ride?: RideLog) => {
+    const targetRide = ride || currentRide;
+    if (!targetRide || targetRide.stops.length === 0) return;
+
+    try {
+      console.log('🗺️ Navigating for ride:', targetRide.id, 'stops:', targetRide.stops);
+
+      // Clean all addresses
+      const cleanStops = targetRide.stops.map(stop => cleanAddress(stop));
+      console.log('Clean stops:', cleanStops);
+
+      // Use the preferred navigation app
+      const navApp = preferredNavApp || 'google';
+
+      let navUrl: string;
+
+      if (navApp === 'google') {
+        try {
+          // Geocode all stops
+          const geocodedStops = await Promise.all(
+            cleanStops.map(async (stop, index) => {
+              try {
+                const coords = await geocodeAddress(stop, 'cs');
+                console.log(`Geocoded stop ${index} (${stop}):`, coords);
+                return { address: stop, coords };
+              } catch (error) {
+                console.warn(`Failed to geocode stop ${index} (${stop}):`, error);
+                return { address: stop, coords: null };
+              }
+            })
+          );
+
+          // Build Google Maps URL with origin (current location if available), waypoints, and destination
+          const params = new URLSearchParams();
+          params.append('api', '1');
+          params.append('travelmode', 'driving');
+
+          // If we have current location, use it as origin
+          if (location) {
+            params.append('origin', `${location.latitude},${location.longitude}`);
+          }
+
+          // Filter out stops without coordinates
+          const validStops = geocodedStops.filter(stop => stop.coords !== null);
+
+          if (validStops.length > 0) {
+            // Last valid stop is destination
+            const destination = validStops[validStops.length - 1];
+            params.append('destination', `${destination.coords!.lat},${destination.coords!.lon}`);
+
+            // All stops except last are waypoints
+            if (validStops.length > 1) {
+              const waypoints = validStops.slice(0, -1)
+                .map(stop => `${stop.coords!.lat},${stop.coords!.lon}`)
+                .join('|');
+              params.append('waypoints', waypoints);
+            }
+
+            navUrl = `https://www.google.com/maps/dir/?${params.toString()}`;
+            console.log('Generated Google Maps URL:', navUrl);
+          } else {
+            // Fallback to search for first stop
+            navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanStops[0])}`;
+          }
+
+        } catch (error) {
+          console.error('Google Maps geocoding failed:', error);
+          // Fallback to search for first stop
+          navUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanStops[0])}`;
+        }
+      } else {
+        // Mapy.cz - just navigate to first stop
+        navUrl = `https://mapy.cz/zakladni?q=${encodeURIComponent(cleanStops[0])}`;
+      }
+
+      console.log('Opening navigation URL:', navUrl);
+      // Open navigation in new window/tab
+      window.open(navUrl, '_blank');
+
+    } catch (error) {
+      console.error('❌ Failed to navigate:', error);
+      alert('Failed to open navigation. Please try again.');
+    }
+  };
+
 
 
   // Load available drivers for shift planning
@@ -286,30 +790,135 @@ const Dashboard: React.FC = () => {
         }
       } catch (error) {
         console.error('Error loading available drivers:', error);
+        // Show user-friendly error message for network issues
+        if (error.message?.includes('NetworkError') || error.message?.includes('fetch')) {
+          alert('Network connection issue. Shift planning features may not be available. Please check your internet connection and try again.');
+        }
       }
     };
 
     loadAvailableDrivers();
   }, [shiftPlanningService]);
 
-  // Load other drivers for chat functionality
+  // Load rides for current vehicle
+  const loadRides = async () => {
+    if (!vehicleNumber) return;
+
+    try {
+      console.log('📦 Loading rides for vehicle:', vehicleNumber);
+
+      // Load current ride (in progress)
+      const currentRideData = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'in_progress', 1);
+      if (currentRideData && currentRideData.length > 0) {
+        setCurrentRide(currentRideData[0]);
+      } else {
+        setCurrentRide(null);
+      }
+
+      // Load pending rides (assigned but not started)
+      const pendingRidesData = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'pending', 10);
+      setPendingRides(pendingRidesData || []);
+
+       // Load recent ride history (completed/cancelled) - load last 30 days to be safe
+       const today = new Date();
+       const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+       const historyData = await supabaseService.getRideLogs({
+         dateFrom: monthAgo.toISOString(),
+         dateTo: today.toISOString()
+       });
+
+       // Filter for this vehicle and completed/cancelled status
+       const vehicleHistory = historyData.filter(ride =>
+         ride.vehicleId === vehicleNumber &&
+         (ride.status === RideStatus.Completed || ride.status === RideStatus.Cancelled)
+       );
+
+       setRideHistory(vehicleHistory);
+
+       console.log('✅ Rides loaded:', {
+         current: currentRideData?.[0]?.id || null,
+         pending: pendingRidesData?.length || 0,
+         history: vehicleHistory.length
+       });
+
+    } catch (error) {
+      console.error('❌ Failed to load rides:', error);
+    }
+  };
+
+  // Initialize socket connection for real-time updates
   useEffect(() => {
-    const loadOtherDrivers = async () => {
+    const initializeSocket = async () => {
       try {
-        const vehicles = await supabaseService.getVehicles();
-        const drivers = vehicles
-          .filter(v => v.id !== vehicleNumber)
-          .map(v => ({ id: v.id, name: v.name || `Vehicle ${v.id}` }));
-        setOtherDrivers(drivers);
+        console.log('🚗 Initializing driver socket connection...');
+        const socketInstance = await initDriverSocket();
+        setSocket(socketInstance);
+        setSocketConnected(true);
+
+        // Listen for ride updates
+        socketInstance.on('ride_update', (data) => {
+          console.log('📨 Received ride update:', data);
+          // Refresh ride data
+          loadRides();
+        });
+
+        // Listen for ride updates (includes assignments)
+        socketInstance.on('ride_updated', (data) => {
+          console.log('📨 Ride updated:', data);
+
+          // Check if this is a new ride assignment to this driver
+          if (data.vehicleId === vehicleNumber && data.status === 'ACCEPTED' && !currentRide) {
+            console.log('🎯 New ride assigned to this driver:', data);
+
+            // Format pickup time for notification
+            const pickupTimeText = data.pickupTime && data.pickupTime !== 'ihned'
+              ? ` v ${new Date(data.pickupTime).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' })}`
+              : data.pickupTime === 'ihned' ? ' ihned' : '';
+
+            // Show notification
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification('Nová jízda přiřazena!', {
+                body: `Jízda pro ${data.customerName}${pickupTimeText} byla přiřazena vašemu vozidlu`,
+                icon: '/android-launchericon-192-192.png'
+              });
+            }
+          }
+
+          // Refresh ride data for any ride update
+          loadRides();
+        });
+
+        // Listen for ride cancellations
+        socketInstance.on('ride_cancelled', (data) => {
+          console.log('❌ Ride cancelled:', data);
+          loadRides();
+        });
+
+        socketInstance.on('disconnect', () => {
+          console.log('🔌 Driver socket disconnected');
+          setSocketConnected(false);
+        });
+
+        socketInstance.on('reconnect', () => {
+          console.log('🔄 Driver socket reconnected');
+          setSocketConnected(true);
+        });
+
       } catch (error) {
-        console.error('Error loading other drivers:', error);
+        console.error('❌ Failed to initialize driver socket:', error);
+        setSocketConnected(false);
       }
     };
 
-    if (vehicleNumber) {
-      loadOtherDrivers();
-    }
-  }, [vehicleNumber]);
+    initializeSocket();
+
+    // Cleanup on unmount
+    return () => {
+      if (socket) {
+        socket.disconnect();
+      }
+    };
+  }, []);
 
   // Initialize notifications
   useEffect(() => {
@@ -389,15 +998,10 @@ const Dashboard: React.FC = () => {
     // Load shift plans when service is available and driver changes
     useEffect(() => {
       if (shiftPlanningService) {
-        // Load shift plans for selected driver or all if no driver selected
-        if (selectedDriver) {
-          loadShiftPlans(shiftPlanningService, selectedDriver?.id);
-        } else if (selectedDriver) {
-          // Use selected driver if available
-          loadShiftPlans(shiftPlanningService, selectedDriver?.id);
-        } else {
-          // Load all shift plans for dispatcher view
-          loadAllShiftPlans(shiftPlanningService);
+        // Always load only the current driver's shifts in driver app
+        const currentDriverId = selectedDriver?.id || driverInfo?.id;
+        if (currentDriverId) {
+          loadShiftPlans(shiftPlanningService, currentDriverId);
         }
       }
     }, [shiftPlanningService, driverInfo, selectedDriver]);
@@ -407,11 +1011,15 @@ const Dashboard: React.FC = () => {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      
+
       const plans = await service.getDriverShiftPlans(driverId, startOfMonth, endOfMonth);
       setShiftPlans(plans);
     } catch (error) {
       console.error('Error loading shift plans:', error);
+      // Show user-friendly error message for network issues
+      if (error.message?.includes('NetworkError') || error.message?.includes('fetch')) {
+        alert('Network connection issue. Shift plans may not be available. Please check your internet connection and try again.');
+      }
     }
   };
 
@@ -420,11 +1028,15 @@ const Dashboard: React.FC = () => {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      
+
       const plans = await service.getAllShiftPlans(startOfMonth, endOfMonth);
       setShiftPlans(plans);
     } catch (error) {
       console.error('Error loading all shift plans:', error);
+      // Show user-friendly error message for network issues
+      if (error.message?.includes('NetworkError') || error.message?.includes('fetch')) {
+        alert('Network connection issue. Shift plans may not be available. Please check your internet connection and try again.');
+      }
     }
   };
 
@@ -449,25 +1061,22 @@ const Dashboard: React.FC = () => {
         };
       }
       
-      if (finalShiftPlan.recurringPattern && finalShiftPlan.recurringPattern !== RecurringPattern.None && finalShiftPlan.recurringEndDate) {
-        // Create recurring shifts
-        await shiftPlanningService.createRecurringShiftPlans(
-          finalShiftPlan,
-          finalShiftPlan.recurringPattern,
-          finalShiftPlan.recurringEndDate
-        );
-      } else {
-        // Create single shift
-        await shiftPlanningService.createShiftPlan(finalShiftPlan);
-      }
-
-       // Reload shift plans
-       if (selectedDriver) {
-         await loadShiftPlans(shiftPlanningService, selectedDriver?.id);
-       } else if (driverInfo) {
-         await loadShiftPlans(shiftPlanningService, driverInfo?.id);
+       if (finalShiftPlan.recurringPattern && finalShiftPlan.recurringPattern !== RecurringPattern.None && finalShiftPlan.recurringEndDate) {
+         // Create recurring shifts
+         await shiftPlanningService.createRecurringShiftPlans(
+           finalShiftPlan,
+           finalShiftPlan.recurringPattern,
+           finalShiftPlan.recurringEndDate
+         );
        } else {
-         await loadAllShiftPlans(shiftPlanningService);
+         // Create single shift
+         await shiftPlanningService.createShiftPlan(finalShiftPlan);
+       }
+
+       // Reload shift plans - always load current driver's shifts
+       const currentDriverId = selectedDriver?.id || driverInfo?.id;
+       if (currentDriverId) {
+         await loadShiftPlans(shiftPlanningService, currentDriverId);
        }
      } catch (error) {
        console.error('Error creating shift plan:', error);
@@ -479,16 +1088,13 @@ const Dashboard: React.FC = () => {
     if (!shiftPlanningService) return;
     
     try {
-      await shiftPlanningService.updateShiftPlan(id, updates);
+       await shiftPlanningService.updateShiftPlan(id, updates);
 
-       // Reload shift plans
-       if (selectedDriver) {
-         await loadShiftPlans(shiftPlanningService, selectedDriver?.id);
-       } else if (driverInfo) {
-         await loadShiftPlans(shiftPlanningService, driverInfo?.id);
-       } else {
-         await loadAllShiftPlans(shiftPlanningService);
-       }
+        // Reload shift plans - always load current driver's shifts
+        const currentDriverId = selectedDriver?.id || driverInfo?.id;
+        if (currentDriverId) {
+          await loadShiftPlans(shiftPlanningService, currentDriverId);
+        }
      } catch (error) {
        console.error('Error updating shift plan:', error);
        throw error;
@@ -499,16 +1105,13 @@ const Dashboard: React.FC = () => {
     if (!shiftPlanningService) return;
     
     try {
-      await shiftPlanningService.deleteShiftPlan(id);
+       await shiftPlanningService.deleteShiftPlan(id);
 
-       // Reload shift plans
-       if (selectedDriver) {
-         await loadShiftPlans(shiftPlanningService, selectedDriver?.id);
-       } else if (driverInfo) {
-         await loadShiftPlans(shiftPlanningService, driverInfo?.id);
-       } else {
-         await loadAllShiftPlans(shiftPlanningService);
-       }
+        // Reload shift plans - always load current driver's shifts
+        const currentDriverId = selectedDriver?.id || driverInfo?.id;
+        if (currentDriverId) {
+          await loadShiftPlans(shiftPlanningService, currentDriverId);
+        }
      } catch (error) {
        console.error('Error deleting shift plan:', error);
        throw error;
@@ -524,22 +1127,41 @@ const Dashboard: React.FC = () => {
       setShowShiftPlanningModal(true);
     };
 
-    // Calculate cash payments for the current active shift
+    // Calculate revenue for the current active shift
     const calculateCurrentShiftCash = useCallback(() => {
       if (!isShiftActive || !shiftStartTimestamp || !rideHistory.length) {
         return 0;
       }
 
       return rideHistory.filter(ride => {
-        // Only count completed rides with cash payment during the current active shift
+        const isCompleted = ride.status === RideStatus.Completed;
+        const hasPrice = ride.estimatedPrice && ride.estimatedPrice > 0;
+        const isCorrectVehicle = ride.vehicleId === vehicleNumber;
+
+        // Use completedAt if available (for completed rides), otherwise use timestamp
+        const rideTime = ride.completedAt ? ride.completedAt : new Date(ride.timestamp).getTime();
+        const isAfterShiftStart = rideTime >= shiftStartTimestamp;
+
+        return isCompleted && hasPrice && isCorrectVehicle && isAfterShiftStart;
+      }).reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
+    }, [isShiftActive, shiftStartTimestamp, rideHistory]);
+
+    // General function to calculate shift cash for any time range
+    const calculateShiftCash = useCallback((rides: RideLog[], shiftStart?: number) => {
+      if (!rides.length || !shiftStart) {
+        return 0;
+      }
+
+      return rides.filter(ride => {
+        // Only count completed rides with cash payment
         if (ride.status !== RideStatus.Completed || ride.payment !== 'cash') return false;
 
         const rideTime = new Date(ride.timestamp).getTime();
 
-        // Check if ride was completed during the current active shift
-        return rideTime >= shiftStartTimestamp;
+        // Check if ride was completed during the shift
+        return rideTime >= shiftStart;
       }).reduce((sum, ride) => sum + (ride.estimatedPrice || 0), 0);
-    }, [isShiftActive, shiftStartTimestamp, rideHistory]);
+    }, []);
 
     const currentShiftCash = calculateCurrentShiftCash();
 
@@ -616,14 +1238,15 @@ const Dashboard: React.FC = () => {
                 <div className="space-y-3">
                   {pendingRides.map((ride) => (
                     <div key={ride.id} className={`bg-slate-800/50 rounded-lg p-3 border border-slate-600 transition-all duration-300 ${flashingRides.has(ride.id) ? 'flash-notification' : ''}`}>
-                      <div className="space-y-2 text-slate-300">
-                         <p><span className="font-medium">Zákazník:</span> {ride.customerName}</p>
-                         <p><span className="font-medium">Telefon:</span> <a href={`tel:${ride.customerPhone}`} className="text-blue-400 underline hover:text-blue-300">{ride.customerPhone}</a></p>
-                         <p><span className="font-medium">Odkud:</span> {ride.stops[0]}</p>
-                         <p><span className="font-medium">Kam:</span> {ride.stops[ride.stops.length - 1]}</p>
-                         <p><span className="font-medium">Počet pasažérů:</span> {ride.passengers}</p>
-                         {ride.estimatedPrice && <p><span className="font-medium">Cena:</span> {ride.estimatedPrice} Kč</p>}
-                      </div>
+                       <div className="space-y-2 text-slate-300">
+                          <p><span className="font-medium">Zákazník:</span> {ride.customerName}</p>
+                          <p><span className="font-medium">Telefon:</span> <a href={`tel:${ride.customerPhone}`} className="text-blue-400 underline hover:text-blue-300">{ride.customerPhone}</a></p>
+                           <p><span className="font-medium">Odkud:</span> {cleanAddress(ride.stops[0])}</p>
+                           <p><span className="font-medium">Kam:</span> {cleanAddress(ride.stops[ride.stops.length - 1])}</p>
+                          <p><span className="font-medium">Počet pasažérů:</span> {ride.passengers}</p>
+                          <p><span className="font-medium">Čas vyzvednutí:</span> {formatPickupTime(ride.pickupTime)}</p>
+                          {ride.estimatedPrice && <p><span className="font-medium">Cena:</span> {ride.estimatedPrice} Kč</p>}
+                       </div>
                       <div className="mt-3 space-y-2">
                          <button
                            onClick={() => acceptRideSpecific(ride)}
@@ -662,8 +1285,8 @@ const Dashboard: React.FC = () => {
                   <div className="space-y-2 text-slate-300">
                     <p><span className="font-medium">{t('dashboard.customer')}:</span> {currentRide.customerName}</p>
                     <p><span className="font-medium">{t('dashboard.phone')}:</span> <a href={`tel:${currentRide.customerPhone}`} className="text-blue-600 underline">{currentRide.customerPhone}</a></p>
-                    <p><span className="font-medium">{t('dashboard.pickup')}:</span> {currentRide.stops[0]}</p>
-                    <p><span className="font-medium">{t('dashboard.destination')}:</span> {currentRide.stops[currentRide.stops.length - 1]}</p>
+                     <p><span className="font-medium">{t('dashboard.pickup')}:</span> {cleanAddress(currentRide.stops[0])}</p>
+                     <p><span className="font-medium">{t('dashboard.destination')}:</span> {cleanAddress(currentRide.stops[currentRide.stops.length - 1])}</p>
                     <p><span className="font-medium">Počet pasažérů:</span> {currentRide.passengers}</p>
                     <p><span className="font-medium">{t('dashboard.status')}:</span> {currentRide.status}</p>
                   </div>
@@ -795,17 +1418,17 @@ const Dashboard: React.FC = () => {
                  <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
                     <div className="flex items-center space-x-2">
                     <div className="text-sm text-slate-300">
-                      {isShiftActive ? (
-                        <>
-                          <span className="font-medium">Tržba aktuální směny:</span> {currentShiftRevenue} Kč
-                          <div className="text-xs text-slate-400 mt-1">
-                            Od: {new Date(shiftStartTimestamp!).toLocaleTimeString('cs-CZ', {
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </div>
-                        </>
-                      ) : (
+                       {isShiftActive ? (
+                         <>
+                           <span className="font-medium">Tržba aktuální směny:</span> {currentShiftCash} Kč
+                           <div className="text-xs text-slate-400 mt-1">
+                             Od: {new Date(shiftStartTimestamp!).toLocaleTimeString('cs-CZ', {
+                               hour: '2-digit',
+                               minute: '2-digit'
+                             })}
+                           </div>
+                         </>
+                       ) : (
                         <>
                           <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
                           {useCustomShift && customShiftStart && customShiftEnd && customShiftDate && (
@@ -908,35 +1531,162 @@ const Dashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* Driver Selection */}
-              <div className="mb-4">
-                <label className="block text-white/80 text-sm font-medium mb-2">
-                  Vyberte řidiče:
-                </label>
-                <select
-                  value={selectedDriver?.id || ''}
-                  onChange={(e) => {
-                    const driverId = parseInt(e.target.value);
-                    const driver = availableDrivers.find(d => d.id === driverId);
-                    setSelectedDriver(driver || null);
-                  }}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-400"
-                >
-                  <option value="" disabled>Vyberte řidiče...</option>
-                  {availableDrivers.map(driver => (
-                    <option key={driver.id} value={driver.id}>
-                      {driver.name}
-                    </option>
-                  ))}
-                </select>
+              {/* Current Driver Info - No selection in driver app */}
+              <div className="mb-4 p-3 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <div className="text-white/80 text-sm">
+                  <span className="font-medium">Řidič:</span> {selectedDriver?.name || driverInfo?.name || 'Nezadáno'}
+                  <div className="text-xs text-slate-400 mt-1">
+                    Selected: {selectedDriver?.id} | Info: {driverInfo?.id}
+                  </div>
+                </div>
               </div>
 
-              <ShiftCalendar
-                shiftPlans={shiftPlans}
-                onDateSelect={handleDateSelect}
-                onShiftClick={handleShiftClick}
-                selectedDate={selectedDate}
-              />
+              {/* View Mode Toggle */}
+              <div className="flex items-center justify-center mb-4">
+                <div className="flex rounded-lg bg-slate-800/50 p-1 border border-slate-700/50">
+                  <button
+                    onClick={() => setShiftViewMode('calendar')}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                      shiftViewMode === 'calendar'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <span>📅 Kalendář</span>
+                  </button>
+                  <button
+                    onClick={() => setShiftViewMode('list')}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                      shiftViewMode === 'list'
+                        ? 'bg-blue-600 text-white shadow-lg'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-700/50'
+                    }`}
+                  >
+                    <span>📋 Seznam</span>
+                  </button>
+                </div>
+              </div>
+
+              {shiftViewMode === 'calendar' ? (
+                <ShiftCalendar
+                  shiftPlans={shiftPlans}
+                  onDateSelect={handleDateSelect}
+                  onShiftClick={handleShiftClick}
+                  selectedDate={selectedDate}
+                />
+              ) : (
+                /* List View */
+                <div className="space-y-2">
+                  {shiftPlans.length > 0 ? (
+                    <>
+                      {/* Header */}
+                      <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-800 rounded-lg text-xs font-medium text-slate-300 border-b border-slate-700">
+                        <div className="col-span-2">Datum</div>
+                        <div className="col-span-2">Začátek</div>
+                        <div className="col-span-2">Konec</div>
+                        <div className="col-span-3">Stav</div>
+                        <div className="col-span-3">Akce</div>
+                      </div>
+
+                      {/* Shifts */}
+                      {shiftPlans.map((shift) => (
+                        <div
+                          key={shift.id}
+                          className="grid grid-cols-12 gap-2 px-3 py-3 bg-slate-800/50 rounded-lg border border-slate-700 hover:bg-slate-800/70 transition-colors"
+                        >
+                          {/* Date */}
+                          <div className="col-span-2">
+                            <div className="text-xs text-slate-300">
+                              {format(new Date(shift.plannedStart), 'd.M.', { locale: cs })}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {format(new Date(shift.plannedStart), 'yyyy', { locale: cs })}
+                            </div>
+                          </div>
+
+                          {/* Start Time */}
+                          <div className="col-span-2">
+                            <div className="text-xs text-slate-300">
+                              {format(new Date(shift.plannedStart), 'HH:mm', { locale: cs })}
+                            </div>
+                          </div>
+
+                          {/* End Time */}
+                          <div className="col-span-2">
+                            <div className="text-xs text-slate-300">
+                              {format(new Date(shift.plannedEnd), 'HH:mm', { locale: cs })}
+                            </div>
+                          </div>
+
+                          {/* Status */}
+                          <div className="col-span-3">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              shift.status === ShiftPlanStatus.Planned ? 'bg-blue-900/50 text-blue-300 border border-blue-700/50' :
+                              shift.status === ShiftPlanStatus.Active ? 'bg-green-900/50 text-green-300 border border-green-700/50' :
+                              shift.status === ShiftPlanStatus.Completed ? 'bg-gray-900/50 text-gray-300 border border-gray-700/50' :
+                              'bg-red-900/50 text-red-300 border border-red-700/50'
+                            }`}>
+                              {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
+                               shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
+                               shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' :
+                               'Zrušeno'}
+                            </span>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="col-span-3 flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingShift(shift);
+                                setShowShiftPlanningModal(true);
+                              }}
+                              className="px-2 py-1 text-gray-400 hover:text-blue-400 hover:bg-slate-600 rounded text-xs transition-colors"
+                              title="Upravit směnu"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Opravdu chcete smazat tuto směnu?')) {
+                                  handleDeleteShift(shift.id);
+                                }
+                              }}
+                              className="px-2 py-1 text-gray-400 hover:text-red-400 hover:bg-slate-600 rounded text-xs transition-colors"
+                              title="Smazat směnu"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="text-center py-8">
+                      <svg className="w-12 h-12 text-gray-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      <h3 className="text-lg font-medium text-white mb-2">
+                        Žádné směny
+                      </h3>
+                      <p className="text-gray-400 mb-4">
+                        Zatím nemáte naplánované žádné směny.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setEditingShift(undefined);
+                          setShowShiftPlanningModal(true);
+                        }}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors inline-flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Vytvořit směnu
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

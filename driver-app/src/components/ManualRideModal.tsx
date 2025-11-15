@@ -187,7 +187,7 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 rideType: RideType.BUSINESS,
                 customerName: 'Přímý zákazník',
                 customerPhone: '',
-                stops: combinedStops,
+                stops: stops, // Use clean addresses without placeIds
                 passengers: 1,
                 pickupTime: 'ihned',
                 status: RideStatus.Pending, // Create as pending first so dispatcher can see it's assigned

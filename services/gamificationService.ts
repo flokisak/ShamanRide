@@ -50,7 +50,12 @@ export class GamificationService {
     // average_rating field now exists in the database schema
 
     // Uložit skóre do databáze
-    await supabaseService.updateDriverScore(driverId, scoreData);
+    try {
+      await supabaseService.updateDriverScore(driverId, scoreData);
+    } catch (error) {
+      console.error('Failed to update driver score:', error);
+      // Don't throw - gamification is optional
+    }
 
     // Aktualizovat statistiky
     await this.updateDriverStats(driverId, driverRides);
@@ -285,7 +290,12 @@ export class GamificationService {
       console.error('Error calculating average fuel efficiency:', error);
     }
 
-    await supabaseService.updateDriverStats(driverId, stats);
+    try {
+      await supabaseService.updateDriverStats(driverId, stats);
+    } catch (error) {
+      console.error('Failed to update driver stats:', error);
+      // Don't throw - gamification is optional
+    }
   }
 
   // Kontrola a přidělení achievement

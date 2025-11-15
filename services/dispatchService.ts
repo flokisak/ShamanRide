@@ -47,25 +47,101 @@ function shortenAddress(address: string): string {
 }
 
 /**
- * Generates an SMS message for the driver in the selected language.
+ * Compresses navigation URLs for SMS by preserving essential parameters.
  */
-export function generateWazeUrl(nav: string | undefined): string {
-    if (!nav) return '';
+export function compressNavigationUrl(url: string, placeIds: string[] = []): string {
     try {
-        const u = new URL(nav);
+        const u = new URL(url);
         const dest = u.searchParams.get('destination');
-        if (dest) {
-            const coordMatch = dest.match(/(-?\d+\.\d+),\s*(-?\d+\.\d+)/);
-            if (coordMatch) return `https://waze.com/ul?ll=${coordMatch[1]},${coordMatch[2]}&navigate=yes`;
+        const waypoints = u.searchParams.get('waypoints');
+
+        // If we have place IDs, try to use them for more accurate navigation
+        if (placeIds.length > 0) {
+            // Use the last place ID as destination if available
+            const lastPlaceId = placeIds[placeIds.length - 1];
+            if (lastPlaceId) {
+                const placeUrl = `https://www.google.com/maps/place/?q=place_id:${lastPlaceId}`;
+                return placeUrl;
+            }
         }
-        const pathMatch = u.pathname.match(/(-?\d+\.\d+),(-?\d+\.\d+)/);
-        if (pathMatch) return `https://waze.com/ul?ll=${pathMatch[1]},${pathMatch[2]}&navigate=yes`;
-    } catch (err) {
-        // ignore
+
+        // Check for specific place ID insertion: ChIJZVL6SDOLC0cROlPH5--7Vh0
+        const specificPlaceId = 'ChIJZVL6SDOLC0cROlPH5--7Vh0';
+        if (dest && dest.includes(specificPlaceId)) {
+            return `https://www.google.com/maps/place/?q=place_id:${specificPlaceId}`;
+        }
+
+        // Preserve api=1 and travelmode for a valid Google Maps directions link.
+        if (dest) {
+            const preserved = new URL(u.origin + u.pathname);
+            preserved.searchParams.set('api', '1');
+            preserved.searchParams.set('destination', dest);
+            if (waypoints) {
+                // keep waypoints for proper navigation
+                preserved.searchParams.set('waypoints', waypoints);
+            }
+            // preserve travelmode if present, otherwise default to driving
+            const tm = u.searchParams.get('travelmode') || 'driving';
+            preserved.searchParams.set('travelmode', tm);
+            return preserved.toString();
+        }
+        return url;
+    } catch {
+        return url;
     }
-    return nav;
 }
 
+/**
+ * Finds the nearest available driver for AI assignment
+ */
+export async function findNearestAvailableDriver(
+  rideRequest: RideRequest,
+  stopCoords: { lat: number; lon: number }[],
+  vehicles: Vehicle[]
+): Promise<{ vehicle: Vehicle; distance: number } | null> {
+  if (stopCoords.length === 0) return null;
+
+  const pickupLocation = stopCoords[0]; // First stop is pickup
+  let nearestDriver: { vehicle: Vehicle; distance: number } | null = null;
+  let minDistance = Infinity;
+
+  // Check each vehicle with an assigned driver (including busy ones)
+  for (const vehicle of vehicles) {
+    if (!vehicle.email || !vehicle.location || vehicle.status === VehicleStatus.OutOfService || vehicle.status === VehicleStatus.NotDrivingToday) continue; // Skip vehicles without drivers, location, or completely out of service
+
+    try {
+      // Geocode vehicle location
+      const vehicleCoords = await geocodeAddress(vehicle.location, 'cs');
+
+      // Calculate distance from vehicle to pickup location
+      const distance = haversineDistance(
+        vehicleCoords.lat, vehicleCoords.lon,
+        pickupLocation.lat, pickupLocation.lon
+      );
+
+      // Check if this driver is closer
+      if (distance < minDistance) {
+        minDistance = distance;
+        nearestDriver = { vehicle, distance };
+      }
+    } catch (error) {
+      console.warn(`Failed to geocode vehicle location for ${vehicle.name}:`, error);
+    }
+  }
+
+  // Only assign if driver is within reasonable distance (e.g., 50km)
+  if (nearestDriver && minDistance <= 50) {
+    console.log(`🤖 AI found nearest driver: ${nearestDriver.vehicle.name} (${minDistance.toFixed(1)}km away)`);
+    return nearestDriver;
+  }
+
+  console.log('🤖 AI could not find suitable nearby driver');
+  return null;
+}
+
+/**
+ * Generates an SMS message for the driver with ride details.
+ */
 export function generateSms(ride: RideRequest | RideLog, t: (key: string, params?: any) => string, navigationUrl?: string, navPreferred: 'google' | 'waze' = 'google'): string {
   let formattedPickupTime = ride.pickupTime;
     // Normalize pickup time: accept 'ihned', 'ASAP', localized keys (e.g. 'sms.pickupASAP') or ISO timestamps
@@ -93,53 +169,9 @@ export function generateSms(ride: RideRequest | RideLog, t: (key: string, params
     // Extract place IDs for navigation
     const placeIds = stopsInfo.map(info => info.placeId).filter(Boolean);
 
-    // If caller prefers Waze, convert navigation url first
-    if (navigationUrl && navPreferred === 'waze') {
-        navigationUrl = generateWazeUrl(navigationUrl);
-    }
+    // Navigation URL is already in the correct format from generateNavigationUrl
 
-    // Helper to compress long navigation URLs for SMS (keep destination, hide long waypoints)
-    const compressNavigationUrl = (url: string) => {
-        try {
-            const u = new URL(url);
-            const dest = u.searchParams.get('destination');
-            const waypoints = u.searchParams.get('waypoints');
 
-            // If we have place IDs, try to use them for more accurate navigation
-            if (placeIds.length > 0) {
-                // Use the last place ID as destination if available
-                const lastPlaceId = placeIds[placeIds.length - 1];
-                if (lastPlaceId) {
-                    const placeUrl = `https://www.google.com/maps/place/?q=place_id:${lastPlaceId}`;
-                    return placeUrl;
-                }
-            }
-
-            // Check for specific place ID insertion: ChIJZVL6SDOLC0cROlPH5--7Vh0
-            const specificPlaceId = 'ChIJZVL6SDOLC0cROlPH5--7Vh0';
-            if (dest && dest.includes(specificPlaceId)) {
-                return `https://www.google.com/maps/place/?q=place_id:${specificPlaceId}`;
-            }
-
-            // Preserve api=1 and travelmode for a valid Google Maps directions link.
-            if (dest) {
-                const preserved = new URL(u.origin + u.pathname);
-                preserved.searchParams.set('api', '1');
-                preserved.searchParams.set('destination', dest);
-                if (waypoints) {
-                    // keep waypoints for proper navigation
-                    preserved.searchParams.set('waypoints', waypoints);
-                }
-                // preserve travelmode if present, otherwise default to driving
-                const tm = u.searchParams.get('travelmode') || 'driving';
-                preserved.searchParams.set('travelmode', tm);
-                return preserved.toString();
-            }
-            return url;
-        } catch {
-            return url;
-        }
-    };
 
     const parts: string[] = [];
     parts.push(`${t('sms.route')}: ${stopsText}`);
@@ -151,7 +183,7 @@ export function generateSms(ride: RideRequest | RideLog, t: (key: string, params
     let baseSms = parts.join('\n');
 
     if (navigationUrl && navigationUrl !== 'https://maps.google.com') {
-        baseSms += `\n${t('sms.navigation')}: ${compressNavigationUrl(navigationUrl)}`;
+        baseSms += `\n${t('sms.navigation')}: ${compressNavigationUrl(navigationUrl, placeIds)}`;
     }
 
     return baseSms;
@@ -809,8 +841,8 @@ export async function findBestVehicle(
 
         const bestVehicleIndex = vehiclesInService.findIndex(v => v.id === bestAlternative.vehicle.id);
         const bestVehicleCoords = vehicleCoords[bestVehicleIndex];
-        const longNavigationUrl = generateNavigationUrl(bestVehicleCoords, allStopCoords);
-        const navigationUrl = await shortenUrl(longNavigationUrl);
+        const navigationUrl = generateNavigationUrl(bestVehicleCoords, allStopCoords);
+        // Don't shorten the URL so compressNavigationUrl can work properly
         sms = generateSms({ ...rideRequest, stops: optimizedStops || rideRequest.stops }, t, navigationUrl);
 
         return {

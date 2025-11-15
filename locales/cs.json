@@ -75,6 +75,7 @@
     "notesPlaceholder": "např. 5. patro, u zadního vchodu...",
     "addressHint": "Hledání upřednostněno pro Jižní Moravu.",
     "scheduleRide": "Naplánovat jízdu",
+    "queueRide": "Zařadit do fronty",
     "findingVehicle": "Hledám vozidlo...",
     "findVehicle": "Najít vozidlo",
     "cooldown": "Zkuste to znovu za {cooldownTime}s",
@@ -205,7 +206,8 @@
     "copyText": "Kopírovat text",
     "optimizedRoute": "Optimalizovaná trasa",
     "fuelCost": "Odhadované náklady na palivo",
-    "cost": "Náklady"
+    "cost": "Náklady",
+    "confirmBusyAssignment": "Vozidlo {vehicleName} je aktuálně obsazené. Opravdu chcete přiřadit jízdu k tomuto vozidlu?"
   },
   "rideLog": {
     "title": "Kniha jízd",
@@ -312,6 +314,8 @@
       "message": "Jízda pro {customerName} (řidič: {driverName}) nebyla přijata po dobu 5 minut. Můžete ji znovu odeslat nebo ručně zrušit."
     },
     "rideResent": "Jízda byla znovu odeslána řidiči.",
+    "rideQueued": "Jízda byla zařazena do fronty pro pozdější zpracování.",
+    "rideAssigned": "Jízda byla automaticky přiřazena řidiči {driverName}.",
     "rideScheduled": "Jízda byla naplánována a přidána do seznamu.",
     "noRidesToExport": "Historie jízd je prázdná, není co exportovat.",
     "dataLoadedSuccess": "Data byla úspěšně načtena.",
@@ -488,6 +492,7 @@
   "rideStatus": {
     "SCHEDULED": "Naplánováno",
     "PENDING": "Čeká na přijetí",
+    "QUEUED": "Ve frontě",
     "ACCEPTED": "Přijato",
     "IN_PROGRESS": "Probíhá",
     "COMPLETED": "Dokončeno",

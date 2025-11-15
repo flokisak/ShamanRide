@@ -706,7 +706,7 @@ export { supabaseService };
 
 // Geocoding constants and cache
 const geocodeCache = new Map<string, { lat: number; lon: number }>();
-const SOUTH_MORAVIA_BOUNDS = { lonMin: 16.3, latMin: 48.7, lonMax: 17.2, latMax: 49.3 };
+const CZECH_AUSTRIA_BOUNDS = { lonMin: 9.0, latMin: 46.0, lonMax: 18.0, latMax: 50.0 };
 
 // Geocoding functions
 
@@ -743,19 +743,19 @@ const fetchPhotonCoords = async (addrToTry: string): Promise<{ lat: number; lon:
 };
 
 function isInSouthMoravia(lat: number, lon: number): boolean {
-  return lon >= SOUTH_MORAVIA_BOUNDS.lonMin && lon <= SOUTH_MORAVIA_BOUNDS.lonMax &&
-         lat >= SOUTH_MORAVIA_BOUNDS.latMin && lat <= SOUTH_MORAVIA_BOUNDS.latMax;
+  // Keep South Moravia as highest priority within the expanded bounds
+  return lon >= 16.3 && lon <= 17.2 && lat >= 48.7 && lat <= 49.3;
 }
 
-function isInCzechRepublic(lat: number, lon: number): boolean {
-  // Approximate bounds for Czech Republic
-  return lon >= 12.0 && lon <= 18.9 && lat >= 48.5 && lat <= 51.1;
+function isInCzechAustriaRegion(lat: number, lon: number): boolean {
+  // Approximate bounds for Czech Republic and Austria
+  return lon >= 9.0 && lon <= 18.9 && lat >= 46.0 && lat <= 51.1;
 }
 
 const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon: number }> => {
   const tryGeocode = async (query: string): Promise<{ lat: number; lon: number } | null> => {
     const proxyUrl = 'https://corsproxy.io/?';
-    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=CZ`;
+    const nominatimUrl = `${proxyUrl}https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=10&countrycodes=CZ,AT`;
 
     try {
       const response = await fetch(nominatimUrl);
@@ -767,21 +767,21 @@ const geocodeWithNominatim = async (address: string): Promise<{ lat: number; lon
 
       if (data && Array.isArray(data) && data.length > 0) {
         console.log(`Nominatim found ${data.length} results for "${query}"`);
-        // First priority: results within South Moravia bounds
+        // First priority: results within Czech-Austria bounds
         for (const result of data) {
           const lat = parseFloat(result.lat);
           const lon = parseFloat(result.lon);
-          if (isInSouthMoravia(lat, lon)) {
-            console.log(`Using South Moravia result: ${lat}, ${lon}`);
+          if (isInCzechAustriaRegion(lat, lon)) {
+            console.log(`Using Czech-Austria region result: ${lat}, ${lon}`);
             return { lat, lon };
           }
         }
-        // Second priority: results within Czech Republic
+        // Second priority: results within Czech Republic and Austria
         for (const result of data) {
           const lat = parseFloat(result.lat);
           const lon = parseFloat(result.lon);
-          if (isInCzechRepublic(lat, lon)) {
-            console.log(`Using Czech Republic result: ${lat}, ${lon}`);
+          if (isInCzechAustriaRegion(lat, lon)) {
+            console.log(`Using Czech/Austria region result: ${lat}, ${lon}`);
             return { lat, lon };
           }
         }
@@ -883,7 +883,7 @@ async function geocodeAddress(address: string, language: string): Promise<{ lat:
     if (googleMapsApiKey) {
       console.log('Photon failed, trying Google Maps for address:', cleanAddress);
       const proxyUrl = 'https://corsproxy.io/?';
-      const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&components=country:CZ&bounds=${SOUTH_MORAVIA_BOUNDS.latMin},${SOUTH_MORAVIA_BOUNDS.lonMin}|${SOUTH_MORAVIA_BOUNDS.latMax},${SOUTH_MORAVIA_BOUNDS.lonMax}`;
+      const geocodingUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(cleanAddress)}&key=${googleMapsApiKey}&language=${language}&region=cz&bounds=${CZECH_AUSTRIA_BOUNDS.latMin},${CZECH_AUSTRIA_BOUNDS.lonMin}|${CZECH_AUSTRIA_BOUNDS.latMax},${CZECH_AUSTRIA_BOUNDS.lonMax}`;
 
       const response = await fetch(geocodingUrl);
       if (response.ok) {

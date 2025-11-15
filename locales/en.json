@@ -76,6 +76,7 @@
     "notesPlaceholder": "e.g., 5th floor, at the back entrance...",
     "addressHint": "Search biased towards South Moravia.",
     "scheduleRide": "Schedule Ride",
+    "queueRide": "Queue Ride",
     "findingVehicle": "Finding vehicle...",
     "findVehicle": "Find Vehicle",
     "cooldown": "Try again in {cooldownTime}s",
@@ -204,7 +205,8 @@
     "copyText": "Copy text",
     "optimizedRoute": "Optimized Route",
     "fuelCost": "Estimated fuel cost",
-    "cost": "Cost"
+    "cost": "Cost",
+    "confirmBusyAssignment": "Vehicle {vehicleName} is currently busy. Are you sure you want to assign a ride to this vehicle?"
   },
   "rideLog": {
     "title": "Ride History",
@@ -295,6 +297,8 @@
       "message": "Ride for {customerName} (driver: {driverName}) has not been accepted for 5 minutes. You can re-send it or cancel manually."
     },
     "rideResent": "Ride has been re-sent to the driver.",
+    "rideQueued": "Ride has been queued for later processing.",
+    "rideAssigned": "Ride has been automatically assigned to driver {driverName}.",
     "rideScheduled": "The ride has been scheduled and added to the list.",
     "noRidesToExport": "Ride history is empty, nothing to export.",
     "dataLoadedSuccess": "Data was loaded successfully.",
@@ -456,6 +460,7 @@
   "rideStatus": {
     "SCHEDULED": "Scheduled",
     "PENDING": "Pending",
+    "QUEUED": "Queued",
     "ACCEPTED": "Accepted",
     "IN_PROGRESS": "In Progress",
     "COMPLETED": "Completed",

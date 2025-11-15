@@ -47,6 +47,12 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
     switch (status) {
       case RideStatus.Scheduled:
         return `${base} bg-sky-400 text-white ring-1 ring-inset ring-sky-400 hover:bg-sky-500`;
+      case RideStatus.Pending:
+        return `${base} bg-orange-400 text-white ring-1 ring-inset ring-orange-400 hover:bg-orange-500`;
+      case RideStatus.Queued:
+        return `${base} bg-purple-400 text-white ring-1 ring-inset ring-purple-400 hover:bg-purple-500`;
+      case RideStatus.Accepted:
+        return `${base} bg-blue-400 text-white ring-1 ring-inset ring-blue-400 hover:bg-blue-500`;
       case RideStatus.InProgress:
         return `${base} bg-yellow-400 text-black ring-1 ring-inset ring-yellow-400 hover:bg-yellow-500`;
       case RideStatus.Completed:
@@ -59,14 +65,17 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
   };
   
   const renderRoute = (stops: string[], notes?: string) => {
+    // Strip placeIds from addresses for display
+    const cleanStops = stops?.map(stop => stop.split('|')[0]?.trim() || stop) || [];
+
     const routeText = (() => {
-      if (!stops || stops.length === 0) return 'N/A';
-      if (stops.length === 1) return stops[0];
-      if (stops.length === 2) return `${stops[0]} -> ${stops[1]}`;
-      return `${stops[0]} -> ${stops[stops.length - 1]} (+${stops.length - 2} ${t('rideLog.table.stops')})`;
+      if (!cleanStops || cleanStops.length === 0) return 'N/A';
+      if (cleanStops.length === 1) return cleanStops[0];
+      if (cleanStops.length === 2) return `${cleanStops[0]} -> ${cleanStops[1]}`;
+      return `${cleanStops[0]} -> ${cleanStops[cleanStops.length - 1]} (+${cleanStops.length - 2} ${t('rideLog.table.stops')})`;
     })();
 
-    const fullRouteTooltip = stops && stops.length > 0 ? stops.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
+    const fullRouteTooltip = cleanStops && cleanStops.length > 0 ? cleanStops.map((s, i) => `${i + 1}. ${s}`).join('\n') : '';
 
     return (
       <div className="flex flex-col max-h-16 overflow-hidden" title={fullRouteTooltip}>

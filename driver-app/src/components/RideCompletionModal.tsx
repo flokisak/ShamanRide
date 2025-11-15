@@ -112,7 +112,7 @@ export const RideCompletionModal: React.FC<RideCompletionModalProps> = ({
                             <div className="text-center mb-4">
                                 <h3 className="text-lg font-semibold text-white">Dokončit jízdu</h3>
                                 <p className="text-sm text-gray-300">
-                                    Zákazník: {ride.customerName} • {ride.stops[0]} → {ride.stops[ride.stops.length - 1]}
+                                    Zákazník: {ride.customerName} • {ride.stops[0]?.split('|')[0]?.trim()} → {ride.stops[ride.stops.length - 1]?.split('|')[0]?.trim()}
                                 </p>
                             </div>
 

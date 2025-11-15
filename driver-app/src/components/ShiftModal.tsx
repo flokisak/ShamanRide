@@ -35,10 +35,12 @@ export const ShiftModal: React.FC<ShiftModalProps> = ({
     }
   }, [isOpen, currentOdo, vehicleMileage, isShiftActive]);
 
-  const handleSubmit = () => {
-    console.log('ShiftModal handleSubmit called - isShiftActive:', isShiftActive, 'odoReading:', odoReading);
+  const handleSubmit = async () => {
+    console.log('🔄 ShiftModal handleSubmit called, isShiftActive:', isShiftActive, 'odoReading:', odoReading);
+    setError(null);
+
     const odoValue = parseFloat(odoReading);
-    console.log('Parsed odoValue:', odoValue);
+    console.log('📊 Parsed odoValue:', odoValue, 'isNaN:', isNaN(odoValue));
 
     if (isNaN(odoValue) || odoValue < 0) {
       setError('Zadejte platné číslo pro stav tachometru');
@@ -52,14 +54,17 @@ export const ShiftModal: React.FC<ShiftModalProps> = ({
         return;
       }
       console.log('Calling onEndShift with:', odoValue);
-      onEndShift(odoValue);
+      const success = await onEndShift(odoValue);
+      if (success) {
+        onClose(); // Only close if shift end succeeded
+      }
+      // If not successful, don't close modal, let user try again or cancel
     } else {
       // Starting shift
       console.log('Calling onStartShift with:', odoValue);
-      onStartShift(odoValue);
+      await onStartShift(odoValue);
+      onClose();
     }
-
-    onClose();
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
