@@ -809,6 +809,21 @@ const Dashboard: React.FC = () => {
     await updateVehicleStatus('available');
   };
 
+  const handleManualRideAdded = async (ride?: RideLog) => {
+    // Close the manual ride modal
+    setShowManualRideModal(false);
+
+    // Reload rides to get the new ride
+    loadRides();
+
+    // If a ride was provided and we don't have a current ride, set it as current
+    if (ride && !currentRide) {
+      setCurrentRide(ride);
+      // Update vehicle status to busy
+      await updateVehicleStatus('busy');
+    }
+  };
+
   const formatPickupTime = (pickupTime: string) => {
     if (!pickupTime || pickupTime === 'ihned') {
       return 'ihned';
