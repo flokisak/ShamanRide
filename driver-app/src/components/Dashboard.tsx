@@ -676,10 +676,11 @@ const Dashboard: React.FC = () => {
 
   // Ride action functions
   const acceptRideSpecific = async (ride: RideLog) => {
-    if (!socket || !socketConnected) {
-      alert('No socket connection. Please check your internet connection.');
-      return;
-    }
+    // Socket disabled - using direct database updates instead
+    // if (!socket || !socketConnected) {
+    //   alert('No socket connection. Please check your internet connection.');
+    //   return;
+    // }
 
     try {
       console.log('🎯 Accepting specific ride:', ride.id);
@@ -688,8 +689,8 @@ const Dashboard: React.FC = () => {
       const updatedRide = { ...ride, status: RideStatus.Accepted };
       await supabaseService.updateRideLog(ride.id, updatedRide);
 
-      // Emit to socket for real-time updates
-      socket.emit('ride_update', {
+      // Emit to socket for real-time updates - DISABLED
+      // socket.emit('ride_update', {
         rideId: ride.id,
         status: RideStatus.Accepted,
         vehicleId: vehicleNumber
@@ -728,13 +729,14 @@ const Dashboard: React.FC = () => {
       const updatedRide = { ...currentRide, status: RideStatus.Accepted };
       await supabaseService.updateRideLog(currentRide.id, updatedRide);
 
-      if (socket && socketConnected) {
-        socket.emit('ride_update', {
-          rideId: currentRide.id,
-          status: RideStatus.Accepted,
-          vehicleId: vehicleNumber
-        });
-      }
+      // Socket disabled
+      // if (socket && socketConnected) {
+      //   socket.emit('ride_update', {
+      //     rideId: currentRide.id,
+      //     status: RideStatus.Accepted,
+      //     vehicleId: vehicleNumber
+      //   });
+      // }
 
       setCurrentRide(updatedRide);
       loadRides();
@@ -754,13 +756,14 @@ const Dashboard: React.FC = () => {
       const updatedRide = { ...currentRide, status: RideStatus.InProgress };
       await supabaseService.updateRideLog(currentRide.id, updatedRide);
 
-      if (socket && socketConnected) {
-        socket.emit('ride_update', {
-          rideId: currentRide.id,
-          status: RideStatus.InProgress,
-          vehicleId: vehicleNumber
-        });
-      }
+      // Socket disabled
+      // if (socket && socketConnected) {
+      //   socket.emit('ride_update', {
+      //     rideId: currentRide.id,
+      //     status: RideStatus.InProgress,
+      //     vehicleId: vehicleNumber
+      //   });
+      // }
 
        setCurrentRide(updatedRide);
        loadRides();
@@ -972,7 +975,9 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Initialize socket connection for real-time updates
+  // Initialize socket connection for real-time updates - DISABLED due to auth issues
+  // The driver app uses direct database polling instead of real-time socket updates
+  /*
   useEffect(() => {
     const initializeSocket = async () => {
       try {
@@ -1045,6 +1050,7 @@ const Dashboard: React.FC = () => {
       }
     };
   }, []);
+  */
 
   // Initialize notifications
   useEffect(() => {
