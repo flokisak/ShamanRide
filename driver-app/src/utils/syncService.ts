@@ -16,9 +16,7 @@ export async function updateVehicles(updatedVehicles: any[], options?: any) {
   try {
     // For driver app, update vehicle status and shift-related fields
     for (const vehicle of updatedVehicles) {
-      const updateData: any = {
-        updated_at: new Date().toISOString()
-      };
+      const updateData: any = {};
 
       // Add fields that are present in the vehicle object
       if (vehicle.status !== undefined) updateData.vehicle_status = vehicle.status;
