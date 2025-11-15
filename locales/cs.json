@@ -99,6 +99,8 @@
       "atLeastTwoStops": "Musí být zadány alespoň 2 zastávky (start a cíl)."
     },
     "sendSms": "Odeslat SMS",
+    "smsMessage": "SMS Zpráva",
+    "smsMessagePlaceholder": "Napište SMS zprávu zákazníkovi...",
     "smsPlaceholder": "Napište SMS zprávu...",
     "send": "Odeslat",
     "showChat": "Zobrazit chat záznamy",

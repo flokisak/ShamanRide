@@ -100,6 +100,8 @@
       "atLeastTwoStops": "At least 2 stops are required (pickup and destination)."
     },
     "sendSms": "Send SMS",
+    "smsMessage": "SMS Message",
+    "smsMessagePlaceholder": "Type SMS message to customer...",
     "smsPlaceholder": "Type SMS message...",
     "send": "Send",
     "showChat": "Show chat records",

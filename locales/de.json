@@ -96,6 +96,9 @@
       "atLeastTwoStops": "Es sind mindestens 2 Haltestellen erforderlich (Abholung und Ziel)."
     }
     ,
+    "sendSms": "SMS senden",
+    "smsMessage": "SMS-Nachricht",
+    "smsMessagePlaceholder": "SMS-Nachricht an Kunden eingeben...",
     "phoneNotEdited": "Telefonnummer wurde nicht geändert. Bitte überprüfen Sie die Nummer oder bestätigen Sie die Übermittlung.",
     "confirmSubmitWithUneditedPhone": "Die Telefonnummer wurde nicht geändert. Möchten Sie die Bestellung trotzdem absenden?"
   },

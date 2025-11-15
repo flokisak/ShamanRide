@@ -364,20 +364,35 @@ export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading
               </select>
             </div>
 
-            <div>
-              <label htmlFor="notes" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.notesOptional')}</label>
-              <textarea
-                id="notes"
-                name="notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={t('dispatch.notesPlaceholder')}
-                rows={2}
-                className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 resize-none"
-              />
-            </div>
+             <div>
+               <label htmlFor="notes" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.notesOptional')}</label>
+               <textarea
+                 id="notes"
+                 name="notes"
+                 value={notes}
+                 onChange={(e) => setNotes(e.target.value)}
+                 placeholder={t('dispatch.notesPlaceholder')}
+                 rows={2}
+                 className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 resize-none"
+               />
+             </div>
 
-            {customerPhone.trim() && (
+             {customerPhone.trim() && (
+               <div>
+                 <label htmlFor="smsMessage" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.smsMessage')}</label>
+                 <textarea
+                   id="smsMessage"
+                   name="smsMessage"
+                   value={smsMessage}
+                   onChange={(e) => setSmsMessage(e.target.value)}
+                   placeholder={t('dispatch.smsMessagePlaceholder')}
+                   rows={3}
+                   className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 resize-none"
+                 />
+               </div>
+             )}
+
+             {customerPhone.trim() && (
               <div>
                 <button
                   type="button"
