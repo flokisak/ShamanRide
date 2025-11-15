@@ -687,11 +687,13 @@ const Dashboard: React.FC = () => {
       await supabaseService.updateRideLog(ride.id, updatedRide);
 
       // Emit to socket for real-time updates - DISABLED
-      // socket.emit('ride_update', {
+      /*
+      socket.emit('ride_update', {
         rideId: ride.id,
         status: RideStatus.Accepted,
         vehicleId: vehicleNumber
       });
+      */
 
       // Refresh rides
       loadRides();
