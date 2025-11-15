@@ -28,7 +28,8 @@
     },
     "communication": {
       "title": "Communication",
-      "preferredApp": "Preferred Messaging App"
+      "preferredApp": "Preferred Messaging App",
+      "preferredNav": "Preferred Navigation App"
     },
     "fuel": {
       "title": "Fuel Prices",
@@ -163,6 +164,7 @@
       "licensePlate": "License Plate",
       "location": "Location",
       "phone": "Phone",
+      "email": "Email",
       "type": "Type",
       "status": "Status",
       "capacity": "Capacity",

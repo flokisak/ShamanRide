@@ -32,6 +32,7 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
   const { t, language } = useTranslation();
 
   const [showCalendar, setShowCalendar] = useState(false);
+  const [menuOpen, setMenuOpen] = useState<string | null>(null);
   const selectedDate = dateFilter.startsWith('custom') ? new Date(dateFilter.split('-')[1]) : null;
 
   // Mark rides as viewed when component mounts
@@ -40,6 +41,17 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
       onMarkRidesViewed();
     }
   }, [hasNewRides, onMarkRidesViewed]);
+
+  // Close menu when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuOpen && !(event.target as Element).closest('.actions-menu')) {
+        setMenuOpen(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
 
 
   const getStatusSelectClass = (status: RideStatus) => {
@@ -437,61 +449,63 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                        </select>
                      </div>
 
-                        {/* Actions */}
-                        <div className="col-span-1 flex flex-row gap-1">
-                         <button
-                           onClick={() => onEdit(log.id)}
-                           className="px-1 py-1 text-gray-500 hover:text-blue-500 transition-colors rounded text-xs"
-                           aria-label={t('rideLog.table.editRideFor', { customerName: log.customerName })}
-                           title="Edit"
-                         >
-                           ✏️
-                         </button>
-                         <button
-                           onClick={() => onDuplicate(log)}
-                           className="px-1 py-1 text-gray-500 hover:text-green-500 transition-colors rounded text-xs"
-                           aria-label={`Duplicate ride for ${log.customerName}`}
-                           title="Duplicate"
-                         >
-                           📋
-                         </button>
-                       <button
-                         onClick={() => onSendSms(log.id)}
-                         className="px-1 py-1 text-gray-500 hover:text-green-500 transition-colors rounded text-xs"
-                         aria-label={t('rideLog.table.sendSmsFor', { customerName: log.customerName })}
-                         title="Send SMS"
-                       >
-                         💬
-                       </button>
-                        {onResendRide && log.status === RideStatus.Pending && (Date.now() - log.timestamp) > (5 * 60 * 1000) && (
+                         {/* Actions Menu */}
+                         <div className="col-span-1 relative actions-menu">
                           <button
-                            onClick={() => onResendRide(log.id)}
-                            className="px-1 py-1 text-gray-500 hover:text-orange-500 transition-colors rounded text-xs"
-                            aria-label={`Re-send ride for ${log.customerName}`}
-                            title="Re-send ride"
+                            onClick={() => setMenuOpen(menuOpen === log.id ? null : log.id)}
+                            className="px-2 py-1 text-white hover:text-gray-300 transition-colors rounded text-xs"
+                            aria-label="Actions menu"
+                            title="Actions"
                           >
-                            ↻
+                            ⋮
                           </button>
-                        )}
-                        {onSendToDriver && log.status === RideStatus.Scheduled && log.vehicleId && (
-                          <button
-                            onClick={() => onSendToDriver(log.id)}
-                            className="px-1 py-1 text-gray-500 hover:text-blue-500 transition-colors rounded text-xs"
-                            aria-label={`Send ride to driver for ${log.customerName}`}
-                            title="Send to driver"
-                          >
-                            📤
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onDelete(log.id)}
-                          className="px-1 py-1 text-gray-500 hover:text-red-500 transition-colors rounded text-xs"
-                          aria-label={t('rideLog.table.deleteRideFor', { customerName: log.customerName })}
-                          title="Delete"
-                        >
-                          🗑️
-                        </button>
-                     </div>
+                          {menuOpen === log.id && (
+                            <div className="absolute right-0 mt-1 w-48 bg-white border border-gray-300 rounded-md shadow-lg z-10">
+                              <div className="py-1">
+                                <button
+                                  onClick={() => { onEdit(log.id); setMenuOpen(null); }}
+                                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                >
+                                  ✏️ Upravit
+                                </button>
+                                <button
+                                  onClick={() => { onDuplicate(log); setMenuOpen(null); }}
+                                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                >
+                                  📋 Duplikovat
+                                </button>
+                                <button
+                                  onClick={() => { onSendSms(log.id); setMenuOpen(null); }}
+                                  className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                >
+                                  💬 Odeslat SMS
+                                </button>
+                                {onResendRide && log.status === RideStatus.Pending && (Date.now() - log.timestamp) > (5 * 60 * 1000) && (
+                                  <button
+                                    onClick={() => { onResendRide(log.id); setMenuOpen(null); }}
+                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                  >
+                                    ↻ Znovu odeslat
+                                  </button>
+                                )}
+                                {onSendToDriver && log.status === RideStatus.Scheduled && log.vehicleId && (
+                                  <button
+                                    onClick={() => { onSendToDriver(log.id); setMenuOpen(null); }}
+                                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                  >
+                                    📤 Odeslat řidiči
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => { onDelete(log.id); setMenuOpen(null); }}
+                                  className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                                >
+                                  🗑️ Smazat
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                    </div>
                  );
                })}

@@ -77,7 +77,7 @@ export const ManagePeopleModal: React.FC<ManagePeopleModalProps> = ({ people, on
         console.log(`Role ${role}:`, filteredPeople.length, 'people');
         return (
             <section key={role}>
-                <h3 className="text-lg font-semibold text-amber-400 border-b border-slate-700 pb-2 mb-2 capitalize">{t(`personRolePlural.${role}`)}</h3>
+                <h3 className="text-lg font-semibold text-amber-400 border-b border-slate-700 pb-2 mb-2 capitalize">{t(`personRolePlural.${role.toUpperCase()}`)}</h3>
                 <ul>
                     {filteredPeople.map(person => (
                         editingPerson?.id === person.id ? (

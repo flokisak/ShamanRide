@@ -27,7 +27,8 @@
     },
     "communication": {
       "title": "Komunikace",
-      "preferredApp": "Preferovaná aplikace pro zprávy"
+      "preferredApp": "Preferovaná aplikace pro zprávy",
+      "preferredNav": "Preferovaná navigační aplikace"
     },
     "fuel": {
       "title": "Ceny paliva",
@@ -164,6 +165,7 @@
       "licensePlate": "SPZ",
       "location": "Lokace",
       "phone": "Telefon",
+      "email": "Email",
       "type": "Typ",
       "status": "Status",
       "capacity": "Kapacita",
