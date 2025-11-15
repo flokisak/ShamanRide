@@ -1517,10 +1517,19 @@ const Dashboard: React.FC = () => {
 
             {/* Ride History */}
             {showRideHistory && (
-              <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
-                   <div className="flex justify-between items-center mb-3">
-                     <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
-                   </div>
+               <div className="glass card-hover p-4 rounded-2xl border border-slate-700/50">
+                    <div className="flex justify-between items-center mb-3">
+                      <h2 className="text-lg font-semibold text-white">{t('dashboard.recentRides')}</h2>
+                      <button
+                        onClick={() => setShowRideHistory(false)}
+                        className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                        title="Zavřít historii jízd"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                  <div className="flex items-center space-x-2 mb-4">
                    <button
                      onClick={() => setHistoryFilter('2days')}
