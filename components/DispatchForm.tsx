@@ -46,8 +46,9 @@ export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading
   const [customerName, setCustomerName] = useState('Jan Novák');
   const [customerPhone, setCustomerPhone] = useState('777 123 456');
   const [passengers, setPassengers] = useState(1);
-  const [pickupTime, setPickupTime] = useState('ihned');
-  const [isScheduled, setIsScheduled] = useState(false);
+   const [pickupTime, setPickupTime] = useState('ihned');
+   const [customPickupTime, setCustomPickupTime] = useState('');
+   const [isScheduled, setIsScheduled] = useState(false);
   const [notes, setNotes] = useState('');
   const [smsMessage, setSmsMessage] = useState('');
   const [chatRecords, setChatRecords] = useState<SmsMessageRecord[]>([]);
@@ -200,30 +201,37 @@ export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading
       if (stops.some(stop => !stop.trim())) newErrors.stops = t('dispatch.errors.stopsRequired');
       if (passengers < 1) newErrors.passengers = t('dispatch.errors.passengersRequired');
 
-      setErrors(newErrors);
-      if (Object.keys(newErrors).length > 0) return;
+       setErrors(newErrors);
+       if (Object.keys(newErrors).length > 0) return;
 
-      const rideRequest: RideRequest = {
-         stops: combinedStops,
-         customerName,
-         customerPhone,
-         passengers,
-         pickupTime,
-         notes,
-      };
+       // Handle custom pickup time
+       let finalPickupTime = pickupTime;
+       if (pickupTime === 'custom' && customPickupTime) {
+         finalPickupTime = customPickupTime;
+       }
 
-      if (onQueue) {
-         onQueue(rideRequest);
+       const rideRequest: RideRequest = {
+          stops: combinedStops,
+          customerName,
+          customerPhone,
+          passengers,
+          pickupTime: finalPickupTime,
+          notes,
+       };
+
+       if (onQueue) {
+          onQueue(rideRequest);
          // Clear form after queuing
          setStops(['Náměstí, Mikulov', 'Dukelské náměstí, Hustopeče']);
          setStopPlaceIds(['', '']);
-         setCustomerName('Jan Novák');
-         setCustomerPhone('777 123 456');
-         setPassengers(1);
-         setPickupTime('ihned');
-         setNotes('');
-         setSmsMessage('');
-         setErrors({});
+          setCustomerName('Jan Novák');
+          setCustomerPhone('777 123 456');
+          setPassengers(1);
+          setPickupTime('ihned');
+          setCustomPickupTime('');
+          setNotes('');
+          setSmsMessage('');
+          setErrors({});
        }
     };
 
@@ -237,22 +245,28 @@ export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading
       if (stops.some(stop => !stop.trim())) newErrors.stops = t('dispatch.errors.stopsRequired');
       if (passengers < 1) newErrors.passengers = t('dispatch.errors.passengersRequired');
 
-      setErrors(newErrors);
-      if (Object.keys(newErrors).length > 0) return;
+       setErrors(newErrors);
+       if (Object.keys(newErrors).length > 0) return;
 
-      const rideRequest: RideRequest = {
-         stops: combinedStops,
-         customerName,
-         customerPhone,
-         passengers,
-         pickupTime,
-         notes,
-      };
-      if (isScheduled) {
-         onSchedule(rideRequest);
-      } else {
-         onSubmit(rideRequest, combinedStops.length > 2 && optimizeStops);
-      }
+       // Handle custom pickup time
+       let finalPickupTime = pickupTime;
+       if (pickupTime === 'custom' && customPickupTime) {
+         finalPickupTime = customPickupTime;
+       }
+
+       const rideRequest: RideRequest = {
+          stops: combinedStops,
+          customerName,
+          customerPhone,
+          passengers,
+          pickupTime: finalPickupTime,
+          notes,
+       };
+       if (isScheduled) {
+          onSchedule(rideRequest);
+       } else {
+          onSubmit(rideRequest, combinedStops.length > 2 && optimizeStops);
+       }
       // Clear SMS message after successful submission
       setSmsMessage('');
    };
@@ -346,23 +360,35 @@ export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading
               {errors.passengers && <p className="mt-1 text-xs text-red-400">{errors.passengers}</p>}
             </div>
 
-            <div>
-              <label htmlFor="pickupTime" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.pickupTime')}</label>
-              <select
-                id="pickupTime"
-                name="pickupTime"
-                value={pickupTime}
-                onChange={(e) => setPickupTime(e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-              >
-                <option value="ihned">{t('dispatch.immediate')}</option>
-                <option value="15min">Za 15 minut</option>
-                <option value="30min">Za 30 minut</option>
-                <option value="1hod">Za 1 hodinu</option>
-                <option value="2hod">Za 2 hodiny</option>
-                <option value="custom">Vlastní čas</option>
-              </select>
-            </div>
+             <div>
+               <label htmlFor="pickupTime" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.pickupTime')}</label>
+               <select
+                 id="pickupTime"
+                 name="pickupTime"
+                 value={pickupTime}
+                 onChange={(e) => setPickupTime(e.target.value)}
+                 className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+               >
+                 <option value="ihned">{t('dispatch.immediate')}</option>
+                 <option value="15min">Za 15 minut</option>
+                 <option value="30min">Za 30 minut</option>
+                 <option value="1hod">Za 1 hodinu</option>
+                 <option value="2hod">Za 2 hodiny</option>
+                 <option value="custom">Vlastní čas</option>
+               </select>
+               {pickupTime === 'custom' && (
+                 <div className="mt-2">
+                   <input
+                     type="time"
+                     id="customPickupTime"
+                     value={customPickupTime}
+                     onChange={(e) => setCustomPickupTime(e.target.value)}
+                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                     placeholder="HH:MM"
+                   />
+                 </div>
+               )}
+             </div>
 
              <div>
                <label htmlFor="notes" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.notesOptional')}</label>

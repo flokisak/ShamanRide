@@ -1031,9 +1031,11 @@ const AppContent: React.FC = () => {
         const paidDistance = rideDistance || 0;
         const fuelCost = paidDistance ? calculateFuelCost(vehicle, paidDistance) : undefined;
 
-       // Use the ETA that was calculated during assignment
-       const totalBusyTime = eta + durationInMinutes + 5; // Add 5 min buffer
-       const freeAt = Date.now() + totalBusyTime * 60 * 1000;
+        // Use the ETA that was calculated during assignment
+        const totalBusyTime = eta + durationInMinutes + 5; // Add 5 min buffer
+        // If driver is already busy, add the new ride time to their existing freeAt time
+        const baseTime = vehicle.freeAt && vehicle.freeAt > Date.now() ? vehicle.freeAt : Date.now();
+        const freeAt = baseTime + totalBusyTime * 60 * 1000;
 
        // Generate customer SMS for the assigned vehicle
        const driverName = people.find(p => p.id === vehicle.driverId)?.name || 'Neznámý';
