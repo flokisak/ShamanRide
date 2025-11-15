@@ -407,8 +407,7 @@ const supabaseService: any = SUPABASE_ENABLED ? {
             mileage: dbRow.mileage,
             shift_start: dbRow.shift_start,
             shift_end: dbRow.shift_end,
-            vehicle_status: dbRow.vehicle_status,
-            updated_at: dbRow.updated_at
+            vehicle_status: dbRow.vehicle_status
           })
           .eq('id', vehicle.id);
 
