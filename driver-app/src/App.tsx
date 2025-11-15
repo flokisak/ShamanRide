@@ -11,11 +11,10 @@ function App() {
     // Initialize background sync
     initializeBackgroundSync();
 
-    // Check if driver shift is active
+    // Check if driver is selected
     const checkShiftStatus = () => {
       const driverId = localStorage.getItem('selectedDriverId');
-      const isShiftActive = localStorage.getItem('isShiftActive') === 'true';
-      setSelectedDriver(!!driverId && isShiftActive);
+      setSelectedDriver(!!driverId);
     };
 
     checkShiftStatus();

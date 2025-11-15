@@ -13,6 +13,7 @@ interface VehicleStatusTableProps {
   onEdit: (vehicle: Vehicle) => void;
   rideLog: RideLog[];
   onAddVehicleClick: () => void;
+  onRefresh?: () => void;
   locations?: Record<string, {latitude: number; longitude: number; timestamp: string}>;
 }
 
@@ -37,7 +38,7 @@ const FilterSelect: React.FC<{
     </div>
 );
 
-export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles, people, onEdit, rideLog, onAddVehicleClick, locations }) => {
+export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles, people, onEdit, rideLog, onAddVehicleClick, onRefresh, locations }) => {
   const { t } = useTranslation();
 
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -189,15 +190,7 @@ export const VehicleStatusTable: React.FC<VehicleStatusTableProps> = ({ vehicles
             <h3 className="text-lg font-medium text-white font-sans">Vozidla</h3>
             <div className="flex items-center space-x-4">
               <button
-                onClick={async () => {
-                  try {
-                    const vh = await supabaseService.getVehicles().catch(() => []);
-                    setVehicles(Array.isArray(vh) ? vh : []);
-                    console.log('Vehicles refreshed manually:', vh);
-                  } catch (err) {
-                    console.error('Failed to refresh vehicles:', err);
-                  }
-                }}
+                onClick={onRefresh}
                 className="flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-md shadow-sm bg-blue-600 hover:bg-blue-500 text-white transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

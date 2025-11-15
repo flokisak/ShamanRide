@@ -382,11 +382,11 @@ const supabaseService: any = SUPABASE_ENABLED ? {
     if (error) throw error;
     return (data || []).map((d: any) => this._fromDbVehicle(d));
   },
-  async updateVehicles(vehicles: any[]) {
-    const dbRows = vehicles.map(v => this._toDbVehicle(v));
-    const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
-    if (error) throw error;
-  },
+   async updateVehicles(vehicles: any[]) {
+     const dbRows = vehicles.map(v => this._toDbVehicle(v));
+     const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
+     if (error) throw error;
+   },
 
   // People
   async getPeople() {
@@ -565,10 +565,10 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       fuel_consumption: v.fuelConsumption ?? null,
       phone: v.phone ?? null,
       email: v.email ?? null,
-      shift_start: v.shiftStart ?? null,
-      shift_end: v.shiftEnd ?? null,
-      shift_start_odo: v.shiftStartOdo ?? null,
-      shift_end_odo: v.shiftEndOdo ?? null,
+        shift_start: v.shift_start ?? null,
+        shift_end: v.shift_end ?? null,
+        shift_start_odo: v.shiftStartOdo ?? null,
+        shift_end_odo: v.shiftEndOdo ?? null,
     };
   },
   _fromDbVehicle(db: any) {
@@ -591,10 +591,10 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       fuelConsumption: db.fuel_consumption ?? null,
       phone: db.phone ?? null,
       email: db.email ?? null,
-      shiftStart: db.shift_start ?? null,
-      shiftEnd: db.shift_end ?? null,
-      shiftStartOdo: db.shift_start_odo ?? null,
-      shiftEndOdo: db.shift_end_odo ?? null,
+        shift_start: db.shift_start ?? null,
+        shift_end: db.shift_end ?? null,
+        shiftStartOdo: db.shift_start_odo ?? null,
+        shiftEndOdo: db.shift_end_odo ?? null,
     };
   },
 

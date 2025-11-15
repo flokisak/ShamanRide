@@ -27,9 +27,10 @@ export const ShiftModal: React.FC<ShiftModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       console.log('ShiftModal opened - isShiftActive:', isShiftActive, 'currentOdo:', currentOdo, 'vehicleMileage:', vehicleMileage);
-      // For starting shift, use vehicle mileage; for ending shift, use current shift odo
-      const defaultOdo = isShiftActive ? (currentOdo?.toString() || '') : (vehicleMileage?.toString() || '');
-      console.log('Setting default odo to:', defaultOdo);
+      // For starting shift, use stored odometer from selection screen, or vehicle mileage; for ending shift, use current shift odo
+      const storedOdo = localStorage.getItem('shiftStartOdo');
+      const defaultOdo = isShiftActive ? (currentOdo?.toString() || '') : (storedOdo || vehicleMileage?.toString() || '');
+      console.log('Setting default odo to:', defaultOdo, 'from stored:', storedOdo);
       setOdoReading(defaultOdo);
       setError('');
     }

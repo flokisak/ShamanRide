@@ -43,6 +43,13 @@ const DriverSelection: React.FC = () => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    if (currentStep === 'odometer') {
+      const vehicle = vehicles.find(v => v.id === selectedVehicle);
+      setOdometerReading(vehicle?.mileage ? vehicle.mileage.toString() : '');
+    }
+  }, [currentStep, selectedVehicle, vehicles]);
+
 
 
   const handleStartShift = () => {
@@ -70,11 +77,6 @@ const DriverSelection: React.FC = () => {
       localStorage.setItem('selectedVehicleId', vehicle.id.toString());
       localStorage.setItem('licensePlate', vehicle.licensePlate || '');
       localStorage.setItem('shiftStartOdo', odoValue.toString());
-
-      // Initialize shift data
-      localStorage.setItem('shiftStartTimestamp', Date.now().toString());
-      localStorage.setItem('driverStatus', 'available');
-      localStorage.setItem('isShiftActive', 'true');
 
       setCurrentStep('shift-started');
     }

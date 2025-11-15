@@ -187,14 +187,14 @@ const Dashboard: React.FC = () => {
         if (vehicleNumber) {
           const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
           if (currentVehicle) {
-            const updatedVehicle = {
-              ...currentVehicle,
-              status: VehicleStatus.Available,
-              shiftStart: null,
-              shiftEnd: null,
-              shiftStartOdo: null,
-              shiftEndOdo: null
-            };
+             const updatedVehicle = {
+               ...currentVehicle,
+               status: VehicleStatus.OutOfService,
+               shift_start: null,
+               shift_end: null,
+               shiftStartOdo: null,
+               shiftEndOdo: null
+             };
             supabaseService.updateVehicles([updatedVehicle]).then(() => {
               // Update local state
               setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
@@ -215,11 +215,12 @@ const Dashboard: React.FC = () => {
     setShiftStartTime(startTime);
     setShiftEndTimestamp(null);
     setDriverStatus('available');
-    setIsShiftActive(true);
-    localStorage.setItem('shiftStartTime', startTime.toString());
-    localStorage.removeItem('shiftEndTime');
-    localStorage.setItem('driverStatus', 'available');
-    localStorage.setItem('isShiftActive', 'true');
+     setIsShiftActive(true);
+     localStorage.setItem('shiftStartTime', startTime.toString());
+     localStorage.removeItem('shiftEndTime');
+     localStorage.setItem('driverStatus', 'available');
+     localStorage.setItem('isShiftActive', 'true');
+     localStorage.removeItem('shiftStartOdo'); // Clear stored odometer after use
 
     // Save start odometer to vehicle data
     setShiftStartOdo(startOdo);
@@ -233,9 +234,10 @@ const Dashboard: React.FC = () => {
         console.log('🚀 Current vehicle before update:', currentVehicle);
         const updatedVehicle = {
           ...currentVehicle,
-          shiftStart: new Date(startTime),
+          shift_start: new Date(startTime),
           shiftStartOdo: startOdo,
-          mileage: startOdo  // Update current mileage to start odometer
+          mileage: startOdo,  // Update current mileage to start odometer
+          status: VehicleStatus.Available
         };
         console.log('🚀 Updated vehicle object:', updatedVehicle);
         if (updatedVehicle) {
@@ -284,15 +286,15 @@ const Dashboard: React.FC = () => {
   const handleEndShift = async (endOdo: number): Promise<boolean> => {
     const endTime = Date.now();
 
-    // Validate shift duration - prevent ending shifts too early
-    if (shiftStartTimestamp) {
-      const shiftDurationHours = (endTime - shiftStartTimestamp) / (1000 * 60 * 60);
+     // Validate shift duration - prevent ending shifts too early
+     if (shiftStartTimestamp) {
+       const shiftDurationHours = (endTime - shiftStartTimestamp) / (1000 * 60 * 60);
 
-      // Minimum shift duration: 1 hour
-      if (shiftDurationHours < 1) {
-        alert(`Směna je příliš krátká (${shiftDurationHours.toFixed(1)} hodin). Minimální délka směny je 1 hodina.`);
-        return false;
-      }
+       // Minimum shift duration: 1 minute for testing
+       if (shiftDurationHours < 1/60) {
+         alert(`Směna je příliš krátká (${(shiftDurationHours*60).toFixed(1)} minut). Minimální délka směny je 1 minuta.`);
+         return false;
+       }
 
       // Check against planned shift end time if available
       if (shiftPlanningService && selectedDriver?.id) {
@@ -324,13 +326,37 @@ const Dashboard: React.FC = () => {
       }
     }
 
-    // Proceed with shift end
-    setShiftEndTimestamp(endTime);
-    setDriverStatus('offline');
-    setIsShiftActive(false);
-    localStorage.setItem('shiftEndTime', endTime.toString());
-    localStorage.setItem('driverStatus', 'offline');
-    localStorage.setItem('isShiftActive', 'false');
+      // Proceed with shift end
+       setShiftEndTimestamp(endTime);
+       setDriverStatus('offline');
+       setIsShiftActive(false);
+       localStorage.setItem('shiftEndTime', endTime.toString());
+       localStorage.setItem('driverStatus', 'offline');
+       localStorage.setItem('isShiftActive', 'false');
+
+       // Update stored odometer for next shift start
+       localStorage.setItem('shiftStartOdo', endOdo.toString());
+
+       // Clear selection to return to driver selection screen
+       localStorage.removeItem('selectedDriverId');
+       localStorage.removeItem('selectedDriverName');
+       localStorage.removeItem('selectedDriverEmail');
+       localStorage.removeItem('selectedVehicleId');
+       localStorage.removeItem('licensePlate');
+
+     // Set custom shift times to the actual shift times for display
+     if (shiftStartTimestamp) {
+       const startDate = new Date(shiftStartTimestamp);
+       const endDate = new Date(endTime);
+       setCustomShiftDate(startDate.toISOString().split('T')[0]);
+       setCustomShiftStart(startDate.toTimeString().slice(0, 5));
+       setCustomShiftEnd(endDate.toTimeString().slice(0, 5));
+       setUseCustomShift(true);
+       localStorage.setItem('customShiftDate', startDate.toISOString().split('T')[0]);
+       localStorage.setItem('customShiftStart', startDate.toTimeString().slice(0, 5));
+       localStorage.setItem('customShiftEnd', endDate.toTimeString().slice(0, 5));
+       localStorage.setItem('useCustomShift', 'true');
+     }
 
     // Save end odometer to vehicle data
     setShiftEndOdo(endOdo);
@@ -340,12 +366,13 @@ const Dashboard: React.FC = () => {
     if (vehicleNumber) {
       try {
         const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
-        const updatedVehicle = {
-          ...currentVehicle,
-          shiftEnd: new Date(endTime),
-          shiftEndOdo: endOdo,
-          mileage: endOdo  // Update current mileage to end odometer
-        };
+         const updatedVehicle = {
+           ...currentVehicle,
+           shift_end: new Date(endTime),
+           shiftEndOdo: endOdo,
+           mileage: endOdo,  // Update current mileage to end odometer
+           status: VehicleStatus.OutOfService
+         };
         if (updatedVehicle) {
           await supabaseService.updateVehicles([updatedVehicle]);
           console.log('Vehicle end odometer and mileage updated:', endOdo);
@@ -464,29 +491,28 @@ const Dashboard: React.FC = () => {
           console.log('Driver info from localStorage (fallback):', selectedDriverId, selectedDriverName);
         }
 
-        // Load shift start/end timestamps from database if available
-        // Only load shift start from database if not already set (to avoid overriding resets)
-        if (assignedVehicle.shiftStart && !shiftStartTimestamp) {
-          const shiftStartDate = new Date(assignedVehicle.shiftStart);
+        // Load shift start from database
+        if (assignedVehicle.shift_start) {
+          const shiftStartDate = new Date(assignedVehicle.shift_start);
           if (!isNaN(shiftStartDate.getTime())) {
             const shiftStartTimeVal = shiftStartDate.getTime();
-            setShiftStartTimestamp(shiftStartTimeVal);
+            setShiftStartTime(shiftStartTimeVal);
             localStorage.setItem('shiftStartTime', shiftStartTimeVal.toString());
             console.log('Loaded shift start from database:', new Date(shiftStartTimeVal).toLocaleString());
           } else {
-            console.warn('Invalid shift start date from database:', assignedVehicle.shiftStart);
+            console.warn('Invalid shift start date from database:', assignedVehicle.shift_start);
           }
         }
 
-        if (assignedVehicle.shiftEnd) {
-          const shiftEndDate = new Date(assignedVehicle.shiftEnd);
+        if (assignedVehicle.shift_end) {
+          const shiftEndDate = new Date(assignedVehicle.shift_end);
           if (!isNaN(shiftEndDate.getTime())) {
             const shiftEndTimeVal = shiftEndDate.getTime();
             setShiftEndTimestamp(shiftEndTimeVal);
             localStorage.setItem('shiftEndTime', shiftEndTimeVal.toString());
             console.log('Loaded shift end from database:', new Date(shiftEndTimeVal).toLocaleString());
           } else {
-            console.warn('Invalid shift end date from database:', assignedVehicle.shiftEnd);
+            console.warn('Invalid shift end date from database:', assignedVehicle.shift_end);
           }
         }
 
@@ -516,7 +542,18 @@ const Dashboard: React.FC = () => {
           setDriverStatus('offline'); // Default to offline for unknown statuses
         }
 
-        console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate, 'Loaded status:', vehicleStatus);
+         console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate, 'Loaded status:', vehicleStatus);
+
+         // Sync isShiftActive with vehicle status, but fix inconsistent states
+         let shiftActive = vehicleStatus === 'AVAILABLE';
+         if (assignedVehicle.shift_end && !assignedVehicle.shift_start && vehicleStatus === 'AVAILABLE') {
+           // Inconsistent state: shift ended but no start recorded, fix locally
+           shiftActive = false;
+           setDriverStatus('offline');
+           console.log('Fixed inconsistent shift state: shift ended but no start recorded');
+         }
+         setIsShiftActive(shiftActive);
+         localStorage.setItem('isShiftActive', shiftActive ? 'true' : 'false');
        } else {
           console.warn('No vehicle found with ID:', selectedDriverId);
           console.warn('Available vehicle IDs:', vehicles.map(v => v.id));
@@ -552,6 +589,43 @@ const Dashboard: React.FC = () => {
     if (!address) return address;
     // Split on | and take the first part (the human-readable address)
     return address.split('|')[0]?.trim() || address;
+  };
+
+  // Function to update vehicle status in database
+  const updateVehicleStatus = async (newStatus: string) => {
+    if (!vehicleNumber) return;
+
+    try {
+      const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
+      if (!currentVehicle) return;
+
+      const statusMap: { [key: string]: VehicleStatus } = {
+        'available': VehicleStatus.Available,
+        'on_ride': VehicleStatus.Busy,
+        'break': VehicleStatus.Break,
+        'refueling': VehicleStatus.Break, // Map refueling to break
+        'pause': VehicleStatus.Break, // Map pause to break
+        'offline': VehicleStatus.OutOfService
+      };
+
+      const dbStatus = statusMap[newStatus];
+      if (!dbStatus) {
+        console.warn('Unknown status:', newStatus);
+        return;
+      }
+
+      const updatedVehicle = {
+        ...currentVehicle,
+        status: dbStatus
+      };
+
+      await supabaseService.updateVehicles([updatedVehicle]);
+      setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
+
+      console.log('Updated vehicle status in database:', dbStatus);
+    } catch (error) {
+      console.error('Failed to update vehicle status:', error);
+    }
   };
 
   // Ride action functions
@@ -642,13 +716,16 @@ const Dashboard: React.FC = () => {
         });
       }
 
-      setCurrentRide(updatedRide);
-      loadRides();
+       setCurrentRide(updatedRide);
+       loadRides();
 
-    } catch (error) {
-      console.error('❌ Failed to start ride:', error);
-      alert('Failed to start ride. Please try again.');
-    }
+       // Update vehicle status to busy
+       await updateVehicleStatus('on_ride');
+
+     } catch (error) {
+       console.error('❌ Failed to start ride:', error);
+       alert('Failed to start ride. Please try again.');
+     }
   };
 
   const endRide = () => {
@@ -658,7 +735,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleRideCompleted = () => {
+  const handleRideCompleted = async () => {
     // Close the completion modal
     setShowCompletionModal(false);
     setRideToComplete(null);
@@ -668,6 +745,9 @@ const Dashboard: React.FC = () => {
 
     // Clear current ride since it's completed
     setCurrentRide(null);
+
+    // Update vehicle status back to available
+    await updateVehicleStatus('available');
   };
 
   const formatPickupTime = (pickupTime: string) => {
@@ -1084,22 +1164,56 @@ const Dashboard: React.FC = () => {
      }
    };
 
-  const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
-    if (!shiftPlanningService) return;
-    
-    try {
-       await shiftPlanningService.updateShiftPlan(id, updates);
+   const handleUpdateShift = async (id: string, updates: Partial<ShiftPlan>) => {
+     if (!shiftPlanningService) return;
 
-        // Reload shift plans - always load current driver's shifts
-        const currentDriverId = selectedDriver?.id || driverInfo?.id;
-        if (currentDriverId) {
-          await loadShiftPlans(shiftPlanningService, currentDriverId);
+     try {
+        await shiftPlanningService.updateShiftPlan(id, updates);
+
+        // If the shift is being set to Active, update the vehicle shiftStart
+        if (updates.status === ShiftPlanStatus.Active && vehicleNumber) {
+          const startTime = Date.now();
+          setShiftStartTime(startTime);
+          setShiftEndTimestamp(null);
+          setDriverStatus('available');
+          setIsShiftActive(true);
+          localStorage.setItem('shiftStartTime', startTime.toString());
+          localStorage.removeItem('shiftEndTime');
+          localStorage.setItem('driverStatus', 'available');
+          localStorage.setItem('isShiftActive', 'true');
+
+          // Update vehicle with shiftStart
+          try {
+            const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
+            const updatedVehicle = {
+              ...currentVehicle,
+              shift_start: new Date(startTime),
+              shiftStartOdo: startOdo,
+              mileage: startOdo
+            };
+            if (updatedVehicle) {
+              await supabaseService.updateVehicles([updatedVehicle]);
+              console.log('✅ Vehicle shift start updated in database');
+
+              // Update local vehicles state
+              setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
+              console.log('✅ Local vehicles state updated');
+            }
+          } catch (error) {
+            console.error('❌ Failed to update vehicle shift start:', error);
+          }
         }
-     } catch (error) {
-       console.error('Error updating shift plan:', error);
-       throw error;
-      }
-   };
+
+         // Reload shift plans - always load current driver's shifts
+         const currentDriverId = selectedDriver?.id || driverInfo?.id;
+         if (currentDriverId) {
+           await loadShiftPlans(shiftPlanningService, currentDriverId);
+         }
+      } catch (error) {
+        console.error('Error updating shift plan:', error);
+        throw error;
+       }
+    };
 
   const handleDeleteShift = async (id: string) => {
     if (!shiftPlanningService) return;
@@ -1428,17 +1542,27 @@ const Dashboard: React.FC = () => {
                              })}
                            </div>
                          </>
-                       ) : (
-                        <>
-                          <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
-                          {useCustomShift && customShiftStart && customShiftEnd && customShiftDate && (
-                            <div className="text-xs text-slate-400">
-                              {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
-                              <span className="text-xs text-slate-500 ml-1">(přes půlnoc)</span>
-                            </div>
-                          )}
-                        </>
-                      )}
+                        ) : (
+                         <>
+                           <span className="font-medium">Tržba směny:</span> {shiftCash} Kč
+                           {shiftEndTimestamp && shiftStartTimestamp ? (
+                             <div className="text-xs text-slate-400 mt-1">
+                               Od: {new Date(shiftStartTimestamp).toLocaleTimeString('cs-CZ', {
+                                 hour: '2-digit',
+                                 minute: '2-digit'
+                               })} Do: {new Date(shiftEndTimestamp).toLocaleTimeString('cs-CZ', {
+                                 hour: '2-digit',
+                                 minute: '2-digit'
+                               })}
+                             </div>
+                           ) : useCustomShift && customShiftStart && customShiftEnd && customShiftDate ? (
+                             <div className="text-xs text-slate-400">
+                               {new Date(customShiftDate).toLocaleDateString('cs-CZ')} • {customShiftStart} - {customShiftEnd}
+                               <span className="text-xs text-slate-500 ml-1">(přes půlnoc)</span>
+                             </div>
+                           ) : null}
+                         </>
+                       )}
                     </div>
                    <button
                      onClick={() => setShowRideHistory(true)}
@@ -1466,16 +1590,23 @@ const Dashboard: React.FC = () => {
 
               <div className="space-y-4">
                 {/* Shift Button */}
-                <button
-                  onClick={() => setShowShiftModal(true)}
-                  className={`w-full py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg ${
-                    isShiftActive
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-green-600 hover:bg-green-700'
-                  }`}
-                >
-                  {isShiftActive ? '🏁 Ukončit směnu' : '🚗 Začít směnu'}
-                </button>
+                 <button
+                   onClick={() => {
+                     if (!isShiftActive && localStorage.getItem('shiftStartOdo')) {
+                       // Start shift directly with stored odometer
+                       handleStartShift(parseFloat(localStorage.getItem('shiftStartOdo')!));
+                     } else {
+                       setShowShiftModal(true);
+                     }
+                   }}
+                   className={`w-full py-3 rounded-lg btn-modern text-white font-bold text-lg shadow-lg ${
+                     isShiftActive
+                       ? 'bg-red-600 hover:bg-red-700'
+                       : 'bg-green-600 hover:bg-green-700'
+                   }`}
+                 >
+                   {isShiftActive ? '🏁 Ukončit směnu' : '🚗 Začít směnu'}
+                 </button>
 
                 {/* Status Selector */}
                 <div>
