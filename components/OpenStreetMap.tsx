@@ -214,8 +214,7 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
           waypointsParam = `&waypoints=${intermediate}`;
         }
         const googleUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&mode=driving&key=${googleMapsApiKey}`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(googleUrl)}`;
-        const googleResponse = await fetch(proxyUrl);
+        const googleResponse = await fetch(googleUrl);
 
         if (googleResponse.ok) {
           const proxyData = await googleResponse.json();

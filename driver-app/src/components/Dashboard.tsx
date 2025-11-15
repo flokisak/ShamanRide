@@ -599,13 +599,14 @@ const Dashboard: React.FC = () => {
          console.log('Assigned vehicle:', assignedVehicle.id, 'License plate:', assignedVehicle.licensePlate, 'Loaded status:', vehicleStatus);
 
          // Sync isShiftActive with vehicle status, but fix inconsistent states
-         let shiftActive = vehicleStatus === 'AVAILABLE';
-         if (assignedVehicle.shift_end && !assignedVehicle.shift_start && vehicleStatus === 'AVAILABLE') {
-           // Inconsistent state: shift ended but no start recorded, fix locally
-           shiftActive = false;
-           setDriverStatus('offline');
-           console.log('Fixed inconsistent shift state: shift ended but no start recorded');
-         }
+          // Shift is active when vehicle is AVAILABLE or BUSY
+          let shiftActive = vehicleStatus === 'AVAILABLE' || vehicleStatus === 'BUSY';
+          if (assignedVehicle.shift_end && !assignedVehicle.shift_start && (vehicleStatus === 'AVAILABLE' || vehicleStatus === 'BUSY')) {
+            // Inconsistent state: shift ended but no start recorded, fix locally
+            shiftActive = false;
+            setDriverStatus('offline');
+            console.log('Fixed inconsistent shift state: shift ended but no start recorded');
+          }
          setIsShiftActive(shiftActive);
          localStorage.setItem('isShiftActive', shiftActive ? 'true' : 'false');
        } else {
@@ -961,17 +962,29 @@ const Dashboard: React.FC = () => {
     try {
       console.log('📦 Loading rides for vehicle:', vehicleNumber);
 
-      // Load current ride (in progress)
+      // Load current ride (in progress or accepted)
       const currentRideData = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'in_progress', 1);
+      const acceptedRideData = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'accepted', 1);
+      
+      // Prioritize in_progress rides, otherwise use accepted rides
       if (currentRideData && currentRideData.length > 0) {
         setCurrentRide(currentRideData[0]);
+      } else if (acceptedRideData && acceptedRideData.length > 0) {
+        setCurrentRide(acceptedRideData[0]);
       } else {
         setCurrentRide(null);
       }
 
-      // Load pending rides (assigned but not started)
+      // Load pending rides (assigned but not started) - include accepted rides that aren't current
       const pendingRidesData = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'pending', 10);
-      setPendingRides(pendingRidesData || []);
+      const acceptedRidesData = await supabaseService.getRideLogsByVehicle(vehicleNumber, 'accepted', 10);
+      
+      // Combine pending and accepted rides, excluding the one set as current
+      const allPendingRides = [...(pendingRidesData || []), ...(acceptedRidesData || [])]
+        .filter(ride => !currentRideData?.[0] || ride.id !== currentRideData[0].id)
+        .filter(ride => !acceptedRideData?.[0] || ride.id !== acceptedRideData[0].id);
+      
+      setPendingRides(allPendingRides);
 
        // Load recent ride history (completed/cancelled) - load last 30 days to be safe
        const today = new Date();

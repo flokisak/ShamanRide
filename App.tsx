@@ -1088,7 +1088,7 @@ const AppContent: React.FC = () => {
           if (aiAssignment) {
             finalVehicle = aiAssignment.vehicle;
             finalDriverName = getDriverName(aiAssignment.vehicle.driverId);
-            finalStatus = RideStatus.Accepted;
+            finalStatus = RideStatus.Pending;
             console.log('🎯 AI assigned ride to nearest driver:', finalDriverName);
           } else {
             finalStatus = RideStatus.Queued;
@@ -1097,7 +1097,7 @@ const AppContent: React.FC = () => {
             console.log('📋 Ride queued - waiting for dispatcher assignment');
           }
         } else {
-          finalStatus = RideStatus.Accepted;
+          finalStatus = RideStatus.Pending;
         }
 
         const newLog: RideLog = {
