@@ -378,15 +378,22 @@ async function runWithFallback<T>(
 const supabaseService: any = SUPABASE_ENABLED ? {
   // Vehicles
   async getVehicles() {
-    const { data, error } = await supabase.from('vehicles').select('*');
+    // Add cache-busting parameter to ensure fresh data
+    const { data, error } = await supabase
+      .from('vehicles')
+      .select('*')
+      .order('updated_at', { ascending: false });
     if (error) throw error;
+    console.log('getVehicles: fetched', data?.length, 'vehicles from database');
     return (data || []).map((d: any) => this._fromDbVehicle(d));
   },
-   async updateVehicles(vehicles: any[]) {
-     const dbRows = vehicles.map(v => this._toDbVehicle(v));
-     const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
-     if (error) throw error;
-   },
+    async updateVehicles(vehicles: any[]) {
+      const dbRows = vehicles.map(v => this._toDbVehicle(v));
+      console.log('updateVehicles: updating vehicles in database:', dbRows.map(v => ({ id: v.id, shift_start_odo: v.shift_start_odo, mileage: v.mileage })));
+      const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
+      if (error) throw error;
+      console.log('updateVehicles: successfully updated', vehicles.length, 'vehicles');
+    },
 
   // People
   async getPeople() {
@@ -565,10 +572,11 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       fuel_consumption: v.fuelConsumption ?? null,
       phone: v.phone ?? null,
       email: v.email ?? null,
-        shift_start: v.shift_start ?? null,
-        shift_end: v.shift_end ?? null,
-        shift_start_odo: v.shiftStartOdo ?? null,
-        shift_end_odo: v.shiftEndOdo ?? null,
+      shift_start: v.shift_start ?? null,
+      shift_end: v.shift_end ?? null,
+      shift_start_odo: v.shiftStartOdo ?? null,
+      shift_end_odo: v.shiftEndOdo ?? null,
+      updated_at: new Date().toISOString(),
     };
   },
   _fromDbVehicle(db: any) {

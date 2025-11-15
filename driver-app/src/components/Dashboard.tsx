@@ -463,7 +463,17 @@ const Dashboard: React.FC = () => {
         setAvailableDrivers(peopleData.filter(p => p.role === 'Driver'));
 
         console.log('Looking for vehicle with ID:', selectedVehicleId);
-        console.log('Available vehicles:', vehiclesData.map(v => ({ id: v.id, email: v.email, name: v.name, licensePlate: v.licensePlate, mileage: v.mileage, driverId: v.driverId })));
+        console.log('Available vehicles:', vehiclesData.map(v => ({
+          id: v.id,
+          name: v.name,
+          licensePlate: v.licensePlate,
+          mileage: v.mileage,
+          shiftStartOdo: v.shiftStartOdo,
+          shiftEndOdo: v.shiftEndOdo,
+          shift_start: v.shift_start,
+          shift_end: v.shift_end,
+          status: v.status
+        })));
 
         // Find the vehicle by vehicle ID
         let assignedVehicle = vehiclesData.find(v => v.id === parseInt(selectedVehicleId));
@@ -569,6 +579,15 @@ const Dashboard: React.FC = () => {
         }
 
         // Load shift odometer readings from database
+        console.log('Vehicle data from database:', {
+          id: assignedVehicle.id,
+          shiftStartOdo: assignedVehicle.shiftStartOdo,
+          shiftEndOdo: assignedVehicle.shiftEndOdo,
+          shift_start: assignedVehicle.shift_start,
+          shift_end: assignedVehicle.shift_end,
+          mileage: assignedVehicle.mileage
+        });
+
         if (assignedVehicle.shiftStartOdo !== null && assignedVehicle.shiftStartOdo !== undefined) {
           setShiftStartOdo(assignedVehicle.shiftStartOdo);
           localStorage.setItem('shiftStartOdo', assignedVehicle.shiftStartOdo.toString());
