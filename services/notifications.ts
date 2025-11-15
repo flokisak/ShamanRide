@@ -26,7 +26,7 @@ export const requestNotificationPermission = async (): Promise<boolean> => {
 };
 
 // Show system notification (non-focus-stealing)
-export const showSystemNotification = (title: string, options: NotificationOptions = {}) => {
+export const showSystemNotification = async (title: string, options: NotificationOptions = {}) => {
   try {
     if (Notification.permission === 'granted') {
       const notification = new Notification(title, {
@@ -43,6 +43,12 @@ export const showSystemNotification = (title: string, options: NotificationOptio
       }, 3000);
 
       return notification;
+    } else if (Notification.permission === 'default') {
+      // Request permission and try again
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        return showSystemNotification(title, options);
+      }
     }
   } catch (error) {
     console.error('Error showing system notification:', error);
@@ -183,12 +189,8 @@ export const notifyUser = (type: 'ride' | 'message' | 'general' = 'general', cus
   }
 };
 
-// Initialize notifications on app start
+// Initialize notifications on app start (no longer requests permission automatically)
 export const initializeNotifications = async () => {
-  const permissionGranted = await requestNotificationPermission();
-  if (permissionGranted) {
-    console.log('Notification permissions granted for dispatcher app');
-  } else {
-    console.warn('Notification permissions not granted for dispatcher app');
-  }
+  // Permission will be requested when actually showing notifications
+  console.log('Notification system initialized');
 };

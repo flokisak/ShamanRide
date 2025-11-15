@@ -213,7 +213,8 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
           const intermediate = waypoints.slice(1, -1).map(w => `${w[0]},${w[1]}`).join('|');
           waypointsParam = `&waypoints=${intermediate}`;
         }
-        const googleUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&mode=driving&key=${googleMapsApiKey}`;
+        const proxyUrl = 'https://corsproxy.io/?';
+        const googleUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&mode=driving&key=${googleMapsApiKey}`;
         const googleResponse = await fetch(googleUrl);
 
         if (googleResponse.ok) {

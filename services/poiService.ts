@@ -34,6 +34,7 @@ export interface POISearchOptions {
 
 const CACHE_EXPIRY = 30 * 60 * 1000; // 30 minutes
 const searchCache = new Map<string, { results: POIResult[]; timestamp: number }>();
+const proxyUrl = 'https://corsproxy.io/?';
 
 /**
  * Generates cache key for POI search
