@@ -320,19 +320,16 @@ const Dashboard: React.FC = () => {
           const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id, startOfDay, endOfDay);
           const currentShift = driverShifts.find(shift => shift.status === ShiftPlanStatus.Active);
 
-          if (currentShift && currentShift.plannedEnd) {
-            const plannedEndTime = new Date(currentShift.plannedEnd).getTime();
-            const timeBeforePlannedEnd = (plannedEndTime - endTime) / (1000 * 60 * 60); // hours
+           if (currentShift && currentShift.plannedEnd) {
+             const plannedEndTime = new Date(currentShift.plannedEnd).getTime();
+             const timeBeforePlannedEnd = (plannedEndTime - endTime) / (1000 * 60 * 60); // hours
 
-            // Allow ending up to 2 hours early, but warn if more than 30 minutes early
-            if (timeBeforePlannedEnd > 2) {
-              alert(`Směna končí příliš brzy. Plánovaný konec je ${new Date(currentShift.plannedEnd).toLocaleTimeString('cs-CZ')}.`);
-              return false;
-            } else if (timeBeforePlannedEnd > 0.5) { // More than 30 minutes early
-              const confirmEarly = confirm(`Směna končí ${timeBeforePlannedEnd.toFixed(1)} hodin před plánovaným koncem (${new Date(currentShift.plannedEnd).toLocaleTimeString('cs-CZ')}). Opravdu chcete směnu ukončit?`);
-              if (!confirmEarly) return false;
-            }
-          }
+             // Allow early ending with confirmation
+             if (timeBeforePlannedEnd > 0) { // Ending before planned time
+               const confirmEarly = confirm(`Směna končí ${timeBeforePlannedEnd.toFixed(1)} hodin před plánovaným koncem (${new Date(currentShift.plannedEnd).toLocaleTimeString('cs-CZ')}). Skutečný čas konce bude zaznamenán. Opravdu chcete směnu ukončit?`);
+               if (!confirmEarly) return false;
+             }
+           }
         } catch (error) {
           console.error('Failed to validate against planned shift:', error);
           // Continue with shift end even if validation fails
