@@ -5,7 +5,11 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/((?!assets).*)",
+      "source": "/assets/(.*)",
+      "destination": "/assets/$1"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
