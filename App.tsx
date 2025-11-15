@@ -1074,33 +1074,16 @@ const AppContent: React.FC = () => {
           stopCoords = finalStops.map(() => ({ lat: 0, lon: 0 }));
         }
 
-        // Check if dispatcher is busy (has unassigned rides) or if AI should handle assignment
-        const hasUnassignedRides = rideLog.some(ride => ride.status === RideStatus.Pending && !ride.vehicleId);
-        const shouldQueue = hasUnassignedRides || !vehicle.email; // Queue if dispatcher busy or no driver assigned
+        // For manual assignments (dispatcher selected a specific vehicle), assign to that vehicle
+        // For automatic assignments, check dispatcher busyness and potentially queue
+        const isManualAssignment = true; // This function is only called for manual assignments from ManualAssignmentModal
 
-    let finalStatus = RideStatus.Queued;
+        let finalStatus = RideStatus.Pending;
         let finalVehicle = vehicle;
         let finalDriverName = getDriverName(vehicle.driverId);
 
-        if (shouldQueue) {
-          console.log('📋 Dispatcher busy or no driver assigned, queuing ride...');
-
-          // Try AI matching - find nearest available driver
-          const aiAssignment = await findNearestAvailableDriver(rideRequest, stopCoords, vehicles);
-          if (aiAssignment) {
-            finalVehicle = aiAssignment.vehicle;
-            finalDriverName = getDriverName(aiAssignment.vehicle.driverId);
-            finalStatus = RideStatus.Pending;
-            console.log('🎯 AI assigned ride to nearest driver:', finalDriverName);
-          } else {
-            finalStatus = RideStatus.Queued;
-            finalVehicle = { ...vehicle, id: undefined }; // No vehicle assigned yet
-            finalDriverName = null;
-            console.log('📋 Ride queued - waiting for dispatcher assignment');
-          }
-        } else {
-          finalStatus = RideStatus.Pending;
-        }
+        // Manual assignments always assign to the selected vehicle
+        console.log('🎯 Manual assignment to selected vehicle:', finalDriverName);
 
         const newLog: RideLog = {
             id: crypto.randomUUID(),
