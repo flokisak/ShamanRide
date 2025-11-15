@@ -442,27 +442,27 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                 const isToday = isSameDay(day, new Date());
 
-                return (
-                  <div
-                    key={index}
-                    onClick={() => {
-                      setSelectedDate(day);
-                      setViewMode('day');
-                    }}
-                    className={`relative p-2 h-24 border rounded-lg cursor-pointer transition-all ${
-                      isSelected ? 'bg-slate-300 border-slate-400' : 'border-gray-200'
-                    } ${isToday ? 'ring-2 ring-slate-500' : ''} ${
-                      shifts.length > 0 ? 'bg-slate-200' : ''
-                    } hover:bg-slate-200`}
-                  >
-                    <div className={`text-sm font-medium mb-1 ${
-                      isToday || isSelected || shifts.length > 0 ? 'text-slate-900' : 'text-slate-200 hover:text-slate-900'
-                    } ${!isSameMonth(day, currentMonth) ? 'text-slate-500 hover:text-slate-600' : ''}`}>
-                      {format(day, 'd')}
-                      {shifts.length > 0 && (
-                        <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mt-1"></div>
-                      )}
-                    </div>
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => {
+                        setSelectedDate(day);
+                        setViewMode('day');
+                      }}
+                      className={`relative p-2 h-24 border rounded-lg cursor-pointer transition-all ${
+                        isSelected ? 'bg-slate-600 border-slate-500' : 'border-slate-600'
+                      } ${isToday ? 'ring-2 ring-blue-500' : ''} ${
+                        shifts.length > 0 ? 'bg-slate-700' : 'bg-slate-800'
+                      } hover:bg-slate-700`}
+                    >
+                      <div className={`text-sm font-medium mb-1 text-white ${
+                        !isSameMonth(day, currentMonth) ? 'text-slate-500' : ''
+                      }`}>
+                        {format(day, 'd')}
+                        {shifts.length > 0 && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full mx-auto mt-1"></div>
+                        )}
+                      </div>
 
                     {/* Shift Indicators */}
                     <div className="space-y-1">
@@ -633,42 +633,42 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                    </div>
 
                    {getShiftsForDate(selectedDate).length > 0 ? (
-                     <div className="space-y-3">
-                       {getShiftsForDate(selectedDate).map((shift) => (
-                         <div key={shift.id} className="bg-slate-700 rounded-lg p-4 border border-slate-600">
-                           <div className="flex items-center justify-between">
-                             <div className="flex-1">
-                               <div className="flex items-center gap-3 mb-2">
-                                 <h4 className="text-lg font-medium text-white">
-                                   {shift.driverName}
-                                 </h4>
-                                 <span className={`px-2 py-1 text-xs rounded-full ${
-                                   shift.status === ShiftPlanStatus.Planned ? 'bg-blue-100 text-blue-800' :
-                                   shift.status === ShiftPlanStatus.Active ? 'bg-green-100 text-green-800' :
-                                   shift.status === ShiftPlanStatus.Completed ? 'bg-gray-100 text-gray-800' :
-                                   'bg-red-100 text-red-800'
-                                 }`}>
-                                   {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
-                                    shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
-                                    shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' :
-                                    'Zrušeno'}
-                                 </span>
-                               </div>
+                  <div className="space-y-3">
+                    {getShiftsForDate(selectedDate).map((shift) => (
+                      <div key={shift.id} className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h4 className="text-lg font-medium text-white">
+                                {shift.driverName}
+                              </h4>
+                              <span className={`px-2 py-1 text-xs rounded-full border ${
+                                shift.status === ShiftPlanStatus.Planned ? 'bg-blue-900/50 text-blue-300 border-blue-700/50' :
+                                shift.status === ShiftPlanStatus.Active ? 'bg-green-900/50 text-green-300 border-green-700/50' :
+                                shift.status === ShiftPlanStatus.Completed ? 'bg-gray-900/50 text-gray-300 border-gray-700/50' :
+                                'bg-red-900/50 text-red-300 border-red-700/50'
+                              }`}>
+                                {shift.status === ShiftPlanStatus.Planned ? 'Plánováno' :
+                                 shift.status === ShiftPlanStatus.Active ? 'Aktivní' :
+                                 shift.status === ShiftPlanStatus.Completed ? 'Dokončeno' :
+                                 'Zrušeno'}
+                              </span>
+                            </div>
 
-                               <div className="text-gray-300 text-sm space-y-1">
-                                 <div>
-                                   <span className="font-medium">Začátek:</span> {format(new Date(shift.plannedStart), 'd. MMMM yyyy HH:mm', { locale: cs })}
-                                 </div>
-                                 <div>
-                                   <span className="font-medium">Konec:</span> {format(new Date(shift.plannedEnd), 'd. MMMM yyyy HH:mm', { locale: cs })}
-                                 </div>
-                                 {shift.notes && (
-                                   <div>
-                                     <span className="font-medium">Poznámky:</span> {shift.notes}
-                                   </div>
-                                 )}
-                               </div>
-                             </div>
+                            <div className="text-slate-300 text-sm space-y-1">
+                              <div>
+                                <span className="font-medium">Začátek:</span> {format(new Date(shift.plannedStart), 'd. MMMM yyyy HH:mm', { locale: cs })}
+                              </div>
+                              <div>
+                                <span className="font-medium">Konec:</span> {format(new Date(shift.plannedEnd), 'd. MMMM yyyy HH:mm', { locale: cs })}
+                              </div>
+                              {shift.notes && (
+                                <div>
+                                  <span className="font-medium">Poznámky:</span> {shift.notes}
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
                              <div className="flex items-center gap-2 ml-4">
                                <button
@@ -909,16 +909,16 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-slate-700">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-800">
+          <h2 className="text-xl font-bold text-white">
             {editingShift ? 'Upravit směnu' : 'Naplánovat směnu'}
           </h2>
 
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
+            className="p-2 hover:bg-slate-700 rounded-lg text-gray-400 hover:text-white transition-colors"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -927,7 +927,7 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
         </div>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg mb-4 text-sm">
+          <div className="bg-red-900/50 border border-red-700 text-red-300 px-3 py-2 rounded-lg mb-4 text-sm">
             {error}
           </div>
         )}
@@ -935,14 +935,14 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           {isDispatcher && (
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-1">
+              <label className="block text-slate-300 text-sm font-medium mb-1">
                 Řidič
               </label>
               <select
                 name="driverId"
                 value={formData.driverId}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               >
                 <option value={0} disabled>Vyberte řidiče...</option>
@@ -957,7 +957,7 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-1">
+              <label className="block text-slate-300 text-sm font-medium mb-1">
                 Začátek
               </label>
               <input
@@ -965,12 +965,12 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
                 name="plannedStart"
                 value={formData.plannedStart}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-1">
+              <label className="block text-slate-300 text-sm font-medium mb-1">
                 Konec
               </label>
               <input
@@ -978,7 +978,7 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
                 name="plannedEnd"
                 value={formData.plannedEnd}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
@@ -986,14 +986,14 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-1">
+              <label className="block text-slate-300 text-sm font-medium mb-1">
                 Stav
               </label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value={ShiftPlanStatus.Planned}>Plánováno</option>
                 <option value={ShiftPlanStatus.Active}>Aktivní</option>
@@ -1002,14 +1002,14 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-1">
+              <label className="block text-slate-300 text-sm font-medium mb-1">
                 Opakování
               </label>
               <select
                 name="recurringPattern"
                 value={formData.recurringPattern}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value={RecurringPattern.None}>Bez opakování</option>
                 <option value={RecurringPattern.Daily}>Denně</option>
@@ -1021,7 +1021,7 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
 
           {formData.recurringPattern !== RecurringPattern.None && (
             <div>
-              <label className="block text-gray-700 text-sm font-medium mb-1">
+              <label className="block text-slate-300 text-sm font-medium mb-1">
                 Konec opakování
               </label>
               <input
@@ -1029,14 +1029,14 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
                 name="recurringEndDate"
                 value={formData.recurringEndDate}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
           )}
 
           <div>
-            <label className="block text-gray-700 text-sm font-medium mb-1">
+            <label className="block text-slate-300 text-sm font-medium mb-1">
               Poznámky
             </label>
             <textarea
@@ -1044,7 +1044,7 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
               value={formData.notes}
               onChange={handleInputChange}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+              className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               placeholder="Volitelné poznámky..."
             />
           </div>
@@ -1068,7 +1068,7 @@ const ShiftCreateEditModal: React.FC<ShiftCreateEditModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors"
+                className="flex-1 px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg transition-colors"
               >
                 Zrušit
               </button>
