@@ -50,45 +50,8 @@ function shortenAddress(address: string): string {
  * Compresses navigation URLs for SMS by preserving essential parameters.
  */
 export function compressNavigationUrl(url: string, placeIds: string[] = []): string {
-    try {
-        const u = new URL(url);
-        const dest = u.searchParams.get('destination');
-        const waypoints = u.searchParams.get('waypoints');
-
-        // If we have place IDs, try to use them for more accurate navigation
-        if (placeIds.length > 0) {
-            // Use the last place ID as destination if available
-            const lastPlaceId = placeIds[placeIds.length - 1];
-            if (lastPlaceId) {
-                const placeUrl = `https://www.google.com/maps/place/?q=place_id:${lastPlaceId}`;
-                return placeUrl;
-            }
-        }
-
-        // Check for specific place ID insertion: ChIJZVL6SDOLC0cROlPH5--7Vh0
-        const specificPlaceId = 'ChIJZVL6SDOLC0cROlPH5--7Vh0';
-        if (dest && dest.includes(specificPlaceId)) {
-            return `https://www.google.com/maps/place/?q=place_id:${specificPlaceId}`;
-        }
-
-        // Preserve api=1 and travelmode for a valid Google Maps directions link.
-        if (dest) {
-            const preserved = new URL(u.origin + u.pathname);
-            preserved.searchParams.set('api', '1');
-            preserved.searchParams.set('destination', dest);
-            if (waypoints) {
-                // keep waypoints for proper navigation
-                preserved.searchParams.set('waypoints', waypoints);
-            }
-            // preserve travelmode if present, otherwise default to driving
-            const tm = u.searchParams.get('travelmode') || 'driving';
-            preserved.searchParams.set('travelmode', tm);
-            return preserved.toString();
-        }
-        return url;
-    } catch {
-        return url;
-    }
+    // Since URLs are clicked rather than typed, no need to compress them
+    return url;
 }
 
 /**
