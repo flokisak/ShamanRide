@@ -462,18 +462,21 @@ const supabaseService: any = SUPABASE_ENABLED ? {
      }
      upsertLocal('ride-log', rideLog);
    },
-  async updateRideLogs(rideLogs: any[]) {
-    if (SUPABASE_ENABLED) {
-      try {
-        const dbRows = rideLogs.map(r => this._toDbRideLog(r));
-        const { error } = await supabase.from('ride_logs').upsert(dbRows, { onConflict: 'id' });
-        if (error) throw error;
-      } catch (err) {
-        console.warn('Failed to update ride logs in supabase, updating local:', err);
-      }
-    }
-    writeTable('ride-log', rideLogs);
-  },
+   async updateRideLogs(rideLogs: any[]) {
+     if (SUPABASE_ENABLED) {
+       try {
+         const dbRows = rideLogs.map(r => this._toDbRideLog(r));
+         const { error } = await supabase.from('ride_logs').upsert(dbRows, { onConflict: 'id' });
+         if (error) throw error;
+       } catch (err) {
+         console.warn('Failed to update ride logs in supabase, updating local:', err);
+       }
+     }
+     writeTable('ride-log', rideLogs);
+   },
+   async updateRideLog(id: string, ride: any) {
+     await this.updateRideLogs([ride]);
+   },
 
   // Locations
   async getLocations() {
@@ -719,6 +722,9 @@ const supabaseService: any = SUPABASE_ENABLED ? {
   },
   async updateRideLogs(rideLogs: any[]) {
     writeTable('ride-log', rideLogs);
+  },
+  async updateRideLog(id: string, ride: any) {
+    await this.updateRideLogs([ride]);
   },
   async getLocations() {
     return readTable('locations');
