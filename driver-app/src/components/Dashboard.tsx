@@ -215,12 +215,12 @@ const Dashboard: React.FC = () => {
     setShiftStartTime(startTime);
     setShiftEndTimestamp(null);
     setDriverStatus('available');
-     setIsShiftActive(true);
-     localStorage.setItem('shiftStartTime', startTime.toString());
-     localStorage.removeItem('shiftEndTime');
-     localStorage.setItem('driverStatus', 'available');
-     localStorage.setItem('isShiftActive', 'true');
-     localStorage.removeItem('shiftStartOdo'); // Clear stored odometer after use
+      setIsShiftActive(true);
+      localStorage.setItem('shiftStartTime', startTime.toString());
+      localStorage.removeItem('shiftEndTime');
+      localStorage.setItem('driverStatus', 'available');
+      localStorage.setItem('isShiftActive', 'true');
+      localStorage.removeItem('shiftStartOdo'); // Clear stored odometer after use
 
     // Save start odometer to vehicle data
     setShiftStartOdo(startOdo);
@@ -232,6 +232,10 @@ const Dashboard: React.FC = () => {
       try {
         const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
         console.log('🚀 Current vehicle before update:', currentVehicle);
+        if (!currentVehicle) {
+          console.error('❌ Vehicle not found in local state for update');
+          return;
+        }
         const updatedVehicle = {
           ...currentVehicle,
           shift_start: new Date(startTime),
@@ -240,14 +244,12 @@ const Dashboard: React.FC = () => {
           status: VehicleStatus.Available
         };
         console.log('🚀 Updated vehicle object:', updatedVehicle);
-        if (updatedVehicle) {
-          await supabaseService.updateVehicles([updatedVehicle]);
-          console.log('✅ Vehicle start odometer and mileage updated in database:', startOdo);
+        await supabaseService.updateVehicles([updatedVehicle]);
+        console.log('✅ Vehicle start odometer and mileage updated in database:', startOdo);
 
-          // Update local vehicles state
-          setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
-          console.log('✅ Local vehicles state updated');
-        }
+        // Update local vehicles state
+        setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
+        console.log('✅ Local vehicles state updated');
       } catch (error) {
         console.error('❌ Failed to update vehicle start odometer and mileage:', error);
       }
@@ -496,9 +498,40 @@ const Dashboard: React.FC = () => {
           const shiftStartDate = new Date(assignedVehicle.shift_start);
           if (!isNaN(shiftStartDate.getTime())) {
             const shiftStartTimeVal = shiftStartDate.getTime();
-            setShiftStartTime(shiftStartTimeVal);
-            localStorage.setItem('shiftStartTime', shiftStartTimeVal.toString());
-            console.log('Loaded shift start from database:', new Date(shiftStartTimeVal).toLocaleString());
+            const hoursSinceShiftStart = (Date.now() - shiftStartTimeVal) / (1000 * 60 * 60);
+            if (hoursSinceShiftStart > 24) {
+              console.log('⚠️ Old shift start detected in database (', hoursSinceShiftStart.toFixed(1), 'hours ago), resetting vehicle status');
+              // Reset the vehicle in database
+              const updatedVehicle = {
+                ...assignedVehicle,
+                status: VehicleStatus.OutOfService,
+                shift_start: null,
+                shift_end: null,
+                shiftStartOdo: null,
+                shiftEndOdo: null
+              };
+              try {
+                await supabaseService.updateVehicles([updatedVehicle]);
+                // Update local
+                assignedVehicle = updatedVehicle;
+                setVehicles(prev => prev.map(v => v.id === parseInt(selectedVehicleId) ? updatedVehicle : v));
+                // Reset localStorage
+                localStorage.removeItem('shiftStartTime');
+                localStorage.removeItem('shiftEndTime');
+                localStorage.setItem('isShiftActive', 'false');
+                localStorage.setItem('driverStatus', 'offline');
+                setShiftStartTime(null);
+                setShiftEndTimestamp(null);
+                setIsShiftActive(false);
+                setDriverStatus('offline');
+              } catch (err) {
+                console.error('Failed to reset old shift in database:', err);
+              }
+            } else {
+              setShiftStartTime(shiftStartTimeVal);
+              localStorage.setItem('shiftStartTime', shiftStartTimeVal.toString());
+              console.log('Loaded shift start from database:', new Date(shiftStartTimeVal).toLocaleString());
+            }
           } else {
             console.warn('Invalid shift start date from database:', assignedVehicle.shift_start);
           }
