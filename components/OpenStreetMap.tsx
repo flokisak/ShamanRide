@@ -6,6 +6,45 @@ import { useTranslation } from '../contexts/LanguageContext';
 import { fetchVehiclePositions, GpsVehicle } from '../services/gpsService';
 import { splitAddressAndPlaceId } from '../services/addressUtils';
 
+// Polyline decoding function for Google Maps
+function decodePolyline(encoded: string): [number, number][] {
+  const poly: [number, number][] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let b;
+    let shift = 0;
+    let result = 0;
+
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+
+    const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+
+    const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+
+    poly.push([lat * 1e-5, lng * 1e-5]); // Convert to [lat, lng]
+  }
+
+  return poly;
+}
+
 // Fix for default icon path issue with bundlers
 // @ts-ignore - _getIconUrl is an internal property that may not be in types
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -162,6 +201,46 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
 
     console.log('🌐 Calculating route for:', cacheKey);
 
+    // Try Google Maps API directly
+    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (googleMapsApiKey) {
+      try {
+        console.log('Trying Google Maps routing...');
+        const origin = `${waypoints[0][0]},${waypoints[0][1]}`;
+        const destination = `${waypoints[waypoints.length - 1][0]},${waypoints[waypoints.length - 1][1]}`;
+        let waypointsParam = '';
+        if (waypoints.length > 2) {
+          const intermediate = waypoints.slice(1, -1).map(w => `${w[0]},${w[1]}`).join('|');
+          waypointsParam = `&waypoints=${intermediate}`;
+        }
+        const googleUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&mode=driving&key=${googleMapsApiKey}`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(googleUrl)}`;
+        const googleResponse = await fetch(proxyUrl);
+
+        if (googleResponse.ok) {
+          const proxyData = await googleResponse.json();
+          const googleData = JSON.parse(proxyData.contents);
+          if (googleData.status === 'OK' && googleData.routes && googleData.routes.length > 0) {
+            const route = googleData.routes[0];
+            const geometry = decodePolyline(route.overview_polyline.points);
+            const totalDistance = route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0);
+            const totalDuration = route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0);
+            const summary = {
+              distance: `${(totalDistance / 1000).toFixed(1)} km`,
+              duration: `${Math.round(totalDuration / 60)} min`
+            };
+            const result = { geometry, summary };
+            routeCache.set(cacheKey, result);
+            setTimeout(() => routeCache.delete(cacheKey), 10 * 60 * 1000);
+            return result;
+          }
+        }
+        console.log('Google Maps routing failed');
+      } catch (error) {
+        console.log('Google Maps routing error:', error);
+      }
+    }
+
     try {
         const coordsString = waypoints.map(c => `${c[1]},${c[0]}`).join(';');
         const url = `/api/route?coordinates=${encodeURIComponent(coordsString)}`;
@@ -211,15 +290,15 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
 
         enhancedWaypoints.push(start);
 
-        // For distances over 10km, add intermediate points to simulate road curvature
-        if (distance > 10) {
-            const numIntermediates = Math.min(Math.floor(distance / 5), 5); // Max 5 intermediates
+        // For distances over 5km, add intermediate points to simulate road curvature
+        if (distance > 5) {
+            const numIntermediates = Math.min(Math.floor(distance / 2), 10); // More intermediates
             for (let j = 1; j <= numIntermediates; j++) {
                 const ratio = j / (numIntermediates + 1);
                 const lat = start[0] + (end[0] - start[0]) * ratio;
                 const lon = start[1] + (end[1] - start[1]) * ratio;
-                // Add small random variation to simulate road curvature (±0.5km)
-                const variation = 0.005; // ~500m in degrees
+                // Add random variation to simulate road curvature (±1km)
+                const variation = 0.01; // ~1km in degrees
                 enhancedWaypoints.push([
                     lat + (Math.random() - 0.5) * variation,
                     lon + (Math.random() - 0.5) * variation
