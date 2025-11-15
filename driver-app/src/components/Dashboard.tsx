@@ -987,7 +987,7 @@ const Dashboard: React.FC = () => {
 
   // Initialize socket connection for real-time updates - DISABLED due to auth issues
   // The driver app uses direct database polling instead of real-time socket updates
-  // Force redeploy
+  // Force redeploy 2
   /*
   useEffect(() => {
     const initializeSocket = async () => {
