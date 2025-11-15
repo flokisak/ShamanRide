@@ -20,7 +20,7 @@ import { StreamChatDriver } from './StreamChatDriver';
 import { testNotifications } from '../utils/testNotifications';
 import ShiftPlanningModal from './ShiftPlanningModal';
 import ShiftCalendar from './ShiftCalendar';
-import { ShiftPlanningService } from '../../../services/shiftPlanningService';
+import { ShiftPlanningService } from '../services/shiftPlanningService';
 import { ShiftPlan, ShiftPlanStatus, RecurringPattern } from '../../../types';
 
 import io from 'socket.io-client';
@@ -260,27 +260,39 @@ const Dashboard: React.FC = () => {
     // Update shift planning status to Active
     if (shiftPlanningService && selectedDriver?.id) {
       try {
-        const today = new Date();
-        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+        const now = new Date();
+        // Look for planned shifts within a 24-hour window around current time
+        const searchStart = new Date(now.getTime() - 12 * 60 * 60 * 1000); // 12 hours ago
+        const searchEnd = new Date(now.getTime() + 12 * 60 * 60 * 1000); // 12 hours from now
 
-        // Find today's planned shift for this driver
-        const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id, startOfDay, endOfDay);
-        const currentShift = driverShifts.find(shift =>
-          shift.status === ShiftPlanStatus.Planned &&
-          new Date(shift.plannedStart) <= new Date() &&
-          new Date(shift.plannedEnd) >= new Date()
-        );
+        console.log('🔍 Looking for planned shifts for driver', selectedDriver.id, 'between', searchStart.toISOString(), 'and', searchEnd.toISOString());
+
+        const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id, searchStart, searchEnd);
+        console.log('📋 Found', driverShifts.length, 'shifts for driver');
+
+        const currentShift = driverShifts.find(shift => {
+          const plannedStart = new Date(shift.plannedStart);
+          const plannedEnd = new Date(shift.plannedEnd);
+          const isPlanned = shift.status === ShiftPlanStatus.Planned;
+          const timeMatches = plannedStart <= now && plannedEnd >= now;
+
+          console.log('Checking shift:', shift.id, 'status:', shift.status, 'plannedStart:', plannedStart.toISOString(), 'plannedEnd:', plannedEnd.toISOString(), 'timeMatches:', timeMatches);
+
+          return isPlanned && timeMatches;
+        });
 
         if (currentShift) {
+          console.log('✅ Found matching planned shift:', currentShift.id, 'updating to Active');
           await shiftPlanningService.updateShiftPlan(currentShift.id, {
             status: ShiftPlanStatus.Active,
             actualStart: new Date()
           });
-          console.log('Shift status updated to Active:', currentShift.id);
+          console.log('✅ Shift status updated to Active:', currentShift.id);
+        } else {
+          console.log('⚠️ No matching planned shift found for driver', selectedDriver.id);
         }
       } catch (error) {
-        console.error('Failed to update shift status to Active:', error);
+        console.error('❌ Failed to update shift status to Active:', error);
       }
     }
   };
@@ -390,25 +402,26 @@ const Dashboard: React.FC = () => {
     // Update shift planning status to Completed
     if (shiftPlanningService && selectedDriver?.id) {
       try {
-        const today = new Date();
-        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+        console.log('🔍 Looking for active shifts for driver', selectedDriver.id, 'to mark as completed');
 
-        // Find today's active shift for this driver
-        const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id, startOfDay, endOfDay);
-        const currentShift = driverShifts.find(shift =>
-          shift.status === ShiftPlanStatus.Active
-        );
+        // Find any active shift for this driver (not limited to today)
+        const driverShifts = await shiftPlanningService.getDriverShiftPlans(selectedDriver.id);
+        console.log('📋 Found', driverShifts.length, 'total shifts for driver');
 
-        if (currentShift) {
-          await shiftPlanningService.updateShiftPlan(currentShift.id, {
+        const activeShift = driverShifts.find(shift => shift.status === ShiftPlanStatus.Active);
+
+        if (activeShift) {
+          console.log('✅ Found active shift:', activeShift.id, 'updating to Completed');
+          await shiftPlanningService.updateShiftPlan(activeShift.id, {
             status: ShiftPlanStatus.Completed,
             actualEnd: new Date()
           });
-          console.log('Shift status updated to Completed:', currentShift.id);
+          console.log('✅ Shift status updated to Completed:', activeShift.id);
+        } else {
+          console.log('⚠️ No active shift found for driver', selectedDriver.id);
         }
       } catch (error) {
-        console.error('Failed to update shift status to Completed:', error);
+        console.error('❌ Failed to update shift status to Completed:', error);
       }
     }
 
@@ -447,7 +460,7 @@ const Dashboard: React.FC = () => {
         console.log('Available vehicles:', vehiclesData.map(v => ({ id: v.id, email: v.email, name: v.name, licensePlate: v.licensePlate, mileage: v.mileage, driverId: v.driverId })));
 
         // Find the vehicle by vehicle ID
-        const assignedVehicle = vehiclesData.find(v => v.id === parseInt(selectedVehicleId));
+        let assignedVehicle = vehiclesData.find(v => v.id === parseInt(selectedVehicleId));
 
         // Find the driver by driver ID
         const assignedDriver = peopleData.find(p => p.id === parseInt(selectedDriverId));

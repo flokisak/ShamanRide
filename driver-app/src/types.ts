@@ -341,3 +341,34 @@ export interface ShiftData {
   created_at: string;
   updated_at: string;
 }
+
+// Shift planning types
+export enum ShiftPlanStatus {
+  Planned = 'PLANNED',
+  Active = 'ACTIVE',
+  Completed = 'COMPLETED',
+  Cancelled = 'CANCELLED'
+}
+
+export enum RecurringPattern {
+  None = 'NONE',
+  Daily = 'DAILY',
+  Weekly = 'WEEKLY',
+  Monthly = 'MONTHLY'
+}
+
+export interface ShiftPlan {
+  id: string;
+  driverId: number;
+  driverName?: string;
+  plannedStart: Date;
+  plannedEnd: Date;
+  actualStart?: Date;
+  actualEnd?: Date;
+  status: ShiftPlanStatus;
+  notes?: string;
+  recurringPattern?: RecurringPattern;
+  recurringEndDate?: Date;
+  createdAt: string;
+  updatedAt: string;
+}
