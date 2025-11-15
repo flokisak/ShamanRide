@@ -381,18 +381,44 @@ const supabaseService: any = SUPABASE_ENABLED ? {
     // Add cache-busting parameter to ensure fresh data
     const { data, error } = await supabase
       .from('vehicles')
-      .select('*')
-      .order('updated_at', { ascending: false });
+      .select('*');
     if (error) throw error;
     console.log('getVehicles: fetched', data?.length, 'vehicles from database');
+    if (data && data.length > 0) {
+      console.log('getVehicles: first vehicle raw data:', data[0]);
+      console.log('getVehicles: available columns:', Object.keys(data[0]));
+    }
     return (data || []).map((d: any) => this._fromDbVehicle(d));
   },
     async updateVehicles(vehicles: any[]) {
       const dbRows = vehicles.map(v => this._toDbVehicle(v));
-      console.log('updateVehicles: updating vehicles in database:', dbRows.map(v => ({ id: v.id, shift_start_odo: v.shift_start_odo, mileage: v.mileage })));
-      const { error } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
-      if (error) throw error;
-      console.log('updateVehicles: successfully updated', vehicles.length, 'vehicles');
+      console.log('updateVehicles: updating vehicles in database:', dbRows.map(v => ({
+        id: v.id,
+        mileage: v.mileage,
+        shift_start_odo: v.shift_start_odo,
+        shift_end_odo: v.shift_end_odo,
+        updated_at: v.updated_at
+      })));
+
+      // Try upsert first
+      const { error: upsertError } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
+      if (upsertError) {
+        console.error('updateVehicles: upsert failed, trying individual updates:', upsertError);
+        // Fallback to individual updates
+        for (const vehicle of dbRows) {
+          const { error: updateError } = await supabase
+            .from('vehicles')
+            .update(vehicle)
+            .eq('id', vehicle.id);
+          if (updateError) {
+            console.error('updateVehicles: individual update failed for vehicle', vehicle.id, updateError);
+            throw updateError;
+          }
+        }
+        console.log('updateVehicles: successfully updated', vehicles.length, 'vehicles with individual updates');
+      } else {
+        console.log('updateVehicles: successfully updated', vehicles.length, 'vehicles with upsert');
+      }
     },
 
   // People
