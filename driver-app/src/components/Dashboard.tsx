@@ -250,6 +250,15 @@ const Dashboard: React.FC = () => {
         // Update local vehicles state
         setVehicles(prev => prev.map(v => v.id === vehicleNumber ? updatedVehicle : v));
         console.log('✅ Local vehicles state updated');
+
+        // Force refresh vehicle data from database to ensure consistency
+        try {
+          const freshVehicles = await supabaseService.getVehicles();
+          setVehicles(freshVehicles);
+          console.log('✅ Vehicle data refreshed from database');
+        } catch (refreshError) {
+          console.error('❌ Failed to refresh vehicle data:', refreshError);
+        }
       } catch (error) {
         console.error('❌ Failed to update vehicle start odometer and mileage:', error);
       }
