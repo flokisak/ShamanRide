@@ -239,7 +239,6 @@ const Dashboard: React.FC = () => {
         const updatedVehicle = {
           ...currentVehicle,
           shift_start: new Date(startTime),
-          shiftStartOdo: startOdo,
           mileage: startOdo,  // Update current mileage to start odometer
           status: VehicleStatus.Available
         };
@@ -386,13 +385,12 @@ const Dashboard: React.FC = () => {
     if (vehicleNumber) {
       try {
         const currentVehicle = vehicles.find(v => v.id === vehicleNumber);
-         const updatedVehicle = {
-           ...currentVehicle,
-           shift_end: new Date(endTime),
-           shiftEndOdo: endOdo,
-           mileage: endOdo,  // Update current mileage to end odometer
-           status: VehicleStatus.OutOfService
-         };
+          const updatedVehicle = {
+            ...currentVehicle,
+            shift_end: new Date(endTime),
+            mileage: endOdo,  // Update current mileage to end odometer
+            status: VehicleStatus.OutOfService
+          };
         if (updatedVehicle) {
           await supabaseService.updateVehicles([updatedVehicle]);
           console.log('Vehicle end odometer and mileage updated:', endOdo);
@@ -468,8 +466,6 @@ const Dashboard: React.FC = () => {
           name: v.name,
           licensePlate: v.licensePlate,
           mileage: v.mileage,
-          shiftStartOdo: v.shiftStartOdo,
-          shiftEndOdo: v.shiftEndOdo,
           shift_start: v.shift_start,
           shift_end: v.shift_end,
           status: v.status
@@ -578,26 +574,13 @@ const Dashboard: React.FC = () => {
           }
         }
 
-        // Load shift odometer readings from database
+        // Load vehicle mileage from database
         console.log('Vehicle data from database:', {
           id: assignedVehicle.id,
-          shiftStartOdo: assignedVehicle.shiftStartOdo,
-          shiftEndOdo: assignedVehicle.shiftEndOdo,
+          mileage: assignedVehicle.mileage,
           shift_start: assignedVehicle.shift_start,
-          shift_end: assignedVehicle.shift_end,
-          mileage: assignedVehicle.mileage
+          shift_end: assignedVehicle.shift_end
         });
-
-        if (assignedVehicle.shiftStartOdo !== null && assignedVehicle.shiftStartOdo !== undefined) {
-          setShiftStartOdo(assignedVehicle.shiftStartOdo);
-          localStorage.setItem('shiftStartOdo', assignedVehicle.shiftStartOdo.toString());
-          console.log('Loaded shift start odometer from database:', assignedVehicle.shiftStartOdo);
-        }
-        if (assignedVehicle.shiftEndOdo !== null && assignedVehicle.shiftEndOdo !== undefined) {
-          setShiftEndOdo(assignedVehicle.shiftEndOdo);
-          localStorage.setItem('shiftEndOdo', assignedVehicle.shiftEndOdo.toString());
-          console.log('Loaded shift end odometer from database:', assignedVehicle.shiftEndOdo);
-        }
 
         // Load current driver status from vehicle status - preserve manual settings
         const vehicleStatus = assignedVehicle.status;

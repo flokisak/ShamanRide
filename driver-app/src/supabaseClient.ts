@@ -391,34 +391,36 @@ const supabaseService: any = SUPABASE_ENABLED ? {
     return (data || []).map((d: any) => this._fromDbVehicle(d));
   },
     async updateVehicles(vehicles: any[]) {
-      const dbRows = vehicles.map(v => this._toDbVehicle(v));
-      console.log('updateVehicles: updating vehicles in database:', dbRows.map(v => ({
-        id: v.id,
-        mileage: v.mileage,
-        shift_start_odo: v.shift_start_odo,
-        shift_end_odo: v.shift_end_odo,
-        updated_at: v.updated_at
-      })));
+      console.log('updateVehicles: updating', vehicles.length, 'vehicles');
 
-      // Try upsert first
-      const { error: upsertError } = await supabase.from('vehicles').upsert(dbRows, { onConflict: 'id' });
-      if (upsertError) {
-        console.error('updateVehicles: upsert failed, trying individual updates:', upsertError);
-        // Fallback to individual updates
-        for (const vehicle of dbRows) {
-          const { error: updateError } = await supabase
-            .from('vehicles')
-            .update(vehicle)
-            .eq('id', vehicle.id);
-          if (updateError) {
-            console.error('updateVehicles: individual update failed for vehicle', vehicle.id, updateError);
-            throw updateError;
-          }
+      for (const vehicle of vehicles) {
+        const dbRow = this._toDbVehicle(vehicle);
+        console.log('updateVehicles: updating vehicle', vehicle.id, 'with data:', {
+          mileage: dbRow.mileage,
+          shift_start: dbRow.shift_start,
+          shift_end: dbRow.shift_end
+        });
+
+        const { error } = await supabase
+          .from('vehicles')
+          .update({
+            mileage: dbRow.mileage,
+            shift_start: dbRow.shift_start,
+            shift_end: dbRow.shift_end,
+            vehicle_status: dbRow.vehicle_status,
+            updated_at: dbRow.updated_at
+          })
+          .eq('id', vehicle.id);
+
+        if (error) {
+          console.error('updateVehicles: failed to update vehicle', vehicle.id, error);
+          throw error;
         }
-        console.log('updateVehicles: successfully updated', vehicles.length, 'vehicles with individual updates');
-      } else {
-        console.log('updateVehicles: successfully updated', vehicles.length, 'vehicles with upsert');
+
+        console.log('updateVehicles: successfully updated vehicle', vehicle.id);
       }
+
+      console.log('updateVehicles: completed updating all vehicles');
     },
 
   // People
@@ -600,8 +602,6 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       email: v.email ?? null,
       shift_start: v.shift_start ?? null,
       shift_end: v.shift_end ?? null,
-      shift_start_odo: v.shiftStartOdo ?? null,
-      shift_end_odo: v.shiftEndOdo ?? null,
       updated_at: new Date().toISOString(),
     };
   },
@@ -625,10 +625,8 @@ const supabaseService: any = SUPABASE_ENABLED ? {
       fuelConsumption: db.fuel_consumption ?? null,
       phone: db.phone ?? null,
       email: db.email ?? null,
-        shift_start: db.shift_start ?? null,
-        shift_end: db.shift_end ?? null,
-        shiftStartOdo: db.shift_start_odo ?? null,
-        shiftEndOdo: db.shift_end_odo ?? null,
+      shift_start: db.shift_start ?? null,
+      shift_end: db.shift_end ?? null,
     };
   },
 
