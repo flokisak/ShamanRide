@@ -157,8 +157,8 @@ export function generateSms(ride: RideRequest | RideLog, t: (key: string, params
  */
 export function generateCustomerSms(vehicle: Vehicle, eta: number, driverName: string): string {
     const roundedEta = Math.round(eta);
-    // Remove hardcoded Czech strings and use a more generic format
-    return `Your ride has been assigned. Vehicle: ${vehicle.name} (${vehicle.licensePlate}). Driver: ${driverName || 'Unknown'}. ETA: ${roundedEta} min.`;
+    // Czech message for customer when ride is assigned
+    return `Vaše jízda byla přiřazena. Vozidlo: ${vehicle.name} (${vehicle.licensePlate}). Řidič: ${driverName || 'Neznámý'}. Odhadovaný příjezd: ${roundedEta} min.`;
 }
 
 /**
