@@ -410,12 +410,12 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
                          ride.status === 'completed' ? 'bg-green-600' : getStatusColor(ride.status)
                        } border-0`}
                      >
-                       <option value="pending">Pending</option>
-                       <option value="assigned">Assigned</option>
-                       <option value="accepted">Accepted</option>
-                       <option value="in_progress">In Progress</option>
-                       <option value="completed">Completed</option>
-                       <option value="cancelled">Cancelled</option>
+                        <option value="pending">Pending</option>
+                        <option value="assigned">Assigned</option>
+                        {isDispatcher && <option value="accepted">Accepted</option>}
+                        <option value="in_progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
                      </select>
                    </div>
 
@@ -443,36 +443,27 @@ const Rides = ({ currentUser, shiftId, isDispatcher = false, onRideUpdate, onSta
                           )}
                         </>
                       ) : (
-                       <>
-                         {ride.status === 'assigned' && (
-                           <button
-                             onClick={() => changeStatus(ride.id, 'accepted', currentUser.id)}
-                             className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium"
-                             title="Accept ride"
-                           >
-                             ✓
-                           </button>
-                         )}
-                         {ride.status === 'accepted' && (
-                           <button
-                             onClick={() => changeStatus(ride.id, 'in_progress', currentUser.id)}
-                             className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium"
-                             title="Start ride"
-                           >
-                             ▶
-                           </button>
-                         )}
-                         {ride.status === 'in_progress' && (
-                           <button
-                             onClick={() => changeStatus(ride.id, 'completed', currentUser.id)}
-                             className="px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium"
-                             title="Complete ride"
-                           >
-                             ■
-                           </button>
-                         )}
-                       </>
-                     )}
+                        <>
+                          {ride.status === 'assigned' && (
+                            <button
+                              onClick={() => changeStatus(ride.id, 'in_progress', currentUser.id)}
+                              className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-medium"
+                              title="Start ride"
+                            >
+                              ▶
+                            </button>
+                          )}
+                          {ride.status === 'in_progress' && (
+                            <button
+                              onClick={() => changeStatus(ride.id, 'completed', currentUser.id)}
+                              className="px-2 py-1 bg-purple-600 hover:bg-purple-700 rounded text-xs font-medium"
+                              title="Complete ride"
+                            >
+                              ■
+                            </button>
+                          )}
+                        </>
+                      )}
                    </div>
                  </div>
                ))}
