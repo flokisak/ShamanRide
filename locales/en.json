@@ -487,5 +487,10 @@
     "rideType": {
       "PRIVATE": "Private",
       "BUSINESS": "Business"
+    },
+    "shiftPlanning": {
+      "fastOptions": "Fast options",
+      "dayShift": "Day shift (6:00-18:00)",
+      "nightShift": "Night shift (18:00-6:00)"
     }
 }

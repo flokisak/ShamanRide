@@ -27,12 +27,12 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingShift, setEditingShift] = useState<ShiftPlan | undefined>(undefined);
-  let t: (key: string) => string;
-  try {
-    ({ t } = useTranslation());
-  } catch (error) {
-    t = (key: string) => key; // Fallback to return the key itself
-  }
+   let t = (key: string) => key; // Default fallback
+   try {
+     ({ t } = useTranslation());
+   } catch (error) {
+     // Keep the default fallback
+   }
 
   // Initialize service
   useEffect(() => {
