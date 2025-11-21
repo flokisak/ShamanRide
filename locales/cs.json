@@ -387,7 +387,8 @@
       "totalRevenue": "Celkové tržby",
       "avgPrice": "Průměrná cena jízdy",
       "cancelledRides": "Zrušené jízdy",
-      "totalFuelCost": "Celkové náklady na palivo"
+      "totalFuelCost": "Celkové náklady na palivo",
+      "paidKm": "Zaplacené km"
     },
     "chartTitle": "Počet jízd na vozidlo",
     "noChartData": "Nejsou k dispozici žádná data pro graf.",
@@ -399,7 +400,13 @@
         "revenue": "Tržby",
         "fuelCost": "Náklady na palivo"
     },
-    "noData": "Pro vybrané období nejsou žádná data."
+    "noData": "Pro vybrané období nejsou žádná data.",
+    "shamanTotem": {
+      "title": "🪄 Šamanský totem - Efektivita služby",
+      "paidKm": "Zaplacené km: {km} km",
+      "target": "Cíl: Zlepšit na 40%+ efektivitu",
+      "description": "Současná efektivita se zdá nízká (~20%). Zaměřte se na snížení prázdných km a zvýšení objemu jízd. Totem ukazuje duchovní energii vaší služby - mířte do zelené zóny!"
+    }
   },
   "smsPreview": {
     "title": "Zpráva pro řidiče připravena",

@@ -68,11 +68,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
         return filtered;
     }, [rideLog, dateRange, selectedVehicleId, selectedDriverId, vehicles]);
 
-    const analyticsData = useMemo(() => {
+        const analyticsData = useMemo(() => {
         const completedRides = filteredRideLog.filter(log => log.status === RideStatus.Completed);
         const totalRevenue = completedRides.reduce((sum, log) => sum + (log.estimatedPrice || 0), 0);
         const totalFuelCost = completedRides.reduce((sum, log) => sum + (log.fuelCost || 0), 0);
         const ridesCancelled = filteredRideLog.filter(log => log.status === RideStatus.Cancelled).length;
+        const totalPaidKm = completedRides.reduce((sum, log) => sum + (log.distance || 0), 0);
 
         // Calculate separate card and cash revenue
         const cardRevenue = completedRides
@@ -124,6 +125,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
             totalRevenue,
             totalFuelCost,
             ridesCancelled,
+            totalPaidKm,
             avgPricePerRide: completedRides.length > 0 ? (totalRevenue / completedRides.length) : 0,
             cardRevenue,
             cashRevenue,
@@ -261,18 +263,43 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
                     </div>
                     
                     {/* Stat cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                         <StatCard title={t('analytics.cards.completedRides')} value={analyticsData.completedRides} />
                         <StatCard title={t('analytics.cards.totalRevenue')} value={`${analyticsData.totalRevenue.toLocaleString(language)} Kč`} />
                         <StatCard title="💳 Karta" value={`${analyticsData.cardRevenue.toLocaleString(language)} Kč`} />
                         <StatCard title="💵 Hotovost" value={`${analyticsData.cashRevenue.toLocaleString(language)} Kč`} />
                         <StatCard title={t('analytics.cards.totalFuelCost')} value={`${analyticsData.totalFuelCost.toLocaleString(language)} Kč`} icon={<FuelIcon size={32}/>} />
                         <StatCard title={t('analytics.cards.cancelledRides')} value={analyticsData.ridesCancelled} />
+                        <StatCard title="🚗 Zaplacené km" value={`${analyticsData.totalPaidKm.toFixed(1)} km`} description="Metrika efektivity služby" />
                     </div>
 
                     {/* Chart */}
                     <div className="pt-4">
                         <BarChart data={analyticsData.chartData} title={t('analytics.chartTitle')} />
+                    </div>
+
+                    {/* Shaman Totem - Service Efficiency */}
+                    <div className="pt-4">
+                        <h3 className="text-lg font-medium text-gray-200 mb-4 font-sans">{t('analytics.shamanTotem.title')}</h3>
+                        <div className="bg-slate-700 rounded-lg p-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-sm text-gray-300 mb-2">
+                                        <span>{t('analytics.shamanTotem.paidKm', { km: analyticsData.totalPaidKm.toFixed(1) })}</span>
+                                        <span>{t('analytics.shamanTotem.target')}</span>
+                                    </div>
+                                    <div className="w-full bg-slate-600 rounded-full h-4">
+                                        <div
+                                            className="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-4 rounded-full transition-all duration-500"
+                                            style={{ width: `${Math.min((analyticsData.totalPaidKm / (analyticsData.totalPaidKm * 5)) * 100, 100)}%` }}
+                                        ></div>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2">
+                                        {t('analytics.shamanTotem.description')}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     {/* Vehicle Table */}
