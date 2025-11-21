@@ -2329,8 +2329,9 @@ const Dashboard: React.FC = () => {
                preferredNavApp={preferredNavApp}
                currentLocation={location}
                currentRide={currentRide}
+               driverInfo={driverInfo}
              />
-        )}
+         )}
 
          {/* Ride Completion Modal */}
          {showCompletionModal && rideToComplete && vehicleNumber && (

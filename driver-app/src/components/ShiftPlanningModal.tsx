@@ -37,7 +37,12 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [viewMode, setViewMode] = useState<'month' | 'day' | 'list'>('month');
-  const { t } = useTranslation();
+  let t: (key: string) => string;
+  try {
+    ({ t } = useTranslation());
+  } catch (error) {
+    t = (key: string) => key; // Fallback to return the key itself
+  }
 
   useEffect(() => {
     if (editingShift) {
@@ -174,7 +179,7 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
              <label className="block text-white/80 text-sm font-medium mb-2">
                {t('shiftPlanning.fastOptions')}
              </label>
-             <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                <button
                  type="button"
                  onClick={() => {

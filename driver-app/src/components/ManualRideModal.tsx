@@ -17,6 +17,7 @@ interface ManualRideModalProps {
     preferredNavApp?: 'google' | 'mapy' | 'waze';
     currentLocation?: { lat: number; lng: number } | null;
     currentRide?: RideLog | null;
+    driverInfo?: any;
 }
 
 type ModalState = 'form' | 'loading' | 'success' | 'error';
@@ -31,7 +32,8 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
     onNavigateToDestination,
     preferredNavApp = 'google',
     currentLocation,
-    currentRide
+    currentRide,
+    driverInfo
 }) => {
     console.log('ManualRideModal opened with:', { vehicleNumber, licensePlate });
     console.log('SUPABASE_ENABLED:', SUPABASE_ENABLED);
@@ -185,7 +187,8 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                 timestamp: Date.now(),
                 vehicleName: licensePlate,
                 vehicleLicensePlate: licensePlate,
-                driverName: null, // Will be set by the system
+                driverName: driverInfo?.name || null,
+                driverId: driverInfo?.id || null,
                 vehicleType: null,
                 rideType: RideType.BUSINESS,
                 customerName: 'Přímý zákazník',
