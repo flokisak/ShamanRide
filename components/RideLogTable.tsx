@@ -406,7 +406,7 @@ export const RideLogTable: React.FC<RideLogTableProps> = ({ logs, vehicles, peop
                       {/* Time */}
                       <div className="col-span-2">
                         <div className="text-xs text-slate-300">{new Date(log.timestamp).toLocaleString(language, { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                        <div className={`text-xs ${log.status === RideStatus.Scheduled ? 'text-sky-300 font-semibold bg-sky-900/30 px-2 py-1 rounded border border-sky-700/50' : 'text-slate-400'}`}>
+                        <div className="text-xs text-sky-300 font-semibold bg-sky-900/30 px-2 py-1 rounded border border-sky-700/50">
                           {log.pickupTime === 'ihned' ? t('dispatch.immediate') :
                            log.status === RideStatus.Scheduled && log.estimatedPickupTimestamp ?
                              new Date(log.estimatedPickupTimestamp).toLocaleString(language, { hour: '2-digit', minute: '2-digit' }) :
