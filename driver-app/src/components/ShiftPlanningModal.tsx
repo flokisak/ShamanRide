@@ -181,14 +181,22 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                    const now = new Date();
                    const startDate = new Date(now);
                    startDate.setHours(6, 0, 0, 0); // 6:00 AM today
-                   const endDate = new Date(now);
-                   endDate.setHours(18, 0, 0, 0); // 6:00 PM today
+                    const endDate = new Date(now);
+                    endDate.setHours(18, 0, 0, 0); // 6:00 PM today
 
-                   setFormData(prev => ({
-                     ...prev,
-                     plannedStart: startDate.toISOString().slice(0, 16),
-                     plannedEnd: endDate.toISOString().slice(0, 16)
-                   }));
+                    setFormData(prev => ({
+                      ...prev,
+                      plannedStart: startDate.getFullYear() + '-' +
+                                    String(startDate.getMonth() + 1).padStart(2, '0') + '-' +
+                                    String(startDate.getDate()).padStart(2, '0') + 'T' +
+                                    String(startDate.getHours()).padStart(2, '0') + ':' +
+                                    String(startDate.getMinutes()).padStart(2, '0'),
+                      plannedEnd: endDate.getFullYear() + '-' +
+                                  String(endDate.getMonth() + 1).padStart(2, '0') + '-' +
+                                  String(endDate.getDate()).padStart(2, '0') + 'T' +
+                                  String(endDate.getHours()).padStart(2, '0') + ':' +
+                                  String(endDate.getMinutes()).padStart(2, '0')
+                    }));
                  }}
                  className="flex-1 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2"
                >
@@ -203,15 +211,23 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
                    const now = new Date();
                    const startDate = new Date(now);
                    startDate.setHours(18, 0, 0, 0); // 6:00 PM today
-                   const endDate = new Date(now);
-                   endDate.setDate(endDate.getDate() + 1); // Next day
-                   endDate.setHours(6, 0, 0, 0); // 6:00 AM next day
+                    const endDate = new Date(now);
+                    endDate.setDate(endDate.getDate() + 1); // Next day
+                    endDate.setHours(6, 0, 0, 0); // 6:00 AM next day
 
-                   setFormData(prev => ({
-                     ...prev,
-                     plannedStart: startDate.toISOString().slice(0, 16),
-                     plannedEnd: endDate.toISOString().slice(0, 16)
-                   }));
+                    setFormData(prev => ({
+                      ...prev,
+                      plannedStart: startDate.getFullYear() + '-' +
+                                    String(startDate.getMonth() + 1).padStart(2, '0') + '-' +
+                                    String(startDate.getDate()).padStart(2, '0') + 'T' +
+                                    String(startDate.getHours()).padStart(2, '0') + ':' +
+                                    String(startDate.getMinutes()).padStart(2, '0'),
+                      plannedEnd: endDate.getFullYear() + '-' +
+                                  String(endDate.getMonth() + 1).padStart(2, '0') + '-' +
+                                  String(endDate.getDate()).padStart(2, '0') + 'T' +
+                                  String(endDate.getHours()).padStart(2, '0') + ':' +
+                                  String(endDate.getMinutes()).padStart(2, '0')
+                    }));
                  }}
                  className="flex-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2"
                >

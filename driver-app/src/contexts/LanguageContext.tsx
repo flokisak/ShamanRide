@@ -102,6 +102,11 @@ const staticTranslations = {
       "confirm": "Potvrdit",
       "yes": "Ano",
       "no": "Ne"
+    },
+    "shiftPlanning": {
+      "fastOptions": "Rychlé možnosti",
+      "dayShift": "Denní směna (6:00-18:00)",
+      "nightShift": "Noční směna (18:00-6:00)"
     }
   }
 };
