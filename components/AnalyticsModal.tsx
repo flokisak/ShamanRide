@@ -70,6 +70,9 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
     }, [rideLog, dateRange, selectedVehicleId, selectedDriverId, vehicles]);
 
         const analyticsData = useMemo(() => {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
         // Calculate total km driven from GPS data
         let totalDrivenKm = 0;
         const vehicleIds = selectedVehicleId === 'all' ? vehicles.map(v => v.id) : [selectedVehicleId];
@@ -161,7 +164,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
             vehicleStats: vehicleStatsArray,
             chartData,
         };
-    }, [filteredRideLog, vehicles]);
+    }, [filteredRideLog, vehicles, dateRange, selectedVehicleId, locations]);
     
     // Haversine distance calculation
 function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
