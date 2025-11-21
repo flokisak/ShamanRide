@@ -516,8 +516,13 @@
       "MANAGEMENT": "Vedení",
       "DISPATCHER": "Dispečeři"
     },
-    "paymentMethod": {
-      "cash": "Hotovost",
-      "card": "Karta"
-    }
+     "paymentMethod": {
+       "cash": "Hotovost",
+       "card": "Karta"
+     },
+     "voice": {
+       "startListening": "Začít naslouchat",
+       "stopListening": "Přestat naslouchat",
+       "listening": "Naslouchám"
+     }
 }

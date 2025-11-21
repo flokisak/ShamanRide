@@ -338,14 +338,15 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
 
                                <div>
                                    <label className="block text-sm font-medium text-gray-300 mb-1">{t('dashboard.manualRide.destination')}</label>
-                                   <AutocompleteInputField
-                                       id="manual-destination"
-                                       value={destination}
-                                       onChange={(val) => handleDestinationChange(val)}
-                                       onSelectPlaceId={(pid) => setDestinationPlaceId(pid || '')}
-                                       suggestionMode="remote"
-                                       placeholder="Adresa cíle"
-                                   />
+                                    <AutocompleteInputField
+                                        id="manual-destination"
+                                        value={destination}
+                                        onChange={(val) => handleDestinationChange(val)}
+                                        onSelectPlaceId={(pid) => setDestinationPlaceId(pid || '')}
+                                        suggestionMode="remote"
+                                        placeholder="Adresa cíle"
+                                        enableVoiceInput={true}
+                                    />
                                </div>
 
                                {/* Waypoints */}
@@ -361,18 +362,19 @@ export const ManualRideModal: React.FC<ManualRideModalProps> = ({
                                                {t('dashboard.manualRide.removeWaypoint')}
                                            </button>
                                        </div>
-                                       <AutocompleteInputField
-                                           id={`manual-waypoint-${index}`}
-                                           value={waypoint}
-                                           onChange={(val) => handleWaypointChange(index, val)}
-                                           onSelectPlaceId={(pid) => setWaypointsPlaceIds(prev => {
-                                               const p = [...prev];
-                                               p[index] = pid || '';
-                                               return p;
-                                           })}
-                                           suggestionMode="remote"
-                                           placeholder="Adresa mezizastávky"
-                                       />
+                                        <AutocompleteInputField
+                                            id={`manual-waypoint-${index}`}
+                                            value={waypoint}
+                                            onChange={(val) => handleWaypointChange(index, val)}
+                                            onSelectPlaceId={(pid) => setWaypointsPlaceIds(prev => {
+                                                const p = [...prev];
+                                                p[index] = pid || '';
+                                                return p;
+                                            })}
+                                            suggestionMode="remote"
+                                            placeholder="Adresa mezizastávky"
+                                            enableVoiceInput={true}
+                                        />
                                    </div>
                                ))}
 

@@ -1,4 +1,7 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { useVoiceRecognition } from '../utils/useVoiceRecognition';
+import { useTranslation } from '../contexts/LanguageContext';
+import { MicrophoneIcon } from '../icons';
 
 export type SuggestionMode = 'local' | 'remote' | 'poi';
 
@@ -16,11 +19,42 @@ export const AutocompleteInputField: React.FC<{
   isFirst?: boolean;
   poiTypes?: string[];
   userLocation?: { lat: number; lng: number };
-}> = ({ id, value, onChange, suggestionMode, localSuggestions = [], error, hint, placeholder, isFirst, poiTypes, userLocation, onSelectPlaceId }) => {
+  enableVoiceInput?: boolean;
+}> = ({ id, value, onChange, suggestionMode, localSuggestions = [], error, hint, placeholder, isFirst, poiTypes, userLocation, onSelectPlaceId, enableVoiceInput = true }) => {
   const [suggestions, setSuggestions] = useState<{ text: string; placeId?: string }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceTimeout = useRef<number | null>(null);
+  const { t } = useTranslation();
+
+  // Voice recognition
+  const handleVoiceResult = useCallback((transcript: string) => {
+    onChange(transcript);
+    // Clear any previously selected placeId since this is voice input
+    try { onSelectPlaceId && onSelectPlaceId(undefined); } catch (err) { /* noop */ }
+    // Trigger suggestions for the voice input
+    if (suggestionMode === 'remote') {
+      debouncedFetch(transcript);
+    } else if (suggestionMode === 'poi') {
+      debouncedFetch(transcript);
+    } else {
+      filterLocalSuggestions(transcript);
+    }
+  }, [onChange, onSelectPlaceId, suggestionMode]);
+
+  const handleVoiceError = useCallback((error: string) => {
+    console.warn('Voice recognition error:', error);
+    // Could show a toast notification here if needed
+  }, []);
+
+  const {
+    isListening,
+    isSupported,
+    error: voiceError,
+    startListening,
+    stopListening,
+    resetError: resetVoiceError
+  } = useVoiceRecognition(handleVoiceResult, handleVoiceError, 'cs-CZ');
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -109,19 +143,44 @@ export const AutocompleteInputField: React.FC<{
   return (
     <div className="relative flex-grow" ref={wrapperRef}>
       <label htmlFor={id} className="sr-only">{isFirst ? 'Pickup' : 'Destination'}</label>
-      <input
-        type="text"
-        id={id}
-        name={id}
-        value={value}
-        onChange={handleChange}
-        onFocus={onFocus}
-        className={`w-full bg-slate-700 border ${error ? 'border-red-500' : 'border-slate-600'} rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500`}
-        autoComplete="off"
-        placeholder={placeholder}
-      />
-      {hint && !error && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
+      <div className="relative">
+        <input
+          type="text"
+          id={id}
+          name={id}
+          value={value}
+          onChange={handleChange}
+          onFocus={onFocus}
+          className={`w-full bg-slate-700 border ${error ? 'border-red-500' : 'border-slate-600'} rounded-md shadow-sm py-2 px-3 pr-10 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500`}
+          autoComplete="off"
+          placeholder={placeholder}
+        />
+        {enableVoiceInput && isSupported && (
+          <button
+            type="button"
+            onClick={isListening ? stopListening : startListening}
+            className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-md transition-colors ${
+              isListening
+                ? 'text-red-400 animate-pulse'
+                : voiceError
+                ? 'text-red-400 hover:text-red-300'
+                : 'text-gray-400 hover:text-cyan-400'
+            }`}
+            title={isListening ? t('voice.stopListening') : t('voice.startListening')}
+            aria-label={isListening ? t('voice.stopListening') : t('voice.startListening')}
+          >
+            <MicrophoneIcon size={16} />
+          </button>
+        )}
+      </div>
+      {hint && !error && !voiceError && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
       {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+      {voiceError && <p className="mt-1 text-xs text-red-400">{voiceError}</p>}
+      {isListening && (
+        <p className="mt-1 text-xs text-cyan-400 animate-pulse">
+          {t('voice.listening')}...
+        </p>
+      )}
       {showSuggestions && suggestions.length > 0 && (
         <ul className="absolute z-10 w-full bg-slate-800 border border-slate-600 rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
           {suggestions.map((suggestion, index) => (
