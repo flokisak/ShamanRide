@@ -403,7 +403,8 @@
     "noData": "Pro vybrané období nejsou žádná data.",
     "shamanTotem": {
       "title": "🪄 Šamanský totem - Efektivita služby",
-      "paidKm": "Zaplacené km: {km} km",
+      "paidKm": "Zaplacené km",
+      "totalKm": "Celkové km",
       "target": "Cíl: Zlepšit na 40%+ efektivitu",
       "description": "Současná efektivita se zdá nízká (~20%). Zaměřte se na snížení prázdných km a zvýšení objemu jízd. Totem ukazuje duchovní energii vaší služby - mířte do zelené zóny!"
     }

@@ -2770,7 +2770,7 @@ const AppContent: React.FC = () => {
       {manualAssignmentDetails && (<ManualAssignmentModal details={manualAssignmentDetails} people={people} onConfirm={handleManualAssignmentConfirm} onClose={() => setManualAssignmentDetails(null)} messagingApp={messagingApp} />)}
       {isPeopleModalOpen && (<ManagePeopleModal people={people} onAdd={handleAddPerson} onUpdate={handleUpdatePerson} onDelete={handleDeletePerson} onClose={() => setIsPeopleModalOpen(false)}/>)}
       {isTariffModalOpen && (<TariffSettingsModal initialTariff={tariff} onSave={setTariff} onClose={() => setIsTariffModalOpen(false)} />)}
-      {isAnalyticsModalOpen && <AnalyticsModal rideLog={rideLog} vehicles={vehicles} people={people} onClose={() => setIsAnalyticsModalOpen(false)} />}
+      {isAnalyticsModalOpen && <AnalyticsModal rideLog={rideLog} vehicles={vehicles} people={people} locations={locations} onClose={() => setIsAnalyticsModalOpen(false)} />}
       {smsToPreview && (
         <SmsPreviewModal 
             {...smsToPreview} 

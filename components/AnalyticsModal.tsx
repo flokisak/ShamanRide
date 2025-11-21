@@ -8,10 +8,11 @@ import html2canvas from 'html2canvas';
 import { useTranslation } from '../contexts/LanguageContext';
 
 interface AnalyticsModalProps {
-  rideLog: RideLog[];
-  vehicles: Vehicle[];
-  people: Person[];
-  onClose: () => void;
+   rideLog: RideLog[];
+   vehicles: Vehicle[];
+   people: Person[];
+   locations: Record<string, any>;
+   onClose: () => void;
 }
 
 type DateRange = 'today' | '7d' | '30d' | 'all';
@@ -27,7 +28,7 @@ const StatCard: React.FC<{ title: string; value: string | number; description?: 
     </div>
 );
 
-export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicles, people, onClose }) => {
+export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicles, people, locations, onClose }) => {
     const { t, language } = useTranslation();
     const [dateRange, setDateRange] = useState<DateRange>('7d');
     const [selectedVehicleId, setSelectedVehicleId] = useState<number | 'all'>('all');
@@ -69,11 +70,37 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
     }, [rideLog, dateRange, selectedVehicleId, selectedDriverId, vehicles]);
 
         const analyticsData = useMemo(() => {
+        // Calculate total km driven from GPS data
+        let totalDrivenKm = 0;
+        const vehicleIds = selectedVehicleId === 'all' ? vehicles.map(v => v.id) : [selectedVehicleId];
+        let startDate = new Date(startOfToday);
+        if (dateRange === '7d') {
+            startDate.setDate(startDate.getDate() - 7);
+        } else if (dateRange === '30d') {
+            startDate.setDate(startDate.getDate() - 30);
+        } else if (dateRange === 'all') {
+            startDate = new Date(0); // Beginning of time
+        }
+        vehicleIds.forEach(vehicleId => {
+            const vehicleLocations = Object.values(locations).filter((loc: any) =>
+                loc.vehicle_id === vehicleId &&
+                new Date(loc.timestamp) >= startDate
+            ).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            for (let i = 1; i < vehicleLocations.length; i++) {
+                const prev = vehicleLocations[i-1];
+                const curr = vehicleLocations[i];
+                if (prev.lat && prev.lon && curr.lat && curr.lon) {
+                    totalDrivenKm += haversineDistance(prev.lat, prev.lon, curr.lat, curr.lon);
+                }
+            }
+        });
         const completedRides = filteredRideLog.filter(log => log.status === RideStatus.Completed);
         const totalRevenue = completedRides.reduce((sum, log) => sum + (log.estimatedPrice || 0), 0);
         const totalFuelCost = completedRides.reduce((sum, log) => sum + (log.fuelCost || 0), 0);
         const ridesCancelled = filteredRideLog.filter(log => log.status === RideStatus.Cancelled).length;
         const totalPaidKm = completedRides.reduce((sum, log) => sum + (log.distance || 0), 0);
+        const efficiencyPercentage = totalDrivenKm > 0 ? (totalPaidKm / totalDrivenKm) * 100 : 0;
 
         // Calculate separate card and cash revenue
         const cardRevenue = completedRides
@@ -126,6 +153,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
             totalFuelCost,
             ridesCancelled,
             totalPaidKm,
+            totalDrivenKm,
+            efficiencyPercentage,
             avgPricePerRide: completedRides.length > 0 ? (totalRevenue / completedRides.length) : 0,
             cardRevenue,
             cashRevenue,
@@ -134,7 +163,19 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
         };
     }, [filteredRideLog, vehicles]);
     
-    const DateRangeButton: React.FC<{ range: DateRange, label: string }> = ({ range, label }) => {
+    // Haversine distance calculation
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+}
+
+const DateRangeButton: React.FC<{ range: DateRange, label: string }> = ({ range, label }) => {
         const isActive = dateRange === range;
         return (
             <button
@@ -263,14 +304,15 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
                     </div>
                     
                     {/* Stat cards */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
                         <StatCard title={t('analytics.cards.completedRides')} value={analyticsData.completedRides} />
                         <StatCard title={t('analytics.cards.totalRevenue')} value={`${analyticsData.totalRevenue.toLocaleString(language)} Kč`} />
                         <StatCard title="💳 Karta" value={`${analyticsData.cardRevenue.toLocaleString(language)} Kč`} />
                         <StatCard title="💵 Hotovost" value={`${analyticsData.cashRevenue.toLocaleString(language)} Kč`} />
                         <StatCard title={t('analytics.cards.totalFuelCost')} value={`${analyticsData.totalFuelCost.toLocaleString(language)} Kč`} icon={<FuelIcon size={32}/>} />
                         <StatCard title={t('analytics.cards.cancelledRides')} value={analyticsData.ridesCancelled} />
-                        <StatCard title="🚗 Zaplacené km" value={`${analyticsData.totalPaidKm.toFixed(1)} km`} description="Metrika efektivity služby" />
+                        <StatCard title="🚗 Zaplacené km" value={`${analyticsData.totalPaidKm.toFixed(1)} km`} description="Placené kilometry" />
+                        <StatCard title="🚙 Celkové km" value={`${analyticsData.totalDrivenKm.toFixed(1)} km`} description={`Efektivita: ${analyticsData.efficiencyPercentage.toFixed(1)}%`} />
                     </div>
 
                     {/* Chart */}
@@ -285,14 +327,16 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
                             <div className="space-y-4">
                                 <div>
                                     <div className="flex justify-between text-sm text-gray-300 mb-2">
-                                        <span>{t('analytics.shamanTotem.paidKm', { km: analyticsData.totalPaidKm.toFixed(1) })}</span>
-                                        <span>{t('analytics.shamanTotem.target')}</span>
+                                        <span>Zaplacené km: {analyticsData.totalPaidKm.toFixed(1)} km</span>
+                                        <span>Celkové km: {analyticsData.totalDrivenKm.toFixed(1)} km</span>
                                     </div>
-                                    <div className="w-full bg-slate-600 rounded-full h-4">
+                                    <div className="w-full bg-slate-600 rounded-full h-6 relative">
                                         <div
-                                            className="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-4 rounded-full transition-all duration-500"
-                                            style={{ width: `${Math.min((analyticsData.totalPaidKm / (analyticsData.totalPaidKm * 5)) * 100, 100)}%` }}
-                                        ></div>
+                                            className="bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 h-6 rounded-full transition-all duration-500 flex items-center justify-center text-xs font-bold text-white"
+                                            style={{ width: `${Math.min(analyticsData.efficiencyPercentage, 100)}%` }}
+                                        >
+                                            {analyticsData.efficiencyPercentage.toFixed(1)}%
+                                        </div>
                                     </div>
                                     <p className="text-xs text-gray-400 mt-2">
                                         {t('analytics.shamanTotem.description')}
