@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShiftPlan, ShiftPlanStatus, RecurringPattern, Person } from '../types';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { cs } from 'date-fns/locale';
 import { ShiftPlanningService } from '../services/shiftPlanningService';
 
@@ -260,7 +260,9 @@ const ShiftPlanningModal: React.FC<ShiftPlanningModalProps> = ({
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1, locale: cs });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1, locale: cs });
+  const monthDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   if (!isOpen) return null;
 

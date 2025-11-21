@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ShiftPlan, ShiftPlanStatus } from '../../../types';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns';
 import { cs } from 'date-fns/locale';
 
 interface ShiftCalendarProps {
@@ -21,7 +21,9 @@ const ShiftCalendar: React.FC<ShiftCalendarProps> = ({
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
-  const monthDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1, locale: cs });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1, locale: cs });
+  const monthDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   // Get shifts for a specific date
   const getShiftsForDate = (date: Date): ShiftPlan[] => {
