@@ -797,6 +797,41 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const cancelRide = async () => {
+    if (!currentRide) return;
+
+    try {
+      console.log('❌ Cancelling ride:', currentRide.id);
+
+      const updatedRide = { ...currentRide, status: RideStatus.Cancelled };
+      await supabaseService.updateRideLog(currentRide.id, updatedRide);
+
+      // Socket disabled
+      // if (socket && socketConnected) {
+      //   socket.emit('ride_update', {
+      //     rideId: currentRide.id,
+      //     status: RideStatus.Cancelled,
+      //     vehicleId: vehicleNumber
+      //   });
+      // }
+
+      // Clear current ride
+      setCurrentRide(null);
+
+      // Update vehicle status back to available
+      await updateVehicleStatus('available');
+
+      // Refresh rides
+      loadRides();
+
+      console.log('✅ Ride cancelled successfully');
+
+    } catch (error) {
+      console.error('❌ Failed to cancel ride:', error);
+      alert('Failed to cancel ride. Please try again.');
+    }
+  };
+
   const handleRideCompleted = async () => {
     // Close the completion modal
     setShowCompletionModal(false);
