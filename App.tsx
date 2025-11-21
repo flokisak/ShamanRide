@@ -643,21 +643,21 @@ const AppContent: React.FC = () => {
          const newNotifications: Notification[] = [];
 
          rideLog.forEach(log => {
-             // Reminder for scheduled rides
-             if (log.status === RideStatus.Scheduled) {
-                  try {
-                     const pickupTimestamp = new Date(log.pickupTime).getTime();
-                     const minutesToPickup = (pickupTimestamp - now) / (1000 * 60);
+              // Reminder for scheduled rides
+              if (log.status === RideStatus.Scheduled && log.estimatedPickupTimestamp) {
+                   try {
+                      const pickupTimestamp = log.estimatedPickupTimestamp;
+                      const minutesToPickup = (pickupTimestamp - now) / (1000 * 60);
 
-                     const reminder15Id = `reminder-15-${log.id}`;
-                     if (minutesToPickup <= 15 && minutesToPickup > 14 && !notifications.some(n => n.id === reminder15Id)) {
-                         newNotifications.push({ id: reminder15Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message15', messageParams: { customerName: log.customerName, pickupAddress: (log.stops[0] || '').split('|')[0].trim() }, timestamp: now, rideLogId: log.id });
-                     }
+                      const reminder15Id = `reminder-15-${log.id}`;
+                      if (minutesToPickup <= 15 && minutesToPickup > 14 && !notifications.some(n => n.id === reminder15Id)) {
+                          newNotifications.push({ id: reminder15Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message15', messageParams: { customerName: log.customerName, pickupAddress: (log.stops[0] || '').split('|')[0].trim() }, timestamp: now, rideLogId: log.id });
+                      }
 
-                 } catch(e) {
-                   console.error("Could not parse schedule time for notification", e)
-                 }
-             }
+                  } catch(e) {
+                    console.error("Could not parse schedule time for notification", e)
+                  }
+              }
 
 
 
@@ -854,7 +854,49 @@ const AppContent: React.FC = () => {
     }
   }, [t, language, vehicles, tariff, fuelPrices]);
 
+  // Helper function to parse pickup time
+  const parsePickupTime = (pickupTime: string): Date => {
+    if (pickupTime === 'ihned') {
+      return new Date(); // Now
+    }
+
+    // Handle relative times
+    const now = new Date();
+    if (pickupTime === '15min') {
+      return new Date(now.getTime() + 15 * 60 * 1000);
+    }
+    if (pickupTime === '30min') {
+      return new Date(now.getTime() + 30 * 60 * 1000);
+    }
+    if (pickupTime === '1hod') {
+      return new Date(now.getTime() + 60 * 60 * 1000);
+    }
+    if (pickupTime === '2hod') {
+      return new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    }
+
+    // Handle time strings like "21:00"
+    if (/^\d{1,2}:\d{2}$/.test(pickupTime)) {
+      const [hours, minutes] = pickupTime.split(':').map(Number);
+      const targetTime = new Date();
+      targetTime.setHours(hours, minutes, 0, 0);
+
+      // If the time has already passed today, schedule for tomorrow
+      if (targetTime <= now) {
+        targetTime.setDate(targetTime.getDate() + 1);
+      }
+
+      return targetTime;
+    }
+
+    // Fallback: try to parse as date string
+    const parsed = new Date(pickupTime);
+    return isNaN(parsed.getTime()) ? now : parsed;
+  };
+
   const handleScheduleRide = useCallback(async (rideRequest: RideRequest) => {
+        const pickupDateTime = parsePickupTime(rideRequest.pickupTime);
+
         const newLog: RideLog = {
           id: crypto.randomUUID(),
         timestamp: Date.now(),
@@ -872,7 +914,7 @@ const AppContent: React.FC = () => {
          vehicleId: null,
          notes: rideRequest.notes,
         estimatedPrice: undefined,
-        estimatedPickupTimestamp: new Date(rideRequest.pickupTime).getTime(),
+        estimatedPickupTimestamp: pickupDateTime.getTime(),
         estimatedCompletionTimestamp: undefined,
     };
 
@@ -2136,9 +2178,16 @@ const AppContent: React.FC = () => {
     // Apply time filter based on pickupTime
     if (timeFilter !== 'all') {
       filtered = filtered.filter(log => {
-        if (!log.pickupTime || log.pickupTime === 'ihned') return false;
-        const date = new Date(log.pickupTime);
-        const hours = date.getHours();
+        let pickupDate: Date;
+        if (log.status === RideStatus.Scheduled && log.estimatedPickupTimestamp) {
+          pickupDate = new Date(log.estimatedPickupTimestamp);
+        } else if (log.pickupTime && log.pickupTime !== 'ihned') {
+          pickupDate = new Date(log.pickupTime);
+          if (isNaN(pickupDate.getTime())) return false; // Invalid date
+        } else {
+          return false;
+        }
+        const hours = pickupDate.getHours();
         switch (timeFilter) {
           case 'morning':
             return hours >= 6 && hours < 12;
@@ -2157,8 +2206,12 @@ const AppContent: React.FC = () => {
     const sorted = filtered.sort((a, b) => {
         if (sortConfig.key === 'timestamp') return a.timestamp - b.timestamp;
         if (sortConfig.key === 'pickupTime') {
-          const aTime = a.pickupTime === 'ihned' ? 0 : a.pickupTime ? new Date(a.pickupTime).getTime() : a.timestamp;
-          const bTime = b.pickupTime === 'ihned' ? 0 : b.pickupTime ? new Date(b.pickupTime).getTime() : b.timestamp;
+          const aTime = a.pickupTime === 'ihned' ? 0 :
+                       a.status === RideStatus.Scheduled && a.estimatedPickupTimestamp ? a.estimatedPickupTimestamp :
+                       a.pickupTime ? (new Date(a.pickupTime).getTime() || a.timestamp) : a.timestamp;
+          const bTime = b.pickupTime === 'ihned' ? 0 :
+                       b.status === RideStatus.Scheduled && b.estimatedPickupTimestamp ? b.estimatedPickupTimestamp :
+                       b.pickupTime ? (new Date(b.pickupTime).getTime() || b.timestamp) : b.timestamp;
           return aTime - bTime;
         }
         return a.customerName.localeCompare(b.customerName, language);

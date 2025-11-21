@@ -345,50 +345,52 @@ export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading
               error={errors.customerPhone}
             />
 
-            <div>
-              <label htmlFor="passengers" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.passengers')}</label>
-              <input
-                type="number"
-                id="passengers"
-                name="passengers"
-                value={passengers}
-                onChange={(e) => setPassengers(parseInt(e.target.value) || 1)}
-                min="1"
-                max="20"
-                className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-              />
-              {errors.passengers && <p className="mt-1 text-xs text-red-400">{errors.passengers}</p>}
-            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="passengers" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.passengers')}</label>
+                <input
+                  type="number"
+                  id="passengers"
+                  name="passengers"
+                  value={passengers}
+                  onChange={(e) => setPassengers(parseInt(e.target.value) || 1)}
+                  min="1"
+                  max="20"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                />
+                {errors.passengers && <p className="mt-1 text-xs text-red-400">{errors.passengers}</p>}
+              </div>
 
-             <div>
-               <label htmlFor="pickupTime" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.pickupTime')}</label>
-               <select
-                 id="pickupTime"
-                 name="pickupTime"
-                 value={pickupTime}
-                 onChange={(e) => setPickupTime(e.target.value)}
-                 className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-               >
-                 <option value="ihned">{t('dispatch.immediate')}</option>
-                 <option value="15min">Za 15 minut</option>
-                 <option value="30min">Za 30 minut</option>
-                 <option value="1hod">Za 1 hodinu</option>
-                 <option value="2hod">Za 2 hodiny</option>
-                 <option value="custom">Vlastní čas</option>
-               </select>
-               {pickupTime === 'custom' && (
-                 <div className="mt-2">
-                   <input
-                     type="time"
-                     id="customPickupTime"
-                     value={customPickupTime}
-                     onChange={(e) => setCustomPickupTime(e.target.value)}
-                     className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
-                     placeholder="HH:MM"
-                   />
-                 </div>
-               )}
-             </div>
+              <div>
+                <label htmlFor="pickupTime" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.pickupTime')}</label>
+                <select
+                  id="pickupTime"
+                  name="pickupTime"
+                  value={pickupTime}
+                  onChange={(e) => setPickupTime(e.target.value)}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                >
+                  <option value="ihned">{t('dispatch.immediate')}</option>
+                  <option value="15min">Za 15 minut</option>
+                  <option value="30min">Za 30 minut</option>
+                  <option value="1hod">Za 1 hodinu</option>
+                  <option value="2hod">Za 2 hodiny</option>
+                  <option value="custom">Vlastní čas</option>
+                </select>
+                {pickupTime === 'custom' && (
+                  <div className="mt-2">
+                    <input
+                      type="time"
+                      id="customPickupTime"
+                      value={customPickupTime}
+                      onChange={(e) => setCustomPickupTime(e.target.value)}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500"
+                      placeholder="HH:MM"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
 
              <div>
                <label htmlFor="notes" className="block text-xs font-medium text-gray-300 mb-1">{t('dispatch.notesOptional')}</label>
