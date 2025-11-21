@@ -653,10 +653,7 @@ const AppContent: React.FC = () => {
                      if (minutesToPickup <= 15 && minutesToPickup > 14 && !notifications.some(n => n.id === reminder15Id)) {
                          newNotifications.push({ id: reminder15Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message15', messageParams: { customerName: log.customerName, pickupAddress: (log.stops[0] || '').split('|')[0].trim() }, timestamp: now, rideLogId: log.id });
                      }
-                     const reminder5Id = `reminder-5-${log.id}`;
-                     if (minutesToPickup <= 5 && minutesToPickup > 4 && !notifications.some(n => n.id === reminder5Id)) {
-                          newNotifications.push({ id: reminder5Id, type: 'reminder', titleKey: 'notifications.scheduledRide.title', messageKey: 'notifications.scheduledRide.message5', messageParams: { customerName: log.customerName, pickupAddress: (log.stops[0] || '').split('|')[0].trim() }, timestamp: now, rideLogId: log.id });
-                     }
+
                  } catch(e) {
                    console.error("Could not parse schedule time for notification", e)
                  }
