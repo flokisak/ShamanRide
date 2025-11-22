@@ -152,8 +152,9 @@ const AppContent: React.FC = () => {
   const [fuelPrices, setFuelPrices] = useState<FuelPrices>(DEFAULT_FUEL_PRICES);
   const [smsGateConfig, setSmsGateConfig] = useState({ server: '', username: '', password: '' });
 
-  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(DEFAULT_COMPANY_INFO);
-   const [allLocations, setAllLocations] = useState<any[]>([]);
+   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(DEFAULT_COMPANY_INFO);
+    const [allLocations, setAllLocations] = useState<any[]>([]);
+    const [locations, setLocations] = useState<Record<string, {latitude: number; longitude: number; timestamp: string}>>({});
 
   const [assignmentResult, setAssignmentResult] = useState<AssignmentResultData | null>(null);
   const [customerSms, setCustomerSms] = useState<string>('');
