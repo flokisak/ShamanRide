@@ -75,29 +75,31 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
 
         // Calculate total km driven from GPS data
         let totalDrivenKm = 0;
-        const vehicleIds = selectedVehicleId === 'all' ? vehicles.map(v => v.id) : [selectedVehicleId];
-        let startDate = new Date(startOfToday);
-        if (dateRange === '7d') {
-            startDate.setDate(startDate.getDate() - 7);
-        } else if (dateRange === '30d') {
-            startDate.setDate(startDate.getDate() - 30);
-        } else if (dateRange === 'all') {
-            startDate = new Date(0); // Beginning of time
-        }
-        vehicleIds.forEach(vehicleId => {
-            const vehicleLocations = locations.filter((loc: any) =>
-                loc.vehicle_id === vehicleId &&
-                new Date(loc.timestamp) >= startDate
-            ).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-            for (let i = 1; i < vehicleLocations.length; i++) {
-                const prev = vehicleLocations[i-1];
-                const curr = vehicleLocations[i];
-                if (prev.lat && prev.lon && curr.lat && curr.lon) {
-                    totalDrivenKm += haversineDistance(prev.lat, prev.lon, curr.lat, curr.lon);
-                }
+        if (locations && Array.isArray(locations)) {
+            const vehicleIds = selectedVehicleId === 'all' ? vehicles.map(v => v.id) : [selectedVehicleId];
+            let startDate = new Date(startOfToday);
+            if (dateRange === '7d') {
+                startDate.setDate(startDate.getDate() - 7);
+            } else if (dateRange === '30d') {
+                startDate.setDate(startDate.getDate() - 30);
+            } else if (dateRange === 'all') {
+                startDate = new Date(0); // Beginning of time
             }
-        });
+            vehicleIds.forEach(vehicleId => {
+                const vehicleLocations = locations.filter((loc: any) =>
+                    loc.vehicle_id === vehicleId &&
+                    new Date(loc.timestamp) >= startDate
+                ).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+                for (let i = 1; i < vehicleLocations.length; i++) {
+                    const prev = vehicleLocations[i-1];
+                    const curr = vehicleLocations[i];
+                    if (prev.lat && prev.lon && curr.lat && curr.lon) {
+                        totalDrivenKm += haversineDistance(prev.lat, prev.lon, curr.lat, curr.lon);
+                    }
+                }
+            });
+        }
         const completedRides = filteredRideLog.filter(log => log.status === RideStatus.Completed);
         const totalRevenue = completedRides.reduce((sum, log) => sum + (log.estimatedPrice || 0), 0);
         const totalFuelCost = completedRides.reduce((sum, log) => sum + (log.fuelCost || 0), 0);
