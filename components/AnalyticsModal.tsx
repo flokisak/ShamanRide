@@ -11,7 +11,7 @@ interface AnalyticsModalProps {
    rideLog: RideLog[];
    vehicles: Vehicle[];
    people: Person[];
-   locations: Record<string, any>;
+   locations: any[];
    onClose: () => void;
 }
 
@@ -85,7 +85,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ rideLog, vehicle
             startDate = new Date(0); // Beginning of time
         }
         vehicleIds.forEach(vehicleId => {
-            const vehicleLocations = Object.values(locations).filter((loc: any) =>
+            const vehicleLocations = locations.filter((loc: any) =>
                 loc.vehicle_id === vehicleId &&
                 new Date(loc.timestamp) >= startDate
             ).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());

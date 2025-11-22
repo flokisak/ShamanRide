@@ -153,7 +153,7 @@ const AppContent: React.FC = () => {
   const [smsGateConfig, setSmsGateConfig] = useState({ server: '', username: '', password: '' });
 
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(DEFAULT_COMPANY_INFO);
-  const [locations, setLocations] = useState<Record<string, any>>({});
+   const [allLocations, setAllLocations] = useState<any[]>([]);
 
   const [assignmentResult, setAssignmentResult] = useState<AssignmentResultData | null>(null);
   const [customerSms, setCustomerSms] = useState<string>('');
@@ -336,7 +336,8 @@ const AppContent: React.FC = () => {
           }
           return acc;
         }, {} as Record<string, any>);
-        setLocations(latestLocs);
+         setAllLocations(loc);
+         setLocations(latestLocs); // Keep for other uses
         const sgc = localStorage.getItem('sms-gate-config');
         if (sgc) {
           try {
@@ -2770,7 +2771,7 @@ const AppContent: React.FC = () => {
       {manualAssignmentDetails && (<ManualAssignmentModal details={manualAssignmentDetails} people={people} onConfirm={handleManualAssignmentConfirm} onClose={() => setManualAssignmentDetails(null)} messagingApp={messagingApp} />)}
       {isPeopleModalOpen && (<ManagePeopleModal people={people} onAdd={handleAddPerson} onUpdate={handleUpdatePerson} onDelete={handleDeletePerson} onClose={() => setIsPeopleModalOpen(false)}/>)}
       {isTariffModalOpen && (<TariffSettingsModal initialTariff={tariff} onSave={setTariff} onClose={() => setIsTariffModalOpen(false)} />)}
-      {isAnalyticsModalOpen && <AnalyticsModal rideLog={rideLog} vehicles={vehicles} people={people} locations={locations} onClose={() => setIsAnalyticsModalOpen(false)} />}
+      {isAnalyticsModalOpen && <AnalyticsModal rideLog={rideLog} vehicles={vehicles} people={people} locations={allLocations} onClose={() => setIsAnalyticsModalOpen(false)} />}
       {smsToPreview && (
         <SmsPreviewModal 
             {...smsToPreview} 
