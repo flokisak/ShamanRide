@@ -213,14 +213,14 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
           const intermediate = waypoints.slice(1, -1).map(w => `${w[0]},${w[1]}`).join('|');
           waypointsParam = `&waypoints=${intermediate}`;
         }
-        const proxyUrl = 'https://corsproxy.io/?';
-        const googleUrl = `${proxyUrl}https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypointsParam}&mode=driving&key=${googleMapsApiKey}`;
+        // Use our backend proxy instead of corsproxy.io
+        const coordsString = waypoints.map(c => `${c[1]},${c[0]}`).join(';');
+        const googleUrl = `/api/route?coordinates=${encodeURIComponent(coordsString)}&google=true`;
         const googleResponse = await fetch(googleUrl);
 
         if (googleResponse.ok) {
-          const proxyData = await googleResponse.json();
-          const googleData = JSON.parse(proxyData.contents);
-          if (googleData.status === 'OK' && googleData.routes && googleData.routes.length > 0) {
+          const data = await googleResponse.json();
+          if (!data.fallback && data.code === 'Ok' && data.routes?.length > 0) {
             const route = googleData.routes[0];
             const geometry = decodePolyline(route.overview_polyline.points);
             const totalDistance = route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0);

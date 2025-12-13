@@ -12,14 +12,21 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
-      server: {
-        proxy: {
-          '/api': {
-            target: 'http://localhost:3001',
-            changeOrigin: true,
-          },
-        },
-      },
+       server: {
+         proxy: {
+           '/api': {
+             target: 'http://localhost:3001',
+             changeOrigin: true,
+           },
+         },
+         cors: true,
+         headers: {
+           'Content-Security-Policy': "default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src *; img-src * data:; frame-src *; style-src * 'unsafe-inline';",
+           'Access-Control-Allow-Origin': '*',
+           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+           'Access-Control-Allow-Headers': '*'
+         }
+       },
       build: {
         rollupOptions: {
           input: {

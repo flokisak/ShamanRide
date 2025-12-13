@@ -437,6 +437,43 @@ app.use(express.json());
         console.warn('Google Maps API key not configured');
       }
 
+      // Try OSRM as secondary routing service
+      try {
+        console.log('Trying OSRM routing service...');
+        // Build OSRM URL (assuming OSRM server running on localhost:5000)
+        const osrmCoords = coordPairs.map(coord => `${coord.lon},${coord.lat}`).join(';');
+        const osrmUrl = `http://localhost:5000/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson&steps=false`;
+        const osrmResponse = await fetch(osrmUrl);
+
+        if (osrmResponse.ok) {
+          const osrmData = await osrmResponse.json();
+          if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+            const route = osrmData.routes[0];
+            const osrmLikeResponse = {
+              code: 'Ok',
+              routes: [{
+                duration: route.duration, // seconds
+                distance: route.distance, // meters
+                geometry: route.geometry, // GeoJSON LineString
+                legs: [{
+                  duration: route.duration,
+                  distance: route.distance,
+                  steps: []
+                }]
+              }],
+              waypoints: coordPairs.map(coord => ({
+                location: [coord.lon, coord.lat]
+              }))
+            };
+            console.log('OSRM routing successful');
+            return res.json(osrmLikeResponse);
+          }
+        }
+        console.warn('OSRM routing failed');
+      } catch (osrmError: any) {
+        console.warn('OSRM routing error:', osrmError.message);
+      }
+
       // All routing services failed, return fallback flag
       console.log('All routing services failed, using local fallback calculation');
       res.status(200).json({

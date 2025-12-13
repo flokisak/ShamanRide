@@ -25,7 +25,10 @@ if (workbox.navigationPreload.isSupported()) {
 }
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') {
+  // Only handle navigation requests, exclude module requests and API calls
+  if (event.request.mode === 'navigate' && 
+      !event.request.url.includes('/src/') && 
+      !event.request.url.includes('/node_modules/')) {
     event.respondWith((async () => {
       try {
         const preloadResp = await event.preloadResponse;
