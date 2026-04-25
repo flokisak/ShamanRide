@@ -1,16 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 import { DEFAULT_FUEL_PRICES, RideStatus } from '../types';
-import dotenv from 'dotenv';
-import path from 'path';
 
-// Load environment variables in Node.js
 const isBrowser = typeof window !== 'undefined';
-if (!isBrowser) {
-  dotenv.config({ path: path.join(process.cwd(), '..', '.env') });
-}
 const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
 const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.SUPABASE_ANON_KEY;
-const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.SUPABASE_SERVICE_KEY;
+const supabaseServiceKey = isBrowser ? undefined : process.env.SUPABASE_SERVICE_KEY;
 
 
 
@@ -18,7 +12,7 @@ export const SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supab
 
 let supabase: any = null;
 if (SUPABASE_ENABLED) {
-  // Use service key if available (for driver app), otherwise anon key
+  // Browser clients must only use the anon key. Service role keys stay server-side.
   const key = supabaseServiceKey || supabaseAnonKey;
   if (isBrowser) {
     // Reuse a single Supabase client instance across bundles to avoid

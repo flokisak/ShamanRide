@@ -10,6 +10,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import { StreamChat } from 'stream-chat';
 import { smsService } from '../services/smsService';
+import { buildRidePushPayload, savePushSubscription, sendPushToVehicle, updateRideFromNotificationAction } from '../api/_push-utils.js';
 
 // Load config from config.json if exists, else .env
 let config: any = {};
@@ -68,7 +69,6 @@ app.use(express.json());
           try {
             // Normalize phone to E.164 format, assuming Czech Republic +420
             const normalizedPhone = phone.startsWith('+') ? phone : `+420${phone.replace(/\s/g, '')}`;
-
             // This is a generic HTTP API call - adjust based on your SMS provider
             const smsResponse = await fetch(smsServer, {
               method: 'POST',
@@ -130,6 +130,7 @@ app.use(express.json());
 
         let stdout = '';
         let stderr = '';
+        let responded = false;
 
         smsgate.stdout.on('data', (data) => {
           stdout += data.toString();
@@ -140,6 +141,8 @@ app.use(express.json());
         });
 
         smsgate.on('close', (code) => {
+          if (responded) return;
+          responded = true;
           console.log(`SMS gate exited with code ${code}`);
           console.log(`stdout: ${stdout}`);
           console.log(`stderr: ${stderr}`);
@@ -151,6 +154,8 @@ app.use(express.json());
         });
 
         smsgate.on('error', (err) => {
+          if (responded) return;
+          responded = true;
           res.status(500).json({ success: false, error: err.message });
         });
       }
@@ -158,29 +163,27 @@ app.use(express.json());
      } catch (err: any) {
        res.status(500).json({ success: false, error: err.message });
      }
-  });
+   });
 
   // Push notification subscription endpoint
   app.post('/api/push-subscription', async (req, res) => {
     try {
-      const { subscription, vehicleNumber, userAgent } = req.body;
+      const { subscription, vehicleNumber, driverId, userAgent } = req.body;
 
       if (!subscription || !vehicleNumber) {
         return res.status(400).json({ success: false, error: 'Missing subscription or vehicle number' });
       }
 
-      // Store subscription in database or in-memory store
-      // For now, we'll just log it and return success
-      console.log('Push subscription received:', {
+      const result = await savePushSubscription({ subscription, vehicleNumber, driverId, userAgent });
+
+      console.log('Push subscription stored:', {
         vehicleNumber,
         endpoint: subscription.endpoint,
-        userAgent
+        userAgent,
+        persisted: result.persisted
       });
 
-      // In production, you would store this in your database
-      // associated with the driver/vehicle
-
-      res.json({ success: true, message: 'Subscription stored' });
+      res.json({ success: true, message: 'Subscription stored', ...result });
     } catch (error: any) {
       console.error('Push subscription error:', error);
       res.status(500).json({ success: false, error: error.message });
@@ -191,15 +194,28 @@ app.use(express.json());
   app.post('/api/notification-action', async (req, res) => {
     try {
       const { action, notificationData } = req.body;
+      const result = await updateRideFromNotificationAction({ action, notificationData });
 
-      console.log('Notification action received:', { action, notificationData });
-
-      // Handle notification actions (accept/decline rides, etc.)
-      // This would integrate with your ride management system
-
-      res.json({ success: true, message: 'Action processed' });
+      console.log('Notification action received:', { action, notificationData, result });
+      res.json({ success: true, message: 'Action processed', ...result });
     } catch (error: any) {
       console.error('Notification action error:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/send-push', async (req, res) => {
+    try {
+      const { vehicleNumber, ride, eventType = 'assigned', payload } = req.body || {};
+      if (!vehicleNumber) {
+        return res.status(400).json({ success: false, error: 'Missing vehicleNumber' });
+      }
+
+      const pushPayload = payload || buildRidePushPayload(ride || {}, eventType);
+      const result = await sendPushToVehicle(vehicleNumber, pushPayload);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error('send-push error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -235,10 +251,18 @@ app.use(express.json());
 
   app.get('/api/gps-vehicles', async (req, res) => {
     try {
-      const response = await fetch('https://gps.lokatory.cz/api/vehicles', {
+      const gpsApiUrl = process.env.GPS_API_URL || 'https://gps.lokatory.cz/api/vehicles';
+      const gpsUsername = process.env.GPS_USERNAME;
+      const gpsPassword = process.env.GPS_PASSWORD;
+
+      if (!gpsUsername || !gpsPassword) {
+        return res.status(500).json({ error: 'GPS configuration missing. Set GPS_USERNAME and GPS_PASSWORD.' });
+      }
+
+      const response = await fetch(gpsApiUrl, {
         method: 'GET',
         headers: {
-          'Authorization': 'Basic ' + Buffer.from('5186800:Hustopece2024').toString('base64'),
+          'Authorization': 'Basic ' + Buffer.from(`${gpsUsername}:${gpsPassword}`).toString('base64'),
           'Content-Type': 'application/json',
         },
         redirect: 'follow',
@@ -437,42 +461,53 @@ app.use(express.json());
         console.warn('Google Maps API key not configured');
       }
 
-      // Try OSRM as secondary routing service
-      try {
-        console.log('Trying OSRM routing service...');
-        // Build OSRM URL (assuming OSRM server running on localhost:5000)
-        const osrmCoords = coordPairs.map(coord => `${coord.lon},${coord.lat}`).join(';');
-        const osrmUrl = `http://localhost:5000/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson&steps=false`;
-        const osrmResponse = await fetch(osrmUrl);
+        // Try OSRM as secondary routing service
+        try {
+            console.log('Trying OSRM routing service...');
+            // Build OSRM URL using public OSRM server
+            const osrmCoords = coordPairs.map(coord => `${coord.lon},${coord.lat}`).join(';');
+            const osrmUrl = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson&steps=false`;
+            console.log('OSRM URL:', osrmUrl);
+            const osrmResponse = await fetch(osrmUrl);
+            console.log('OSRM response status:', osrmResponse.status);
 
-        if (osrmResponse.ok) {
-          const osrmData = await osrmResponse.json();
-          if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
-            const route = osrmData.routes[0];
-            const osrmLikeResponse = {
-              code: 'Ok',
-              routes: [{
-                duration: route.duration, // seconds
-                distance: route.distance, // meters
-                geometry: route.geometry, // GeoJSON LineString
-                legs: [{
-                  duration: route.duration,
-                  distance: route.distance,
-                  steps: []
-                }]
-              }],
-              waypoints: coordPairs.map(coord => ({
-                location: [coord.lon, coord.lat]
-              }))
-            };
-            console.log('OSRM routing successful');
-            return res.json(osrmLikeResponse);
-          }
+            if (osrmResponse.ok) {
+                const osrmData = await osrmResponse.json();
+                console.log('OSRM data code:', osrmData.code);
+                if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+                    const route = osrmData.routes[0];
+                    const osrmLikeResponse = {
+                        code: 'Ok',
+                        routes: [{
+                            duration: route.duration, // seconds
+                            distance: route.distance, // meters
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: route.geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]]) // [lat, lng]
+                            },
+                            legs: [{
+                                duration: route.duration,
+                                distance: route.distance,
+                                steps: []
+                            }]
+                        }],
+                        waypoints: coordPairs.map(coord => ({
+                            location: [coord.lon, coord.lat]
+                        }))
+                    };
+                    console.log('OSRM routing successful');
+                    return res.json(osrmLikeResponse);
+                } else {
+                    console.warn('OSRM data not Ok or no routes');
+                }
+            } else {
+                const text = await osrmResponse.text();
+                console.warn('OSRM response not ok:', text);
+            }
+            console.warn('OSRM routing failed');
+        } catch (osrmError: any) {
+            console.warn('OSRM routing error:', osrmError.message);
         }
-        console.warn('OSRM routing failed');
-      } catch (osrmError: any) {
-        console.warn('OSRM routing error:', osrmError.message);
-      }
 
       // All routing services failed, return fallback flag
       console.log('All routing services failed, using local fallback calculation');

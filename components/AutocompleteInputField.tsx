@@ -103,10 +103,10 @@ export const AutocompleteInputField: React.FC<{
     }
     const filtered = localSuggestions.filter(
       suggestion => suggestion.toLowerCase().includes(userInput.toLowerCase())
-    );
+    ).map(suggestion => ({ text: suggestion }));
     setSuggestions(prev => {
       // Only update if suggestions actually changed
-      if (prev.length !== filtered.length || !prev.every((s, i) => s === filtered[i])) {
+      if (prev.length !== filtered.length || !prev.every((s, i) => s.text === filtered[i].text)) {
         return filtered;
       }
       return prev;

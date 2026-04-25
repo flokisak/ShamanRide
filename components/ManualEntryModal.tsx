@@ -66,12 +66,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
         timestamp: new Date().toISOString()
       };
 
-      const { data, error } = await supabaseService.addManualEntry(entryData);
-
-      if (error) {
-        console.error('Error creating manual entry:', error);
-        return;
-      }
+      await supabaseService.addManualEntry(entryData);
 
       onEntryAdded?.();
       onClose();
@@ -105,12 +100,7 @@ export const ManualEntryModal: React.FC<ManualEntryModalProps> = ({
         timestamp: new Date().toISOString()
       };
 
-      const { data, error } = await supabaseService.addManualEntry(entryData);
-
-      if (error) {
-        console.error('Error creating duplicate ride entry:', error);
-        return;
-      }
+      await supabaseService.addManualEntry(entryData);
 
       onEntryAdded?.();
       setShowDuplicateModal(false);

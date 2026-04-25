@@ -110,6 +110,7 @@ export const EditDriverScoreModal: React.FC<EditDriverScoreModalProps> = ({
         customer_count_score: editedScore.customer_count_score || 0,
         revenue_score: editedScore.revenue_score || 0,
         perfect_rides_score: editedScore.perfect_rides_score || 0,
+        acceptance_time_score: currentScore?.acceptance_time_score || 0,
         deer_collision_score: editedScore.deer_collision_score || 0,
         rank: currentScore?.rank || 0,
         updated_at: new Date().toISOString()

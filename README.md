@@ -2,7 +2,8 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)](https://github.com/your-repo/shamanride)
 [![Status](https://img.shields.io/badge/status-production--ready-success.svg)](https://github.com/your-repo/shamanride)
-
+ 
+ 
 ShamanRide is a comprehensive, enterprise-grade taxi dispatch and fleet management platform designed for modern taxi companies. Built with React, TypeScript, and Supabase, it provides everything needed to efficiently manage rides, drivers, vehicles, and operations in real-time, featuring an advanced gamification system that motivates drivers through intelligent scoring and achievement rewards.
 
 ## 🎯 What ShamanRide Does

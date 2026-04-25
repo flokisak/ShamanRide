@@ -6,12 +6,12 @@ const isBrowser = typeof window !== 'undefined';
 // Use main app's environment variables for consistency
 const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.VITE_SUPABASE_ANON_KEY;
-const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.VITE_SUPABASE_SERVICE_KEY;
+const supabaseServiceKey = isBrowser ? undefined : process.env.SUPABASE_SERVICE_KEY;
 
 console.log('Driver app environment variables:', {
   supabaseUrl: supabaseUrl ? 'SET' : 'NOT SET',
   supabaseAnonKey: supabaseAnonKey ? 'SET (length: ' + supabaseAnonKey.length + ')' : 'NOT SET',
-  supabaseServiceKey: supabaseServiceKey ? 'SET' : 'NOT SET'
+  supabaseServiceKey: supabaseServiceKey ? 'SET (server only)' : 'NOT SET'
 });
 
 export const SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
@@ -21,7 +21,7 @@ if (SUPABASE_ENABLED) {
   // Create our own Supabase client for the driver app
   // Use anon key for client-side authentication, rely on RLS policies
   const key = supabaseAnonKey || supabaseServiceKey;
-  console.log('Creating Supabase client with key type:', supabaseServiceKey ? 'SERVICE' : 'ANON');
+  console.log('Creating Supabase client with key type:', isBrowser ? 'ANON' : (supabaseServiceKey ? 'SERVICE' : 'ANON'));
   if (isBrowser) {
     const GLOBAL_KEY = '__shamanride_supabase_client_driver__';
     (window as any)[GLOBAL_KEY] = (window as any)[GLOBAL_KEY] || createClient(supabaseUrl, key, {

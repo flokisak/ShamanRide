@@ -6,21 +6,15 @@ exports.safeRefreshSession = safeRefreshSession;
 exports.safeGetAccessToken = safeGetAccessToken;
 const supabase_js_1 = require("@supabase/supabase-js");
 const types_1 = require("../types");
-const dotenv_1 = require("dotenv");
-const path_1 = require("path");
-// Load environment variables in Node.js
 const isBrowser = typeof window !== 'undefined';
-if (!isBrowser) {
-    dotenv_1.default.config({ path: path_1.default.join(process.cwd(), '..', '.env') });
-}
 const supabaseUrl = isBrowser ? import.meta.env.VITE_SUPABASE_URL : process.env.SUPABASE_URL;
 const supabaseAnonKey = isBrowser ? import.meta.env.VITE_SUPABASE_ANON_KEY : process.env.SUPABASE_ANON_KEY;
-const supabaseServiceKey = isBrowser ? import.meta.env.VITE_SUPABASE_SERVICE_KEY : process.env.SUPABASE_SERVICE_KEY;
+const supabaseServiceKey = isBrowser ? undefined : process.env.SUPABASE_SERVICE_KEY;
 exports.SUPABASE_ENABLED = Boolean(supabaseUrl && (supabaseAnonKey || supabaseServiceKey));
 let supabase = null;
 exports.supabase = supabase;
 if (exports.SUPABASE_ENABLED) {
-    // Use service key if available (for driver app), otherwise anon key
+    // Browser clients must only use the anon key. Service role keys stay server-side.
     const key = supabaseServiceKey || supabaseAnonKey;
     if (isBrowser) {
         // Reuse a single Supabase client instance across bundles to avoid

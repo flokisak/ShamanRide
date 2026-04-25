@@ -61,7 +61,7 @@ export const DailyStats: React.FC<DailyStatsProps> = ({ rideLog, people, classNa
 
       existing.ridesToday++;
       existing.revenueToday += ride.estimatedPrice || 0;
-      if (ride.smsSent) {
+      if (ride.acceptedAt && ride.timestamp && ride.acceptedAt - ride.timestamp <= 60_000) {
         existing.perfectRidesToday++;
       }
       if (ride.passengers && ride.passengers > 0) {

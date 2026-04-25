@@ -4,8 +4,8 @@ import { useTranslation } from '../contexts/LanguageContext';
 interface ShiftModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onStartShift: (startOdo: number) => void;
-  onEndShift: (endOdo: number) => void;
+  onStartShift: (startOdo: number) => void | Promise<void>;
+  onEndShift: (endOdo: number) => boolean | void | Promise<boolean | void>;
   isShiftActive: boolean;
   currentOdo?: number;
   vehicleMileage?: number;

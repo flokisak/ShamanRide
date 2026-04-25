@@ -443,32 +443,31 @@ function urlBase64ToUint8Array(base64String: string) {
 // Send subscription to server
 export const sendSubscriptionToServer = async (subscription: PushSubscription, userId: string) => {
   try {
-    // This would typically send the subscription to your backend
-    // For now, we'll just log it
-    console.log('Subscription to send to server:', {
-      userId,
-      endpoint: subscription.endpoint,
-      keys: {
-        p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
-        auth: arrayBufferToBase64(subscription.getKey('auth')!)
-      }
+    const payload = {
+      vehicleNumber: userId,
+      subscription: {
+        endpoint: subscription.endpoint,
+        expirationTime: subscription.expirationTime,
+        keys: {
+          p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
+          auth: arrayBufferToBase64(subscription.getKey('auth')!)
+        }
+      },
+      userAgent: navigator.userAgent
+    };
+
+    const response = await fetch('/api/push-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
     });
 
-    // TODO: Send to your backend API
-    // await fetch('/api/push-subscription', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({
-    //     userId,
-    //     subscription: {
-    //       endpoint: subscription.endpoint,
-    //       keys: {
-    //         p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
-    //         auth: arrayBufferToBase64(subscription.getKey('auth')!)
-    //       }
-    //     }
-    //   })
-    // });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Push subscription API failed: ${response.status} ${errorText}`);
+    }
+
+    console.log('Push subscription sent to server:', await response.json());
 
   } catch (error) {
     console.error('Error sending subscription to server:', error);

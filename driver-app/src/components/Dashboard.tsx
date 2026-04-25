@@ -31,6 +31,9 @@ const Dashboard: React.FC = () => {
 
   const watchIdRef = useRef<number | null>(null);
   const locationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLocationSentRef = useRef<number>(0);
+  const knownRideIdsRef = useRef<Set<string>>(new Set());
+  const localRideActionRef = useRef<Map<string, number>>(new Map());
   const [driverStatus, setDriverStatus] = useState<'offline' | 'available' | 'on_ride' | 'break' | 'refueling' | 'pause'>(() => {
     const saved = localStorage.getItem('driverStatus');
     return (saved as any) || 'offline';
@@ -85,7 +88,7 @@ const Dashboard: React.FC = () => {
    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
    const [chatCardActivated, setChatCardActivated] = useState<number | null>(null);
    const [shiftViewMode, setShiftViewMode] = useState<'calendar' | 'list'>('calendar');
-   const [flashingRides, setFlashingRides] = useState<Set<number>>(new Set());
+   const [flashingRides, setFlashingRides] = useState<Set<string>>(new Set());
   // Initialize shift state from localStorage synchronously
     const getInitialShiftValue = (key: string, defaultValue: any = null) => {
       const value = localStorage.getItem(key);
@@ -123,8 +126,47 @@ const Dashboard: React.FC = () => {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
    const [isOnline, setIsOnline] = useState(navigator.onLine);
    const [realtimeConnectionStatus, setRealtimeConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('disconnected');
-   const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
+  const [lastAcceptedRideId, setLastAcceptedRideId] = useState<string | null>(null);
   const [lastAcceptTime, setLastAcceptTime] = useState<number>(0);
+
+  const updateSyncStatus = useCallback(() => {
+    try {
+      const cachedLocations = localStorage.getItem('cached-locations');
+      const pendingMessages = localStorage.getItem('pending-messages');
+      const pendingUpdates = localStorage.getItem('pending-ride-updates');
+      const totalQueued =
+        (cachedLocations ? JSON.parse(cachedLocations).length : 0) +
+        (pendingMessages ? JSON.parse(pendingMessages).length : 0) +
+        (pendingUpdates ? JSON.parse(pendingUpdates).length : 0);
+
+      setQueuedDataCount(totalQueued);
+      setSyncStatus(totalQueued > 0 ? 'error' : 'idle');
+    } catch (error) {
+      console.warn('Failed to update sync status:', error);
+    }
+  }, []);
+
+  const rememberLocalRideAction = useCallback((rideId: string) => {
+    localRideActionRef.current.set(rideId, Date.now());
+    window.setTimeout(() => {
+      const timestamp = localRideActionRef.current.get(rideId);
+      if (timestamp && Date.now() - timestamp >= 4_000) {
+        localRideActionRef.current.delete(rideId);
+      }
+    }, 5_000);
+  }, []);
+
+  const isRecentLocalRideAction = useCallback((rideId: string) => {
+    const timestamp = localRideActionRef.current.get(rideId);
+    return Boolean(timestamp && Date.now() - timestamp < 5_000);
+  }, []);
+
+  const getRideNotificationBody = useCallback((ride: RideLog) => {
+    const from = cleanAddress(ride.stops?.[0] || '');
+    const to = cleanAddress(ride.stops?.[ride.stops.length - 1] || '');
+    const price = ride.estimatedPrice ? ` • ${ride.estimatedPrice} Kč` : '';
+    return `${ride.customerName || 'Zákazník'}: ${from} → ${to}${price}`;
+  }, []);
 
   // Filter ride history based on selected filter
   const filteredRideHistory = useMemo(() => {
@@ -696,6 +738,7 @@ const Dashboard: React.FC = () => {
 
       // Update ride status to accepted
       const updatedRide = { ...ride, status: RideStatus.Accepted };
+      rememberLocalRideAction(ride.id);
       await supabaseService.updateRideLog(ride.id, updatedRide);
 
       // Emit to socket for real-time updates - DISABLED
@@ -740,6 +783,7 @@ const Dashboard: React.FC = () => {
       const updatedRide = { ...currentRide, status: RideStatus.Accepted };
       // Ensure supabaseService is available globally
       const { updateRideLog } = supabaseService;
+      rememberLocalRideAction(currentRide.id);
       await updateRideLog(currentRide.id, updatedRide);
 
       // Socket disabled
@@ -767,6 +811,7 @@ const Dashboard: React.FC = () => {
       console.log('🚀 Starting ride:', currentRide.id);
 
       const updatedRide = { ...currentRide, status: RideStatus.InProgress };
+      rememberLocalRideAction(currentRide.id);
       await supabaseService.updateRideLog(currentRide.id, updatedRide);
 
       // Socket disabled
@@ -804,6 +849,7 @@ const Dashboard: React.FC = () => {
       console.log('❌ Cancelling ride:', currentRide.id);
 
       const updatedRide = { ...currentRide, status: RideStatus.Cancelled };
+      rememberLocalRideAction(currentRide.id);
       await supabaseService.updateRideLog(currentRide.id, updatedRide);
 
       // Socket disabled
@@ -885,19 +931,22 @@ const Dashboard: React.FC = () => {
     return pickupTime;
   };
 
-  const navigateToDestination = async (ride?: RideLog) => {
-    const targetRide = ride || currentRide;
-    if (!targetRide || targetRide.stops.length === 0) return;
+  const navigateToDestination = async (rideOrStops?: RideLog | string[], navOverride?: 'google' | 'mapy' | 'waze') => {
+    const targetStops = Array.isArray(rideOrStops)
+      ? rideOrStops
+      : (rideOrStops || currentRide)?.stops;
+    const targetRideId = Array.isArray(rideOrStops) ? 'manual-route' : (rideOrStops || currentRide)?.id;
+    if (!targetStops || targetStops.length === 0) return;
 
     try {
-      console.log('🗺️ Navigating for ride:', targetRide.id, 'stops:', targetRide.stops);
+      console.log('🗺️ Navigating for ride:', targetRideId, 'stops:', targetStops);
 
       // Clean all addresses
-      const cleanStops = targetRide.stops.map(stop => cleanAddress(stop));
+      const cleanStops = targetStops.map(stop => cleanAddress(stop));
       console.log('Clean stops:', cleanStops);
 
       // Use the preferred navigation app
-      const navApp = preferredNavApp || 'google';
+      const navApp = navOverride || preferredNavApp || 'google';
 
       let navUrl: string;
 
@@ -924,7 +973,7 @@ const Dashboard: React.FC = () => {
 
           // If we have current location, use it as origin
           if (location) {
-            params.append('origin', `${location.latitude},${location.longitude}`);
+            params.append('origin', `${location.lat},${location.lng}`);
           }
 
           // Filter out stops without coordinates
@@ -1038,6 +1087,12 @@ const Dashboard: React.FC = () => {
        );
 
        setRideHistory(vehicleHistory);
+       knownRideIdsRef.current = new Set([
+         ...(currentRideData || []).map(ride => ride.id),
+         ...(acceptedRideData || []).map(ride => ride.id),
+         ...allPendingRides.map(ride => ride.id),
+         ...vehicleHistory.map(ride => ride.id)
+       ]);
 
        console.log('✅ Rides loaded:', {
          current: currentRideData?.[0]?.id || null,
@@ -1049,6 +1104,222 @@ const Dashboard: React.FC = () => {
       console.error('❌ Failed to load rides:', error);
     }
   };
+
+  useEffect(() => {
+    if (!vehicleNumber || !SUPABASE_ENABLED || !supabase) return;
+
+    const mapDbRide = (row: any): RideLog | null => {
+      if (!row) return null;
+      try {
+        const mapper = (supabaseService as any)._fromDbRideLog;
+        if (typeof mapper === 'function') {
+          return mapper.call(supabaseService, row) as RideLog;
+        }
+      } catch (error) {
+        console.warn('Failed to map realtime ride through service mapper:', error);
+      }
+
+      return {
+        id: row.id,
+        timestamp: row.timestamp,
+        vehicleName: row.vehicle_name ?? null,
+        vehicleLicensePlate: row.vehicle_license_plate ?? null,
+        driverName: row.driver_name ?? null,
+        vehicleType: row.vehicle_type ?? null,
+        customerName: row.customer_name,
+        customerPhone: row.customer_phone,
+        stops: Array.isArray(row.stops) ? row.stops : [],
+        pickupTime: row.pickup_time,
+        status: (row.status || '').toUpperCase().replace(/ /g, '_') as RideStatus,
+        vehicleId: row.vehicle_id ?? null,
+        passengers: row.passengers || 1,
+        notes: row.notes ?? undefined,
+        estimatedPrice: row.estimated_price ?? undefined,
+        estimatedPickupTimestamp: row.estimated_pickup_timestamp ?? undefined,
+        estimatedCompletionTimestamp: row.estimated_completion_timestamp ?? undefined,
+        acceptedAt: row.accepted_at ? new Date(row.accepted_at).getTime() : undefined,
+        startedAt: row.started_at ? new Date(row.started_at).getTime() : undefined,
+        completedAt: row.completed_at ? new Date(row.completed_at).getTime() : undefined,
+        fuelCost: row.fuel_cost ?? undefined,
+        rideType: (row.ride_type || 'BUSINESS').toUpperCase() as any,
+        distance: row.distance ?? undefined,
+        payment: row.payment ?? undefined
+      };
+    };
+
+    const flashRide = (rideId: string) => {
+      setFlashingRides(prev => new Set([...prev, rideId]));
+      window.setTimeout(() => {
+        setFlashingRides(prev => {
+          const next = new Set(prev);
+          next.delete(rideId);
+          return next;
+        });
+      }, 5000);
+    };
+
+    const notifyRideAssignment = async (ride: RideLog) => {
+      flashRide(ride.id);
+      await notifyUser('ride', {
+        title: 'Nová jízda',
+        body: getRideNotificationBody(ride),
+        sound: true,
+        vibration: true,
+        systemNotification: true
+      }).catch(error => console.error('Ride assignment notification failed:', error));
+    };
+
+    const notifyRideCancelled = async (ride: RideLog) => {
+      await notifyUser('ride', {
+        title: 'Jízda byla zrušena',
+        body: getRideNotificationBody(ride),
+        sound: true,
+        vibration: true,
+        systemNotification: true
+      }).catch(error => console.error('Ride cancellation notification failed:', error));
+    };
+
+    const channel = supabase
+      .channel(`driver-rides-${vehicleNumber}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ride_logs',
+          filter: `vehicle_id=eq.${vehicleNumber}`
+        },
+        async (payload: any) => {
+          const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
+          const newRide = mapDbRide(payload.new);
+          const oldRide = mapDbRide(payload.old);
+          const ride = newRide || oldRide;
+          if (!ride) return;
+
+          const wasKnown = knownRideIdsRef.current.has(ride.id);
+          const localAction = isRecentLocalRideAction(ride.id);
+
+          if (eventType !== 'DELETE') {
+            knownRideIdsRef.current.add(ride.id);
+          }
+
+          const newStatus = newRide?.status;
+          const oldStatus = oldRide?.status;
+          const assignedNow =
+            eventType === 'INSERT' ||
+            (!wasKnown && newRide?.vehicleId === vehicleNumber) ||
+            (oldRide?.vehicleId !== vehicleNumber && newRide?.vehicleId === vehicleNumber);
+
+          if (newRide && assignedNow && (newStatus === RideStatus.Pending || newStatus === RideStatus.Accepted)) {
+            await notifyRideAssignment(newRide);
+          } else if (
+            newRide &&
+            !localAction &&
+            newStatus === RideStatus.Cancelled &&
+            oldStatus !== RideStatus.Cancelled
+          ) {
+            await notifyRideCancelled(newRide);
+          } else if (eventType === 'DELETE' && oldRide && !localAction) {
+            await notifyRideCancelled(oldRide);
+          }
+
+          await loadRides();
+        }
+      )
+      .subscribe((status: string) => {
+        console.log('Ride realtime subscription status:', status);
+        setRealtimeConnectionStatus(status === 'SUBSCRIBED' ? 'connected' : 'connecting');
+      });
+
+    const pollInterval = window.setInterval(() => {
+      loadRides();
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(pollInterval);
+      setRealtimeConnectionStatus('disconnected');
+      supabase.removeChannel(channel);
+    };
+  }, [vehicleNumber, getRideNotificationBody, isRecentLocalRideAction]);
+
+  useEffect(() => {
+    if (!vehicleNumber || !isShiftActive || driverStatus === 'offline') {
+      if (watchIdRef.current !== null && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+      return;
+    }
+
+    if (!('geolocation' in navigator)) {
+      console.warn('Geolocation is not available in this browser');
+      return;
+    }
+
+    const persistLocation = async (position: GeolocationPosition) => {
+      const now = Date.now();
+      if (now - lastLocationSentRef.current < 10_000) return;
+      lastLocationSentRef.current = now;
+
+      const locationPayload = {
+        vehicle_id: vehicleNumber,
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        timestamp: new Date(now).toISOString()
+      };
+
+      setLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+      setLastLocationUpdate(now);
+
+      if (socket && socketConnected) {
+        socket.emit('position_update', {
+          shiftId: 'dispatcher_shift',
+          vehicleId: vehicleNumber,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        });
+      }
+
+      if (!navigator.onLine || !SUPABASE_ENABLED || !supabase) {
+        queueLocationData(locationPayload);
+        updateSyncStatus();
+        return;
+      }
+
+      try {
+        const { error } = await supabase.from('locations').insert(locationPayload);
+        if (error) throw error;
+      } catch (error) {
+        console.warn('Failed to persist GPS location, queueing for sync:', error);
+        queueLocationData(locationPayload);
+        requestBackgroundSync('location-sync').catch(syncError => {
+          console.warn('Could not request background location sync:', syncError);
+        });
+        updateSyncStatus();
+      }
+    };
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      position => {
+        persistLocation(position).catch(error => console.error('Location update failed:', error));
+      },
+      error => {
+        console.warn('Geolocation watch error:', error);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5_000,
+        timeout: 20_000
+      }
+    );
+
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [vehicleNumber, isShiftActive, driverStatus, socket, socketConnected, updateSyncStatus]);
 
   // Initialize socket connection for real-time updates - DISABLED due to auth issues
   // The driver app uses direct database polling instead of real-time socket updates
@@ -1132,12 +1403,13 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       const selectedDriverId = localStorage.getItem('selectedDriverId');
+      const selectedVehicleId = localStorage.getItem('selectedVehicleId');
       if (selectedDriverId) {
-        console.log('Initializing notifications for driver:', selectedDriverId);
+        console.log('Initializing notifications for driver:', selectedDriverId, 'vehicle:', selectedVehicleId);
 
         // Initialize comprehensive notifications (permissions, push, wake lock)
         const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY; // Add this to .env when available
-        await initializeNotifications(selectedDriverId, vapidKey);
+        await initializeNotifications(selectedVehicleId || selectedDriverId, vapidKey);
 
         // Update permission status
         if ('Notification' in window) {
@@ -1316,8 +1588,8 @@ const Dashboard: React.FC = () => {
             const updatedVehicle = {
               ...currentVehicle,
               shift_start: new Date(startTime),
-              shiftStartOdo: startOdo,
-              mileage: startOdo
+              shiftStartOdo: shiftStartOdo ?? currentVehicle?.mileage ?? 0,
+              mileage: shiftStartOdo ?? currentVehicle?.mileage ?? 0
             };
             if (updatedVehicle) {
               await supabaseService.updateVehicles([updatedVehicle]);

@@ -28,7 +28,6 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { SmsPreviewModal } from './components/SmsPreviewModal';
 import SmsGate from './components/SmsGate';
 import SocketRides from './components/SocketRides';
-import { StreamChatComponent } from './components/StreamChatComponent';
 import { useTranslation } from './contexts/LanguageContext';
 import { SettingsModal } from './components/SettingsModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -74,10 +73,9 @@ type SortKey = 'timestamp' | 'customerName' | 'startMileage' | 'endMileage' | 'd
 type SortDirection = 'asc' | 'desc';
 
 const DEFAULT_LAYOUT: LayoutConfig = [
-  // Row 1: dispatch, driverChat, map (3 columns)
+  // Row 1: dispatch, map (map spans 2 columns)
   { id: 'dispatch', colStart: 1, colSpan: 1, rowStart: 1, rowSpan: 1 },
-  { id: 'driverChat', colStart: 2, colSpan: 1, rowStart: 1, rowSpan: 1 },
-  { id: 'map', colStart: 3, colSpan: 1, rowStart: 1, rowSpan: 1 },
+  { id: 'map', colStart: 2, colSpan: 2, rowStart: 1, rowSpan: 1 },
   // Row 2: rideLog (left 2/3), vehicles (right 1/3)
   { id: 'rideLog', colStart: 1, colSpan: 2, rowStart: 2, rowSpan: 1 },
   { id: 'vehicles', colStart: 3, colSpan: 1, rowStart: 2, rowSpan: 1 },
@@ -91,7 +89,6 @@ const DEFAULT_WIDGET_VISIBILITY: Record<WidgetId, boolean> = {
     leaderboard: true,
     smsGate: true,
     dailyStats: true,
-    driverChat: true,
     socketRides: true,
 };
 
@@ -377,6 +374,30 @@ const AppContent: React.FC = () => {
       }
     };
     loadData();
+  }, []);
+
+  useEffect(() => {
+    if (!SUPABASE_ENABLED) return;
+
+    const refreshLocations = async () => {
+      try {
+        const loc = await supabaseService.getLocations();
+        const latestLocs = (Array.isArray(loc) ? loc : []).reduce((acc, l) => {
+          const key = l.vehicle_id;
+          if (!acc[key] || new Date(l.timestamp) > new Date(acc[key].timestamp)) {
+            acc[key] = l;
+          }
+          return acc;
+        }, {} as Record<string, any>);
+        setAllLocations(Array.isArray(loc) ? loc : []);
+        setLocations(latestLocs);
+      } catch (error) {
+        console.warn('Could not refresh driver locations:', error);
+      }
+    };
+
+    const interval = window.setInterval(refreshLocations, 15_000);
+    return () => window.clearInterval(interval);
   }, []);
 
 
@@ -703,7 +724,7 @@ const AppContent: React.FC = () => {
     }
 
     // Try AI matching - find nearest available driver
-    const aiAssignment = await findNearestAvailableDriver(rideRequest, stopCoords, vehicles);
+    const aiAssignment = await findNearestAvailableDriver(rideRequest, stopCoords, vehicles, locations);
 
     let finalStatus = RideStatus.Pending;
     let finalVehicleId = null;
@@ -854,7 +875,7 @@ const AppContent: React.FC = () => {
       console.error('❌ Failed to save queued/AI-assigned ride (socket or supabase):', error);
       alert('Failed to process ride. Please try again.');
     }
-  }, [t, language, vehicles, tariff, fuelPrices]);
+  }, [t, language, vehicles, tariff, fuelPrices, locations]);
 
   // Helper function to parse pickup time
   const parsePickupTime = (pickupTime: string): Date => {
@@ -1161,14 +1182,7 @@ const AppContent: React.FC = () => {
         setAssignmentResult(null);
         setManualAssignmentDetails(null);
 
-       // Handle SMS modal based on ride status
-       if (finalStatus === RideStatus.Accepted) {
-         // Automatically open SMS modal for accepted rides
-         handleSendSms(newLog.id);
-       } else if (finalStatus === RideStatus.Queued) {
-         // Show notification for queued rides
-         alert(`Ride queued for dispatcher assignment. Customer: ${rideRequest.customerName}`);
-       }
+       // Manual assignments are created as pending so the driver can accept them in the PWA.
       // Persist the created ride via socket (preferred) or Supabase fallback
       try {
         if ((window as any).dispatcherSocket) {
@@ -2231,16 +2245,6 @@ const AppContent: React.FC = () => {
     leaderboard: <Leaderboard />,
     dailyStats: <DailyStats rideLog={rideLog} people={people} />,
      smsGate: <SmsGate people={people} vehicles={vehicles} rideLog={rideLog} onSend={(id) => handleSendSms(id)} smsMessages={smsMessages} messagingApp={messagingApp} onSmsSent={(newMessages) => setSmsMessages(prev => Array.isArray(newMessages) ? [...newMessages, ...prev] : [newMessages, ...prev])} />,
-      driverChat: <StreamChatComponent vehicles={vehicles} people={people} onNewMessage={(vehicleId, message, options) => {
-        // Trigger browser notification for new messages (non-focus-stealing)
-        const vehicle = vehicles.find(v => v.id === vehicleId);
-        const vehicleName = vehicle ? vehicle.name : `Vozidlo ${vehicleId}`;
-        notifyUser('message', {
-          title: 'Nová zpráva od řidiče',
-          body: `${vehicleName}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`,
-          focusStealing: options?.focusStealing ?? false
-        });
-      }} />,
         socketRides: <SocketRides
           currentUser={user}
           shiftId="dispatcher_shift"
@@ -2595,37 +2599,26 @@ const AppContent: React.FC = () => {
                   </div>
                 )}
 
-                {/* Map Widget - Column 3, Row 1 */}
-                {widgetVisibility.map && (
-                  <div className="col-start-3 row-start-1">
-                     <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full flex flex-col">
-                       <div className="p-3 border-b border-slate-700 flex-shrink-0">
-                         <h3 className="text-sm font-semibold text-white flex items-center">
-                           <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
-                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                           </div>
-                           Mapa vozového parku
-                         </h3>
-                       </div>
-                       <div className="flex-1 min-h-0">
-                         {widgetMap.map}
-                       </div>
-                     </div>
-                   </div>
-                )}
-
-                  {/* Driver Chat - Column 2, Row 1 */}
-                  {widgetVisibility.driverChat && (
-                    <div className="col-start-2 row-start-1">
-                       <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full">
-                         <div className="p-4 h-full">
-                          {widgetMap.driverChat}
+{/* Map Widget - Column 2-3, Row 1 */}
+                 {widgetVisibility.map && (
+                   <div className="col-start-2 row-start-1 col-span-2">
+                      <div className="bg-slate-800 rounded-2xl shadow-sm border-0 overflow-hidden h-full flex flex-col">
+                        <div className="p-3 border-b border-slate-700 flex-shrink-0">
+                          <h3 className="text-sm font-semibold text-white flex items-center">
+                            <div className="w-6 h-6 bg-[#81A1C1]/80 rounded-lg flex items-center justify-center mr-2">
+                              <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                             </svg>
+                            </div>
+                            Mapa vozového parku
+                          </h3>
+                        </div>
+                        <div className="flex-1 min-h-0">
+                          {widgetMap.map}
                         </div>
                       </div>
                     </div>
-                  )}
+                 )}
 
                  {/* Ride History - Column 1-2, Row 2 */}
                  {widgetVisibility.rideLog && (

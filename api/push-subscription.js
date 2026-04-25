@@ -1,3 +1,5 @@
+import { savePushSubscription } from './_push-utils.js';
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,24 +16,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { subscription, vehicleNumber, userAgent } = req.body;
+    const { subscription, vehicleNumber, driverId, userAgent } = req.body;
 
     if (!subscription || !vehicleNumber) {
       return res.status(400).json({ success: false, error: 'Missing subscription or vehicle number' });
     }
 
-    // Store subscription in database or in-memory store
-    // For now, we'll just log it and return success
-    console.log('Push subscription received:', {
+    const result = await savePushSubscription({ subscription, vehicleNumber, driverId, userAgent });
+
+    console.log('Push subscription stored:', {
       vehicleNumber,
       endpoint: subscription.endpoint,
-      userAgent
+      userAgent,
+      persisted: result.persisted
     });
 
-    // In production, you would store this in your database
-    // associated with the driver/vehicle
-
-    res.json({ success: true, message: 'Subscription stored' });
+    res.json({ success: true, message: 'Subscription stored', ...result });
   } catch (error) {
     console.error('Push subscription error:', error);
     res.status(500).json({ success: false, error: error.message });

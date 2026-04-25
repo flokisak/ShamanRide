@@ -152,7 +152,11 @@ export interface RideLog {
    estimatedCompletionTimestamp?: number;
    acceptedAt?: number;
    startedAt?: number;
+   completedAt?: number;
    fuelCost?: number;
+   driverId?: number | null;
+   navigationUrl?: string | null;
+   smsSent?: boolean;
    // Kniha jízd fields
    rideType: RideType; // BUSINESS or PRIVATE
    startMileage?: number; // Počáteční stav km
@@ -164,7 +168,7 @@ export interface RideLog {
 }
 
 // Types for customizable layout
-export type WidgetId = 'dispatch' | 'vehicles' | 'rideLog' | 'map' | 'leaderboard' | 'smsGate' | 'dailyStats' | 'driverChat' | 'socketRides';
+export type WidgetId = 'dispatch' | 'vehicles' | 'rideLog' | 'map' | 'leaderboard' | 'smsGate' | 'dailyStats' | 'socketRides';
 
 export interface LayoutItem {
   id: WidgetId;

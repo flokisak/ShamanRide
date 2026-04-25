@@ -150,20 +150,19 @@ app.post('/api/send-sms', async (req, res) => {
 // Push notification subscription endpoint
 app.post('/api/push-subscription', async (req, res) => {
     try {
-        const { subscription, vehicleNumber, userAgent } = req.body;
+        const { subscription, vehicleNumber, driverId, userAgent } = req.body;
         if (!subscription || !vehicleNumber) {
             return res.status(400).json({ success: false, error: 'Missing subscription or vehicle number' });
         }
-        // Store subscription in database or in-memory store
-        // For now, we'll just log it and return success
-        console.log('Push subscription received:', {
+        const pushUtils = await import("../../api/_push-utils.js");
+        const result = await pushUtils.savePushSubscription({ subscription, vehicleNumber, driverId, userAgent });
+        console.log('Push subscription stored:', {
             vehicleNumber,
             endpoint: subscription.endpoint,
-            userAgent
+            userAgent,
+            persisted: result.persisted
         });
-        // In production, you would store this in your database
-        // associated with the driver/vehicle
-        res.json({ success: true, message: 'Subscription stored' });
+        res.json({ success: true, message: 'Subscription stored', ...result });
     }
     catch (error) {
         console.error('Push subscription error:', error);
@@ -174,13 +173,29 @@ app.post('/api/push-subscription', async (req, res) => {
 app.post('/api/notification-action', async (req, res) => {
     try {
         const { action, notificationData } = req.body;
-        console.log('Notification action received:', { action, notificationData });
-        // Handle notification actions (accept/decline rides, etc.)
-        // This would integrate with your ride management system
-        res.json({ success: true, message: 'Action processed' });
+        const pushUtils = await import("../../api/_push-utils.js");
+        const result = await pushUtils.updateRideFromNotificationAction({ action, notificationData });
+        console.log('Notification action received:', { action, notificationData, result });
+        res.json({ success: true, message: 'Action processed', ...result });
     }
     catch (error) {
         console.error('Notification action error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+app.post('/api/send-push', async (req, res) => {
+    try {
+        const { vehicleNumber, ride, eventType = 'assigned', payload } = req.body || {};
+        if (!vehicleNumber) {
+            return res.status(400).json({ success: false, error: 'Missing vehicleNumber' });
+        }
+        const pushUtils = await import("../../api/_push-utils.js");
+        const pushPayload = payload || pushUtils.buildRidePushPayload(ride || {}, eventType);
+        const result = await pushUtils.sendPushToVehicle(vehicleNumber, pushPayload);
+        res.json({ success: true, ...result });
+    }
+    catch (error) {
+        console.error('send-push error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -210,10 +225,16 @@ app.post('/api/webhook/sms-received', async (req, res) => {
 });
 app.get('/api/gps-vehicles', async (req, res) => {
     try {
-        const response = await fetch('https://gps.lokatory.cz/api/vehicles', {
+        const gpsApiUrl = process.env.GPS_API_URL || 'https://gps.lokatory.cz/api/vehicles';
+        const gpsUsername = process.env.GPS_USERNAME;
+        const gpsPassword = process.env.GPS_PASSWORD;
+        if (!gpsUsername || !gpsPassword) {
+            return res.status(500).json({ error: 'GPS configuration missing. Set GPS_USERNAME and GPS_PASSWORD.' });
+        }
+        const response = await fetch(gpsApiUrl, {
             method: 'GET',
             headers: {
-                'Authorization': 'Basic ' + Buffer.from('5186800:Hustopece2024').toString('base64'),
+                'Authorization': 'Basic ' + Buffer.from(`${gpsUsername}:${gpsPassword}`).toString('base64'),
                 'Content-Type': 'application/json',
             },
             redirect: 'follow',

@@ -5,6 +5,17 @@ import { splitAddressAndPlaceId } from './addressUtils';
 
 const urlShortenCache = new Map<string, string>();
 
+export function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
 /**
  * Shortens a URL using the TinyURL API.
  * Falls back to the original URL if the API call fails.
@@ -60,7 +71,8 @@ export function compressNavigationUrl(url: string, placeIds: string[] = []): str
 export async function findNearestAvailableDriver(
   rideRequest: RideRequest,
   stopCoords: { lat: number; lon: number }[],
-  vehicles: Vehicle[]
+  vehicles: Vehicle[],
+  latestLocations: Record<string, { latitude: number; longitude: number; timestamp?: string }> = {}
 ): Promise<{ vehicle: Vehicle; distance: number } | null> {
   if (stopCoords.length === 0) return null;
 
@@ -70,11 +82,17 @@ export async function findNearestAvailableDriver(
 
   // Check each vehicle with an assigned driver (including busy ones)
   for (const vehicle of vehicles) {
-    if (!vehicle.email || !vehicle.location || vehicle.status === VehicleStatus.OutOfService || vehicle.status === VehicleStatus.NotDrivingToday) continue; // Skip vehicles without drivers, location, or completely out of service
+    if (!vehicle.driverId || vehicle.status === VehicleStatus.OutOfService || vehicle.status === VehicleStatus.NotDrivingToday) continue;
 
     try {
-      // Geocode vehicle location
-      const vehicleCoords = await geocodeAddress(vehicle.location, 'cs');
+      const liveLocation = latestLocations[String(vehicle.id)];
+      const vehicleCoords = liveLocation
+        ? { lat: liveLocation.latitude, lon: liveLocation.longitude }
+        : vehicle.location
+          ? await geocodeAddress(vehicle.location, 'cs')
+          : null;
+
+      if (!vehicleCoords) continue;
 
       // Calculate distance from vehicle to pickup location
       const distance = haversineDistance(

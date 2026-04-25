@@ -6,6 +6,7 @@ export enum VehicleType {
 export enum VehicleStatus {
   Available = 'AVAILABLE',
   Busy = 'BUSY',
+  Break = 'BREAK',
   OutOfService = 'OUT_OF_SERVICE',
   NotDrivingToday = 'NOT_DRIVING_TODAY',
 }
@@ -146,7 +147,11 @@ export interface RideLog {
    estimatedCompletionTimestamp?: number;
    acceptedAt?: number;
    startedAt?: number;
+   completedAt?: number;
    fuelCost?: number;
+   driverId?: number | null;
+   navigationUrl?: string | null;
+   smsSent?: boolean;
   // Kniha jízd fields
   rideType: RideType; // BUSINESS or PRIVATE
   startMileage?: number; // Počáteční stav km

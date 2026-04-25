@@ -2,6 +2,30 @@ import { supabaseService } from './supabaseClient';
 
 // Centralized sync helpers: prefer socket emit via window.dispatcherSocket, fallback to supabaseService
 
+async function sendRidePushFallback(rideData: any, eventType = 'assigned') {
+  const vehicleNumber = rideData?.vehicleId ?? rideData?.vehicle_id;
+  const status = String(rideData?.status || '').toLowerCase();
+  const shouldNotify =
+    vehicleNumber &&
+    (eventType === 'cancelled' || status === 'pending' || status === 'accepted' || status === 'cancelled');
+
+  if (!shouldNotify) return;
+
+  try {
+    await fetch('/api/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vehicleNumber,
+        ride: rideData,
+        eventType: status === 'cancelled' ? 'cancelled' : eventType
+      })
+    });
+  } catch (error) {
+    console.warn('Ride push fallback failed:', error);
+  }
+}
+
 export async function persistRide(rideData: any) {
   try {
     const socket = (window as any).dispatcherSocket;
@@ -10,12 +34,14 @@ export async function persistRide(rideData: any) {
       return { via: 'socket' };
     } else {
       await supabaseService.addRideLog(rideData);
+      await sendRidePushFallback(rideData);
       return { via: 'supabase' };
     }
   } catch (err) {
     // Fallback to supabase if emit or other fails
     try {
       await supabaseService.addRideLog(rideData);
+      await sendRidePushFallback(rideData);
       return { via: 'supabase', error: err };
     } catch (err2) {
       return { via: 'failed', error: err2 };

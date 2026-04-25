@@ -4,10 +4,11 @@
   "version": "1.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "server": "cd server && npx tsx server.ts",
+    "dev": "node node_modules/vite/bin/vite.js",
+    "build": "node node_modules/vite/bin/vite.js build",
+    "preview": "node node_modules/vite/bin/vite.js preview",
+    "push:vapid": "node node_modules/web-push/src/cli.js generate-vapid-keys",
+    "server": "cd server && node ../node_modules/tsx/dist/cli.mjs server.ts",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
@@ -32,7 +33,8 @@
     "react-leaflet": "^5.0.0",
     "socket.io-client": "^4.8.1",
     "stream-chat": "^9.27.1",
-    "stream-chat-react": "^13.11.0"
+    "stream-chat-react": "^13.11.0",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",

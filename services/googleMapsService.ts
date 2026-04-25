@@ -12,11 +12,11 @@ async function loadGoogleMaps(): Promise<typeof google.maps> {
     throw new Error('Google Maps API key not configured. Please set VITE_GOOGLE_MAPS_API_KEY in your environment.');
   }
 
-  loadPromise = new Loader({
+  loadPromise = (new Loader({
     apiKey,
     version: 'weekly',
     libraries: ['geometry']
-  }).load();
+  }) as any).load();
 
   googleMaps = await loadPromise;
   return googleMaps;

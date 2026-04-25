@@ -14,10 +14,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch('https://gps.lokatory.cz/api/vehicles', {
+    const gpsApiUrl = process.env.GPS_API_URL || 'https://gps.lokatory.cz/api/vehicles';
+    const gpsUsername = process.env.GPS_USERNAME;
+    const gpsPassword = process.env.GPS_PASSWORD;
+
+    if (!gpsUsername || !gpsPassword) {
+      return res.status(500).json({ error: 'GPS configuration missing. Set GPS_USERNAME and GPS_PASSWORD.' });
+    }
+
+    const response = await fetch(gpsApiUrl, {
       method: 'GET',
       headers: {
-        'Authorization': 'Basic ' + Buffer.from('5186800:Hustopece2024').toString('base64'),
+        'Authorization': 'Basic ' + Buffer.from(`${gpsUsername}:${gpsPassword}`).toString('base64'),
         'Content-Type': 'application/json',
       },
       redirect: 'follow',

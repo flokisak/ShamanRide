@@ -221,7 +221,7 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
         if (googleResponse.ok) {
           const data = await googleResponse.json();
           if (!data.fallback && data.code === 'Ok' && data.routes?.length > 0) {
-            const route = googleData.routes[0];
+            const route = data.routes[0];
             const geometry = decodePolyline(route.overview_polyline.points);
             const totalDistance = route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0);
             const totalDuration = route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0);

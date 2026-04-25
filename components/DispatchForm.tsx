@@ -150,7 +150,7 @@ export const DispatchFormComponent = ({ onSubmit, onSchedule, onQueue, isLoading
    const handlePOISelect = (poi: POIResult) => {
      if (selectedStopIndex !== null) {
        const newStops = [...stops];
-       newStops[selectedStopIndex] = poi.displayName;
+      newStops[selectedStopIndex] = `${poi.name}, ${poi.address}`;
        setStops(newStops);
        setStopPlaceIds(prev => {
          const p = [...prev];

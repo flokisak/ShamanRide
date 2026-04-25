@@ -6,6 +6,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
 const CryptoJS = require('crypto-js');
+const { buildRidePushPayload, sendPushToVehicle } = require('./pushService');
 
 // Initialize Supabase client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -201,6 +202,16 @@ socket.on('join_shift', (shiftId) => {
   // Handle ride updates
   socket.on('ride_update', async (data) => {
     const { shiftId, rideData } = data;
+    let previousRide = null;
+
+    if (rideData && rideData.id) {
+      const { data: existingRows } = await supabase
+        .from('ride_logs')
+        .select('*')
+        .eq('id', rideData.id)
+        .limit(1);
+      previousRide = Array.isArray(existingRows) ? existingRows[0] : null;
+    }
 
     // Persist ride update to Supabase (server-authoritative) and broadcast canonical row
     const dbRideData = {
@@ -268,6 +279,26 @@ socket.on('join_shift', (shiftId) => {
       socket.emit('ride_saved', broadcastRide);
 
       console.log('Ride update saved to Supabase and broadcasted:', saved.id);
+
+      const vehicleId = saved.vehicle_id;
+      const previousVehicleId = previousRide && previousRide.vehicle_id;
+      const status = String(saved.status || '').toLowerCase();
+      const previousStatus = String((previousRide && previousRide.status) || '').toLowerCase();
+      const assignedNow =
+        vehicleId &&
+        (!previousRide || previousVehicleId !== vehicleId) &&
+        (status === 'pending' || status === 'accepted');
+      const cancelledNow =
+        vehicleId &&
+        status === 'cancelled' &&
+        previousStatus !== 'cancelled';
+
+      if (assignedNow || cancelledNow) {
+        const pushPayload = buildRidePushPayload(broadcastRide, cancelledNow ? 'cancelled' : 'assigned');
+        sendPushToVehicle(vehicleId, pushPayload)
+          .then(result => console.log('Ride push result:', result))
+          .catch(error => console.error('Ride push failed:', error));
+      }
     }
   });
 

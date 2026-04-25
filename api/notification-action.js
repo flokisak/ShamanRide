@@ -1,3 +1,5 @@
+import { updateRideFromNotificationAction } from './_push-utils.js';
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,12 +18,10 @@ export default async function handler(req, res) {
   try {
     const { action, notificationData } = req.body;
 
-    console.log('Notification action received:', { action, notificationData });
+    const result = await updateRideFromNotificationAction({ action, notificationData });
+    console.log('Notification action received:', { action, notificationData, result });
 
-    // Handle notification actions (accept/decline rides, etc.)
-    // This would integrate with your ride management system
-
-    res.json({ success: true, message: 'Action processed' });
+    res.json({ success: true, message: 'Action processed', ...result });
   } catch (error) {
     console.error('Notification action error:', error);
     res.status(500).json({ success: false, error: error.message });
