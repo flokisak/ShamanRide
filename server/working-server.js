@@ -33,66 +33,44 @@ app.get('/api/route', async (req, res) => {
       return res.status(400).json({ error: 'At least 2 coordinate pairs required' });
     }
 
-    // Try Google Maps as primary routing service
-    const googleMapsApiKey = process.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (googleMapsApiKey || google) {
-      try {
-        console.log('Trying Google Maps routing service...');
-        // Build Google Maps Directions API URL
-        const origin = `${coordPairs[0].lat},${coordPairs[0].lon}`;
-        const destination = `${coordPairs[coordPairs.length - 1].lat},${coordPairs[coordPairs.length - 1].lon}`;
+    // Use OSRM as the primary routing service
+    try {
+      console.log('Trying OSRM routing service...');
+      const osrmCoords = coordPairs.map(coord => `${coord.lon},${coord.lat}`).join(';');
+      const osrmUrl = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson&steps=false`;
+      console.log('OSRM URL:', osrmUrl);
+      const osrmResponse = await fetch(osrmUrl);
 
-        let waypoints = '';
-        if (coordPairs.length > 2) {
-          const intermediateWaypoints = coordPairs.slice(1, -1).map(coord => `${coord.lat},${coord.lon}`);
-          waypoints = `&waypoints=${intermediateWaypoints.join('|')}`;
+      if (osrmResponse.ok) {
+        const osrmData = await osrmResponse.json();
+        console.log('OSRM data code:', osrmData.code);
+        if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+          const route = osrmData.routes[0];
+          return res.json({
+            code: 'Ok',
+            routes: [{
+              duration: route.duration,
+              distance: route.distance,
+              geometry: {
+                type: 'LineString',
+                coordinates: route.geometry.coordinates.map(coord => [coord[1], coord[0]])
+              },
+              legs: []
+            }],
+            waypoints: coordPairs.map(coord => ({
+              location: [coord.lon, coord.lat]
+            }))
+          });
+        } else {
+          console.warn('OSRM data not Ok or no routes');
         }
-
-        const googleMapsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}${waypoints}&mode=driving&key=${googleMapsApiKey}`;
-
-        const response = await fetch(googleMapsUrl);
-
-        if (response.ok) {
-          const googleData = await response.json();
-
-          if (googleData.status === 'OK' && googleData.routes && googleData.routes.length > 0) {
-            const route = googleData.routes[0];
-
-            // Convert Google Maps polyline to coordinates
-            const geometry = decodePolyline(route.overview_polyline.points);
-
-            // Calculate total distance and duration
-            const totalDistance = route.legs.reduce((sum, leg) => sum + leg.distance.value, 0);
-            const totalDuration = route.legs.reduce((sum, leg) => sum + leg.duration.value, 0);
-
-            const googleMapsLikeResponse = {
-              code: 'Ok',
-              routes: [{
-                duration: totalDuration, // seconds
-                distance: totalDistance, // meters
-                geometry: {
-                  type: 'LineString',
-                  coordinates: geometry // [lon, lat] format for GeoJSON
-                },
-                legs: route.legs.map((leg) => ({
-                  duration: leg.duration.value,
-                  distance: leg.distance.value,
-                  steps: []
-                }))
-              }],
-              waypoints: coordPairs.map(coord => ({
-                location: [coord.lon, coord.lat]
-              }))
-            };
-
-            console.log('Google Maps routing successful');
-            return res.json(googleMapsLikeResponse);
-          }
-        }
-        console.warn('Google Maps routing failed');
-      } catch (googleError) {
-        console.warn('Google Maps routing error:', googleError.message);
+      } else {
+        const text = await osrmResponse.text();
+        console.warn('OSRM response not ok:', text);
       }
+      console.warn('OSRM routing failed');
+    } catch (osrmError) {
+      console.warn('OSRM routing error:', osrmError.message);
     }
 
     // Fallback: Return a simple straight-line route

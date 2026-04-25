@@ -201,46 +201,7 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
 
     console.log('🌐 Calculating route for:', cacheKey);
 
-    // Try Google Maps API directly
-    const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    if (googleMapsApiKey) {
-      try {
-        console.log('Trying Google Maps routing...');
-        const origin = `${waypoints[0][0]},${waypoints[0][1]}`;
-        const destination = `${waypoints[waypoints.length - 1][0]},${waypoints[waypoints.length - 1][1]}`;
-        let waypointsParam = '';
-        if (waypoints.length > 2) {
-          const intermediate = waypoints.slice(1, -1).map(w => `${w[0]},${w[1]}`).join('|');
-          waypointsParam = `&waypoints=${intermediate}`;
-        }
-        // Use our backend proxy instead of corsproxy.io
-        const coordsString = waypoints.map(c => `${c[1]},${c[0]}`).join(';');
-        const googleUrl = `/api/route?coordinates=${encodeURIComponent(coordsString)}&google=true`;
-        const googleResponse = await fetch(googleUrl);
-
-        if (googleResponse.ok) {
-          const data = await googleResponse.json();
-          if (!data.fallback && data.code === 'Ok' && data.routes?.length > 0) {
-            const route = data.routes[0];
-            const geometry = decodePolyline(route.overview_polyline.points);
-            const totalDistance = route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0);
-            const totalDuration = route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0);
-            const summary = {
-              distance: `${(totalDistance / 1000).toFixed(1)} km`,
-              duration: `${Math.round(totalDuration / 60)} min`
-            };
-            const result = { geometry, summary };
-            routeCache.set(cacheKey, result);
-            setTimeout(() => routeCache.delete(cacheKey), 10 * 60 * 1000);
-            return result;
-          }
-        }
-        console.log('Google Maps routing failed');
-      } catch (error) {
-        console.log('Google Maps routing error:', error);
-      }
-    }
-
+    // Use the route API directly. OSRM is the default routing provider.
     try {
         const coordsString = waypoints.map(c => `${c[1]},${c[0]}`).join(';');
         const url = `/api/route?coordinates=${encodeURIComponent(coordsString)}`;
@@ -252,11 +213,11 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
         } else {
             const data = await response.json();
 
-        // Check if we got a fallback response from server
-        if (data.fallback) {
-            console.log('All routing services unavailable, using local fallback calculation');
-            // Skip to fallback calculation below
-        } else if (data.code === 'Ok' && data.routes?.length > 0) {
+            // Check if we got a fallback response from server
+            if (data.fallback) {
+                console.log('All routing services unavailable, using local fallback calculation');
+                // Skip to fallback calculation below
+            } else if (data.code === 'Ok' && data.routes?.length > 0) {
                 const route = data.routes[0];
                 // Check if geometry and coordinates exist
                 if (route.geometry && route.geometry.coordinates && Array.isArray(route.geometry.coordinates)) {
@@ -278,8 +239,7 @@ async function getRoute(waypoints: Coords[]): Promise<{geometry: Coords[], summa
         console.log('Network error occurred, using fallback calculation:', error.message);
     }
 
-    // Fallback: improved routing calculation using road-like paths
-    console.log('Using improved fallback routing calculation');
+
 
     // Create a more realistic route by adding intermediate waypoints for longer distances
     const enhancedWaypoints = [];
